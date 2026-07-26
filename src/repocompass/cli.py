@@ -5,9 +5,9 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from repocompass.agent.model import create_chat_model
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.trace_sink import JsonlTraceSink
+from repocompass.models import create_chat_model
 
 DEFAULT_MAX_TOOL_CALLS = 8
 DEFAULT_MAX_ITERATIONS = 4
