@@ -37,6 +37,16 @@ def generate_run_id() -> str:
     return str(uuid4())
 
 
+def resolve_repository_path(repo_path: Path) -> Path:
+    """Resolve one repository root and require an existing directory."""
+
+    resolved_path = repo_path.expanduser().resolve(strict=True)
+    if not resolved_path.is_dir():
+        raise ValueError(f"Repository path is not a directory: {resolved_path}")
+
+    return resolved_path
+
+
 def _to_json_value(value: object) -> JsonValue:
     """Convert supported graph-update values to JSON-compatible data."""
 
@@ -166,10 +176,7 @@ class AgentRunner:
             trace and performs no trace-file persistence.
         """
 
-        repo_path = request.repo_path.expanduser().resolve(strict=True)
-
-        if not repo_path.is_dir():
-            raise ValueError(f"Repository path is not a directory: {repo_path}")
+        repo_path = resolve_repository_path(request.repo_path)
 
         trace = RunTrace(self._run_id_factory())
         trace.record(

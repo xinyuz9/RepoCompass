@@ -6,11 +6,13 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from repocompass.agent.runner import AgentRunner, RunRequest
+from repocompass.agent.state import (
+    DEFAULT_MAX_ITERATIONS,
+    DEFAULT_MAX_TOOL_CALLS,
+)
 from repocompass.agent.trace_sink import JsonlTraceSink
 from repocompass.models import create_chat_model
 
-DEFAULT_MAX_TOOL_CALLS = 8
-DEFAULT_MAX_ITERATIONS = 4
 DEFAULT_TRACE_DIRECTORY = Path(".repocompass/traces")
 
 

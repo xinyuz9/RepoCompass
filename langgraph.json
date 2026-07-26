@@ -1,0 +1,9 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "repocompass": "./src/repocompass/studio.py:create_studio_graph"
+  },
+  "env": ".env"
+}

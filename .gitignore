@@ -16,3 +16,6 @@ wheels/
 
 # Local RepoCompass run artifacts
 .repocompass/
+
+# Local LangGraph development server state
+.langgraph_api/

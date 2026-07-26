@@ -5,6 +5,9 @@ from langgraph.graph import MessagesState
 
 from repocompass.agent.result import FinalResult
 
+DEFAULT_MAX_TOOL_CALLS = 8
+DEFAULT_MAX_ITERATIONS = 4
+
 
 class AgentState(MessagesState):
     repo_path: Path
