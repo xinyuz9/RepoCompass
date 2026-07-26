@@ -34,17 +34,17 @@ def test_list_tree_returns_empty_when_max_depth_is_zero(tmp_path: Path) -> None:
 def test_list_tree_respects_recursive_depth(tmp_path: Path) -> None:
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    
+
     repocompass_dir = src_dir / "repocompass"
     repocompass_dir.mkdir()
-    
+
     tools_dir = repocompass_dir / "tools"
     tools_dir.mkdir()
-    
+
     (tools_dir / "alpha.txt").touch()
-    
+
     result = list_tree(tmp_path, max_depth=3)
-    
+
     assert result == ["src/", "src/repocompass/", "src/repocompass/tools/"]
 
 
@@ -116,14 +116,13 @@ def test_list_tree_ignores_default_directories(
 ) -> None:
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    
-    
+
     ignored_dir = tmp_path / ignored_name
     ignored_dir.mkdir()
     (ignored_dir / "hidden.py").touch()
-    
+
     result = list_tree(tmp_path)
-    
+
     assert result == ["src/"]
 
 
@@ -168,20 +167,19 @@ def test_list_tree_returns_stable_depth_first_order(tmp_path: Path) -> None:
 
 def test_list_tree_stops_at_max_entries(tmp_path: Path) -> None:
     max_entries = 10
-    
+
     entries = []
     for i in range(max_entries):
         file = f"entries_{i}"
         entries.append(file)
         (tmp_path / file).touch()
-    
+
     (tmp_path / "src").mkdir()
     (tmp_path / "tmp").mkdir()
-    
+
     result = list_tree(tmp_path, max_depth=3, max_entries=max_entries)
-    
+
     assert result == entries
-        
 
 
 # Symbolic links

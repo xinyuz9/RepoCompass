@@ -16,7 +16,7 @@ def test_read_code_returns_numbered_inclusive_range(tmp_path: Path) -> None:
         "fourth line",
         "fifth line",
     ]
-    
+
     file_path = tmp_path / "lines.txt"
     relative_path = file_path.relative_to(tmp_path)
 
@@ -24,18 +24,22 @@ def test_read_code_returns_numbered_inclusive_range(tmp_path: Path) -> None:
         "\n".join(source_lines),
         encoding="utf-8",
     )
-    
+
     start_line = 2
     end_line = 4
-    
-    result = read_code(tmp_path, relative_path, start_line=start_line, end_line=end_line)
-    
+
+    result = read_code(
+        tmp_path, relative_path, start_line=start_line, end_line=end_line
+    )
+
     expected_content = "2 | second line\n3 | third line\n4 | fourth line"
-    
-    assert result == {"path": relative_path.as_posix(), 
-                        "start_line": start_line, 
-                        "end_line": end_line, 
-                        "content": expected_content}
+
+    assert result == {
+        "path": relative_path.as_posix(),
+        "start_line": start_line,
+        "end_line": end_line,
+        "content": expected_content,
+    }
 
 
 def test_read_code_truncates_end_line_at_eof(tmp_path: Path) -> None:
@@ -44,7 +48,7 @@ def test_read_code_truncates_end_line_at_eof(tmp_path: Path) -> None:
         "second line",
         "third line",
     ]
-    
+
     file_path = tmp_path / "lines.txt"
     relative_path = file_path.relative_to(tmp_path)
 
@@ -52,19 +56,22 @@ def test_read_code_truncates_end_line_at_eof(tmp_path: Path) -> None:
         "\n".join(source_lines),
         encoding="utf-8",
     )
-    
+
     start_line = 2
     end_line = 10
-    
-    result = read_code(tmp_path, relative_path, start_line=start_line, end_line=end_line)
-    
-    expected_content = "2 | second line\n3 | third line"
-    
-    assert result == {"path": relative_path.as_posix(), 
-                        "start_line": start_line, 
-                        "end_line": 3, 
-                        "content": expected_content}
 
+    result = read_code(
+        tmp_path, relative_path, start_line=start_line, end_line=end_line
+    )
+
+    expected_content = "2 | second line\n3 | third line"
+
+    assert result == {
+        "path": relative_path.as_posix(),
+        "start_line": start_line,
+        "end_line": 3,
+        "content": expected_content,
+    }
 
 
 def test_read_code_preserves_blank_lines(tmp_path: Path) -> None:
@@ -125,7 +132,7 @@ def test_read_code_rejects_start_line_beyond_eof(tmp_path: Path) -> None:
         "second line",
         "third line",
     ]
-    
+
     file_path = tmp_path / "lines.txt"
     relative_path = file_path.relative_to(tmp_path)
 
@@ -133,13 +140,13 @@ def test_read_code_rejects_start_line_beyond_eof(tmp_path: Path) -> None:
         "\n".join(source_lines),
         encoding="utf-8",
     )
-    
+
     start_line = 4
     end_line = 5
-    
+
     with pytest.raises(ValueError) as exc_info:
         read_code(tmp_path, relative_path, start_line=start_line, end_line=end_line)
-    
+
     assert str(start_line) in str(exc_info.value)
 
 
