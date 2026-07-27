@@ -8,10 +8,10 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, ToolCall
 from langchain_core.runnables import RunnableLambda
 
-from repocompass.agent.contracts import FinalResult
+from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.trace import TraceEventKind
-from tests.model_doubles import with_scripted_planner
+from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
 
 def _create_scripted_model(
@@ -21,7 +21,9 @@ def _create_scripted_model(
     responses = iter(agent_responses)
     model = MagicMock(spec=BaseChatModel)
     model.bind_tools.return_value = RunnableLambda(lambda _: next(responses))
-    model.with_structured_output.return_value = RunnableLambda(lambda _: final_result)
+    model.with_structured_output.return_value = RunnableLambda(
+        lambda _: candidate_from_final_result(final_result)
+    )
     return model
 
 
@@ -43,8 +45,8 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
     request = RunRequest(
         repo_path=tmp_path,
         objective="  Inspect the repository.  ",
-        max_tool_calls=3,
-        max_iterations=2,
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=2,
     )
 
     outcome = runner.run(request)
@@ -58,26 +60,38 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         TraceEventKind.NODE_COMPLETED,
         TraceEventKind.NODE_COMPLETED,
         TraceEventKind.NODE_COMPLETED,
+        TraceEventKind.NODE_COMPLETED,
+        TraceEventKind.NODE_COMPLETED,
         TraceEventKind.RUN_FINISHED,
     ]
     assert [event.node for event in events] == [
         None,
         "plan_investigation",
         "agent",
+        "build_candidate",
+        "evaluate_candidate",
         "finalize",
         None,
     ]
     assert events[0].payload == {
         "repo_path": str(tmp_path.resolve()),
         "objective": "Inspect the repository.",
-        "max_tool_calls": 3,
-        "max_iterations": 2,
+        "max_tool_calls_per_step": 3,
+        "max_explorer_calls_per_step": 2,
     }
     assert events[1].payload["active_objective"] == (
         "Collect repository evidence for the objective."
     )
-    assert events[2].payload["iteration_count"] == 1
-    assert events[3].payload["final_result"] == final_result.model_dump(mode="json")
+    assert events[2].payload["step_explorer_call_count"] == 1
+    assert events[3].payload["candidate_result"] == candidate_from_final_result(
+        final_result
+    ).model_dump(mode="json")
+    assert events[4].payload["evaluation_report"]["passed"] is False
+    assert (
+        events[4].payload["evaluation_report"]["deterministic_issues"][0]["code"]
+        == "evidence_empty"
+    )
+    assert events[5].payload["final_result"] == final_result.model_dump(mode="json")
     assert events[-1].payload == {"stop_reason": None}
     assert all(event.model_dump_json() for event in events)
 
@@ -114,8 +128,8 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
     request = RunRequest(
         repo_path=tmp_path,
         objective="Find authentication.",
-        max_tool_calls=2,
-        max_iterations=2,
+        max_tool_calls_per_step=2,
+        max_explorer_calls_per_step=2,
     )
 
     outcome = runner.run(request)
@@ -129,18 +143,20 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
         "authorize_tools",
         "tools",
         "agent",
+        "build_candidate",
+        "evaluate_candidate",
         "finalize",
     ]
     first_agent_message = node_events[1].payload["messages"][0]
     assert first_agent_message["tool_calls"][0]["name"] == "list_tree"
-    assert node_events[2].payload == {"tool_call_count": 1}
+    assert node_events[2].payload == {"step_tool_call_count": 1}
     tool_message = node_events[3].payload["messages"][0]
     assert tool_message["tool_call_id"] == "call-tree"
     assert "auth.py" in tool_message["content"]
     assert outcome.stop_reason is None
 
 
-def test_runner_preserves_iteration_budget_stop_reason(
+def test_runner_preserves_step_explorer_budget_stop_reason(
     tmp_path: Path,
 ) -> None:
     tree_call = ToolCall(
@@ -166,29 +182,27 @@ def test_runner_preserves_iteration_budget_stop_reason(
     request = RunRequest(
         repo_path=tmp_path,
         objective="Inspect the repository.",
-        max_tool_calls=2,
-        max_iterations=1,
+        max_tool_calls_per_step=2,
+        max_explorer_calls_per_step=1,
     )
 
     outcome = runner.run(request)
 
-    assert outcome.stop_reason == "iteration_budget_exhausted"
+    assert outcome.stop_reason == "step_explorer_budget_exhausted"
     assert outcome.trace.events[-1].payload == {
-        "stop_reason": "iteration_budget_exhausted"
+        "stop_reason": "step_explorer_budget_exhausted"
     }
 
 
 def test_runner_rejects_file_as_repository_path(tmp_path: Path) -> None:
     file_path = tmp_path / "not-a-repository"
     file_path.write_text("not a directory", encoding="utf-8")
-    runner = AgentRunner(
-        with_scripted_planner(MagicMock(spec=BaseChatModel))
-    )
+    runner = AgentRunner(with_scripted_planner(MagicMock(spec=BaseChatModel)))
     request = RunRequest(
         repo_path=file_path,
         objective="Inspect the repository.",
-        max_tool_calls=1,
-        max_iterations=1,
+        max_tool_calls_per_step=1,
+        max_explorer_calls_per_step=1,
     )
 
     with pytest.raises(ValueError, match="not a directory"):

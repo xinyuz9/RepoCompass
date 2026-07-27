@@ -18,7 +18,7 @@ def test_jsonl_trace_sink_writes_one_event_per_line(tmp_path: Path) -> None:
     trace.record(
         TraceEventKind.NODE_COMPLETED,
         node="agent",
-        payload={"iteration_count": 1},
+        payload={"step_explorer_call_count": 1},
     )
     destination = tmp_path / "nested" / "sink-run.jsonl"
 
@@ -33,7 +33,7 @@ def test_jsonl_trace_sink_writes_one_event_per_line(tmp_path: Path) -> None:
         "node_completed",
     ]
     assert events[1]["node"] == "agent"
-    assert events[1]["payload"] == {"iteration_count": 1}
+    assert events[1]["payload"] == {"step_explorer_call_count": 1}
 
 
 def test_jsonl_trace_sink_does_not_overwrite_existing_file(

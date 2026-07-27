@@ -14,9 +14,9 @@ from langchain_core.messages import (
 from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.graph import create_agent_graph
-from repocompass.agent.contracts import FinalResult
+from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
-from tests.model_doubles import with_scripted_planner
+from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
 
 def test_agent_uses_state_repo_path_when_tool_call_spoofs_root(
@@ -61,13 +61,13 @@ def test_agent_uses_state_repo_path_when_tool_call_spoofs_root(
     model = MagicMock(spec=BaseChatModel)
     model.bind_tools.return_value = RunnableLambda(lambda _: next(scripted_responses))
     model.with_structured_output.return_value = RunnableLambda(
-        lambda _: expected_result
+        lambda _: candidate_from_final_result(expected_result)
     )
     initial_state = create_initial_state(
         trusted_repo,
         "Read evidence.py.",
-        max_tool_calls=1,
-        max_iterations=2,
+        max_tool_calls_per_step=1,
+        max_explorer_calls_per_step=2,
     )
 
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
@@ -77,7 +77,7 @@ def test_agent_uses_state_repo_path_when_tool_call_spoofs_root(
     assert "TRUSTED_REPOSITORY_MARKER" in str(tool_result.content)
     assert "UNTRUSTED_REPOSITORY_MARKER" not in str(tool_result.content)
     assert final_state["repo_path"] == trusted_repo.resolve()
-    assert final_state["tool_call_count"] == 1
+    assert final_state["step_tool_call_count"] == 1
     assert final_state["final_result"] == expected_result
 
 
@@ -113,13 +113,13 @@ def test_repository_instruction_text_remains_inside_tool_message() -> None:
     model = MagicMock(spec=BaseChatModel)
     model.bind_tools.return_value = RunnableLambda(next_response)
     model.with_structured_output.return_value = RunnableLambda(
-        lambda _: expected_result
+        lambda _: candidate_from_final_result(expected_result)
     )
     initial_state = create_initial_state(
         fixture_repo,
         "Investigate authentication.",
-        max_tool_calls=1,
-        max_iterations=2,
+        max_tool_calls_per_step=1,
+        max_explorer_calls_per_step=2,
     )
 
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)

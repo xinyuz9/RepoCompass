@@ -13,13 +13,15 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from repocompass.agent.contracts import FinalResult
 from repocompass.agent.graph import create_agent_graph
+from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
 from repocompass.agent.trace import RunTrace, TraceEventKind
 from repocompass.models import WorkflowModels
 
 RunIdFactory = Callable[[], str]
+DEFAULT_MAX_TOOL_CALLS_PER_STEP = 16
+DEFAULT_MAX_EXPLORER_CALLS_PER_STEP = 8
 
 
 def generate_run_id() -> str:
@@ -82,9 +84,10 @@ class RunRequest(BaseModel):
         repo_path: Application-supplied repository root. The Runner must resolve
             it and reject paths that are not existing directories.
         objective: Non-empty repository investigation question.
-        max_tool_calls: Positive tool-call budget enforced by the graph.
-        max_iterations: Positive Agent model-invocation budget enforced by the
-            graph.
+        max_tool_calls_per_step: Positive tool-call budget for one active plan
+            step.
+        max_explorer_calls_per_step: Positive Explorer invocation budget for one
+            active plan step.
     """
 
     model_config = ConfigDict(
@@ -95,8 +98,8 @@ class RunRequest(BaseModel):
 
     repo_path: Path
     objective: str = Field(min_length=1)
-    max_tool_calls: int = Field(gt=0)
-    max_iterations: int = Field(gt=0)
+    max_tool_calls_per_step: int = Field(gt=0)
+    max_explorer_calls_per_step: int = Field(gt=0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,16 +180,16 @@ class AgentRunner:
             payload={
                 "repo_path": str(repo_path),
                 "objective": request.objective,
-                "max_tool_calls": request.max_tool_calls,
-                "max_iterations": request.max_iterations,
+                "max_tool_calls_per_step": request.max_tool_calls_per_step,
+                "max_explorer_calls_per_step": (request.max_explorer_calls_per_step),
             },
         )
 
         initial_state = create_initial_state(
             repo_path,
             request.objective,
-            request.max_tool_calls,
-            request.max_iterations,
+            request.max_tool_calls_per_step,
+            request.max_explorer_calls_per_step,
         )
         graph = create_agent_graph(self._models)
         final_result: FinalResult | None = None
@@ -221,10 +224,10 @@ class AgentRunner:
                     stop_reason = candidate_stop_reason
 
                 if "final_result" in update:
-                    candidate_result = update["final_result"]
-                    if not isinstance(candidate_result, FinalResult):
+                    graph_final_result = update["final_result"]
+                    if not isinstance(graph_final_result, FinalResult):
                         raise TypeError("Graph final_result is not a FinalResult")
-                    final_result = candidate_result
+                    final_result = graph_final_result
 
         if final_result is None:
             raise ValueError("Graph finished without a FinalResult")

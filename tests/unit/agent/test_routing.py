@@ -11,14 +11,12 @@ from langchain_core.messages import (
 )
 
 from repocompass.agent.routing import (
-    AgentInvocationRoute,
-    ToolCallRoute,
-    route_agent_invocation,
-    route_tool_calls,
-)
-from repocompass.agent.state import (
-    AgentInvocationInput,
+    ExplorerInvocationInput,
+    ExplorerInvocationRoute,
     ToolRoutingInput,
+    ToolCallRoute,
+    route_explorer_invocation,
+    route_tool_calls,
 )
 
 
@@ -26,34 +24,39 @@ def test_route_tool_calls_declares_narrow_input_schema() -> None:
     assert get_type_hints(route_tool_calls)["state"] is ToolRoutingInput
 
 
-def test_route_agent_invocation_declares_narrow_input_schema() -> None:
-    assert get_type_hints(route_agent_invocation)["state"] is AgentInvocationInput
+def test_route_explorer_invocation_declares_narrow_input_schema() -> None:
+    assert get_type_hints(route_explorer_invocation)["state"] is ExplorerInvocationInput
 
 
 def _state_for_message(
     message: AIMessage,
     *,
     used_tool_calls: int,
-    max_tool_calls: int,
+    max_tool_calls_per_step: int,
 ) -> ToolRoutingInput:
     """Build only the state fields required for tool-call routing."""
 
     return {
         "messages": [message],
-        "tool_call_count": used_tool_calls,
-        "max_tool_calls": max_tool_calls,
+        "step_tool_call_count": used_tool_calls,
+        "max_tool_calls_per_step": max_tool_calls_per_step,
     }
 
 
 @pytest.mark.parametrize(
-    ("message", "used_tool_calls", "max_tool_calls", "expected_route"),
+    (
+        "message",
+        "used_tool_calls",
+        "max_tool_calls_per_step",
+        "expected_route",
+    ),
     [
         pytest.param(
             AIMessage(content="Enough evidence is available."),
             0,
             3,
-            "finalize",
-            id="no-calls-finalize",
+            "build_candidate",
+            id="no-calls-build-candidate",
         ),
         pytest.param(
             AIMessage(
@@ -118,7 +121,7 @@ def _state_for_message(
 def test_route_tool_calls_decision_table(
     message: AIMessage,
     used_tool_calls: int,
-    max_tool_calls: int,
+    max_tool_calls_per_step: int,
     expected_route: ToolCallRoute,
 ) -> None:
     """Route each valid state according to calls, validity, and budget."""
@@ -126,7 +129,7 @@ def test_route_tool_calls_decision_table(
     state = _state_for_message(
         message,
         used_tool_calls=used_tool_calls,
-        max_tool_calls=max_tool_calls,
+        max_tool_calls_per_step=max_tool_calls_per_step,
     )
 
     assert route_tool_calls(state) == expected_route
@@ -174,7 +177,7 @@ def test_route_tool_calls_rejects_missing_call_id(
     state = _state_for_message(
         message,
         used_tool_calls=0,
-        max_tool_calls=3,
+        max_tool_calls_per_step=3,
     )
 
     with pytest.raises(ValueError, match="Tool call id is None"):
@@ -186,8 +189,8 @@ def test_route_tool_calls_rejects_empty_history() -> None:
 
     state: ToolRoutingInput = {
         "messages": [],
-        "tool_call_count": 0,
-        "max_tool_calls": 3,
+        "step_tool_call_count": 0,
+        "max_tool_calls_per_step": 3,
     }
 
     with pytest.raises(ValueError, match="Message list is empty"):
@@ -199,8 +202,8 @@ def test_route_tool_calls_requires_ai_message() -> None:
 
     state: ToolRoutingInput = {
         "messages": [HumanMessage(content="Inspect the repository.")],
-        "tool_call_count": 0,
-        "max_tool_calls": 3,
+        "step_tool_call_count": 0,
+        "max_tool_calls_per_step": 3,
     }
 
     with pytest.raises(TypeError, match="Last message is not an AIMessage"):
@@ -208,26 +211,30 @@ def test_route_tool_calls_requires_ai_message() -> None:
 
 
 @pytest.mark.parametrize(
-    ("iteration_count", "max_iterations", "expected_route"),
+    (
+        "step_explorer_call_count",
+        "max_explorer_calls_per_step",
+        "expected_route",
+    ),
     [
         pytest.param(0, 1, "agent", id="first-invocation-is-allowed"),
         pytest.param(1, 2, "agent", id="remaining-iteration-is-allowed"),
         pytest.param(
             2,
             2,
-            "iteration_budget_exhausted",
+            "step_explorer_budget_exhausted",
             id="limit-prevents-another-invocation",
         ),
     ],
 )
-def test_route_agent_invocation_enforces_iteration_budget(
-    iteration_count: int,
-    max_iterations: int,
-    expected_route: AgentInvocationRoute,
+def test_route_explorer_invocation_enforces_step_budget(
+    step_explorer_call_count: int,
+    max_explorer_calls_per_step: int,
+    expected_route: ExplorerInvocationRoute,
 ) -> None:
-    state: AgentInvocationInput = {
-        "iteration_count": iteration_count,
-        "max_iterations": max_iterations,
+    state: ExplorerInvocationInput = {
+        "step_explorer_call_count": step_explorer_call_count,
+        "max_explorer_calls_per_step": max_explorer_calls_per_step,
     }
 
-    assert route_agent_invocation(state) == expected_route
+    assert route_explorer_invocation(state) == expected_route

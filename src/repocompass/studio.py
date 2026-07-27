@@ -7,10 +7,13 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
 from repocompass.agent.graph import create_agent_graph
-from repocompass.agent.runner import RunRequest, resolve_repository_path
+from repocompass.agent.runner import (
+    DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
+    DEFAULT_MAX_TOOL_CALLS_PER_STEP,
+    RunRequest,
+    resolve_repository_path,
+)
 from repocompass.agent.state import (
-    DEFAULT_MAX_ITERATIONS,
-    DEFAULT_MAX_TOOL_CALLS,
     RepoCompassState,
     create_initial_state,
 )
@@ -32,17 +35,17 @@ class StudioRunInput(BaseModel):
         min_length=1,
         description="Repository investigation question.",
     )
-    max_tool_calls: int = Field(
-        default=DEFAULT_MAX_TOOL_CALLS,
+    max_tool_calls_per_step: int = Field(
+        default=DEFAULT_MAX_TOOL_CALLS_PER_STEP,
         gt=0,
         strict=True,
-        description="Maximum repository tool calls allowed.",
+        description="Maximum repository tool calls per active plan step.",
     )
-    max_iterations: int = Field(
-        default=DEFAULT_MAX_ITERATIONS,
+    max_explorer_calls_per_step: int = Field(
+        default=DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
         gt=0,
         strict=True,
-        description="Maximum Agent model invocations allowed.",
+        description="Maximum Explorer invocations per active plan step.",
     )
 
 
@@ -62,15 +65,15 @@ def initialize_studio_run(state: StudioState) -> StudioState:
     request = RunRequest(
         repo_path=studio_input.repo_path,
         objective=studio_input.objective,
-        max_tool_calls=studio_input.max_tool_calls,
-        max_iterations=studio_input.max_iterations,
+        max_tool_calls_per_step=studio_input.max_tool_calls_per_step,
+        max_explorer_calls_per_step=studio_input.max_explorer_calls_per_step,
     )
     repo_path = resolve_repository_path(request.repo_path)
     initial_state = create_initial_state(
         repo_path,
         request.objective,
-        request.max_tool_calls,
-        request.max_iterations,
+        request.max_tool_calls_per_step,
+        request.max_explorer_calls_per_step,
     )
     return initial_state
 

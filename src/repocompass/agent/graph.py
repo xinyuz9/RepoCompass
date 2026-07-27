@@ -3,16 +3,21 @@ from langgraph.prebuilt import ToolNode
 
 from repocompass.agent.nodes import (
     create_agent_node,
-    create_finalize_node,
+    create_build_candidate_node,
+    create_evaluate_candidate_node,
     create_plan_investigation_node,
+    finalize_candidate,
     handle_invalid_tool_batch,
-    mark_iteration_budget_exhausted,
+    mark_step_explorer_budget_exhausted,
     reject_pending_tool_calls,
     reserve_tool_budget,
 )
-from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
-from repocompass.agent.routing import route_agent_invocation, route_tool_calls
+from repocompass.agent.routing import (
+    route_explorer_invocation,
+    route_tool_calls,
+)
 from repocompass.agent.state import RepoCompassState
+from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
 from repocompass.models import WorkflowModels
 
 
@@ -31,27 +36,35 @@ def create_agent_graph(models: WorkflowModels):
     builder.add_node("authorize_tools", reserve_tool_budget)
     builder.add_node("tools", ToolNode(REPOSITORY_TOOLS))
     builder.add_node(
-        "iteration_budget_exhausted",
-        mark_iteration_budget_exhausted,
+        "step_explorer_budget_exhausted",
+        mark_step_explorer_budget_exhausted,
     )
-    builder.add_node("finalize", create_finalize_node(models.explorer))
+    builder.add_node(
+        "build_candidate",
+        create_build_candidate_node(models.explorer),
+    )
+    builder.add_node(
+        "evaluate_candidate",
+        create_evaluate_candidate_node(models.evaluator),
+    )
+    builder.add_node("finalize", finalize_candidate)
 
-    agent_invocation_routes = {
+    explorer_invocation_routes = {
         "agent": "agent",
-        "iteration_budget_exhausted": "iteration_budget_exhausted",
+        "step_explorer_budget_exhausted": "step_explorer_budget_exhausted",
     }
     builder.add_edge(START, "plan_investigation")
     builder.add_conditional_edges(
         "plan_investigation",
-        route_agent_invocation,
-        agent_invocation_routes,
+        route_explorer_invocation,
+        explorer_invocation_routes,
     )
     builder.add_conditional_edges(
         "agent",
         route_tool_calls,
         {
             "authorize_tools": "authorize_tools",
-            "finalize": "finalize",
+            "build_candidate": "build_candidate",
             "reject_tools": "reject_tools",
             "handle_invalid_tools": "handle_invalid_tools",
         },
@@ -59,16 +72,18 @@ def create_agent_graph(models: WorkflowModels):
     builder.add_edge("authorize_tools", "tools")
     builder.add_conditional_edges(
         "tools",
-        route_agent_invocation,
-        agent_invocation_routes,
+        route_explorer_invocation,
+        explorer_invocation_routes,
     )
-    builder.add_edge("reject_tools", "finalize")
+    builder.add_edge("reject_tools", "build_candidate")
     builder.add_conditional_edges(
         "handle_invalid_tools",
-        route_agent_invocation,
-        agent_invocation_routes,
+        route_explorer_invocation,
+        explorer_invocation_routes,
     )
-    builder.add_edge("iteration_budget_exhausted", "finalize")
+    builder.add_edge("step_explorer_budget_exhausted", "build_candidate")
+    builder.add_edge("build_candidate", "evaluate_candidate")
+    builder.add_edge("evaluate_candidate", "finalize")
     builder.add_edge("finalize", END)
 
     compiled = builder.compile(name="repocompass_m1")

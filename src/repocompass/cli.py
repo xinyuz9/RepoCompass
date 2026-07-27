@@ -5,10 +5,11 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from repocompass.agent.runner import AgentRunner, RunRequest
-from repocompass.agent.state import (
-    DEFAULT_MAX_ITERATIONS,
-    DEFAULT_MAX_TOOL_CALLS,
+from repocompass.agent.runner import (
+    AgentRunner,
+    DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
+    DEFAULT_MAX_TOOL_CALLS_PER_STEP,
+    RunRequest,
 )
 from repocompass.agent.trace_sink import JsonlTraceSink
 from repocompass.models import create_workflow_models
@@ -51,16 +52,22 @@ def create_parser() -> argparse.ArgumentParser:
         help="repository investigation question",
     )
     parser.add_argument(
-        "--max-tool-calls",
+        "--max-tool-calls-per-step",
         type=_positive_int,
-        default=DEFAULT_MAX_TOOL_CALLS,
-        help=f"tool-call budget (default: {DEFAULT_MAX_TOOL_CALLS})",
+        default=DEFAULT_MAX_TOOL_CALLS_PER_STEP,
+        help=(
+            "tool-call budget for each active plan step "
+            f"(default: {DEFAULT_MAX_TOOL_CALLS_PER_STEP})"
+        ),
     )
     parser.add_argument(
-        "--max-iterations",
+        "--max-explorer-calls-per-step",
         type=_positive_int,
-        default=DEFAULT_MAX_ITERATIONS,
-        help=f"Agent model-invocation budget (default: {DEFAULT_MAX_ITERATIONS})",
+        default=DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
+        help=(
+            "Explorer invocation budget for each active plan step "
+            f"(default: {DEFAULT_MAX_EXPLORER_CALLS_PER_STEP})"
+        ),
     )
     parser.add_argument(
         "--trace-dir",
@@ -80,8 +87,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         request = RunRequest(
             repo_path=arguments.repo_path,
             objective=arguments.objective,
-            max_tool_calls=arguments.max_tool_calls,
-            max_iterations=arguments.max_iterations,
+            max_tool_calls_per_step=arguments.max_tool_calls_per_step,
+            max_explorer_calls_per_step=(arguments.max_explorer_calls_per_step),
         )
         runner = AgentRunner(create_workflow_models())
         outcome = runner.run(request)

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from repocompass import cli
-from repocompass.agent.contracts import FinalResult
+from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import RunOutcome
 from repocompass.agent.trace import RunTrace, TraceEventKind
 
@@ -45,9 +45,9 @@ def test_main_runs_investigation_and_writes_trace(
             str(tmp_path),
             "--objective",
             "Inspect authentication.",
-            "--max-tool-calls",
+            "--max-tool-calls-per-step",
             "3",
-            "--max-iterations",
+            "--max-explorer-calls-per-step",
             "2",
             "--trace-dir",
             str(trace_directory),
@@ -62,8 +62,8 @@ def test_main_runs_investigation_and_writes_trace(
     runner_factory.assert_called_once_with(model)
     assert request.repo_path == tmp_path
     assert request.objective == "Inspect authentication."
-    assert request.max_tool_calls == 3
-    assert request.max_iterations == 2
+    assert request.max_tool_calls_per_step == 3
+    assert request.max_explorer_calls_per_step == 2
     assert json.loads(captured.out) == final_result.model_dump(mode="json")
     assert "Run ID: cli-run" in captured.err
     assert "Stop reason: completed" in captured.err
@@ -103,7 +103,7 @@ def test_main_rejects_non_positive_budget(
                 str(tmp_path),
                 "--objective",
                 "Inspect the repository.",
-                "--max-tool-calls",
+                "--max-tool-calls-per-step",
                 "0",
             ]
         )

@@ -13,22 +13,25 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import RunnableLambda
 
+from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.graph import create_agent_graph
-from repocompass.agent.contracts import FinalResult
+from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
-from tests.model_doubles import with_scripted_planner
+from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
 
 def _create_scripted_model(
     agent_responses: list[AIMessage],
     final_result: FinalResult,
 ) -> MagicMock:
-    """Create a model double with deterministic agent and finalizer responses."""
+    """Create a model double with deterministic Explorer and candidate responses."""
 
     response_iterator = iter(agent_responses)
     model = MagicMock(spec=BaseChatModel)
     model.bind_tools.return_value = RunnableLambda(lambda _: next(response_iterator))
-    model.with_structured_output.return_value = RunnableLambda(lambda _: final_result)
+    model.with_structured_output.return_value = RunnableLambda(
+        lambda _: candidate_from_final_result(final_result)
+    )
     return model
 
 
@@ -49,23 +52,26 @@ def test_graph_finalizes_when_agent_returns_no_tool_calls(tmp_path: Path) -> Non
     initial_state = create_initial_state(
         tmp_path,
         str(user_message.content),
-        max_tool_calls=3,
-        max_iterations=3,
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=3,
     )
 
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
 
     assert final_state["final_result"] == expected_result
+    assert final_state["candidate_result"] == candidate_from_final_result(
+        expected_result
+    )
     assert final_state["stop_reason"] is None
-    assert final_state["tool_call_count"] == 0
-    assert final_state["iteration_count"] == 1
+    assert final_state["step_tool_call_count"] == 0
+    assert final_state["step_explorer_call_count"] == 1
     messages = final_state["messages"]
     assert isinstance(messages[0], HumanMessage)
     assert messages[0].content == user_message.content
     assert messages[1] == agent_response
     model.bind_tools.assert_called_once()
     model.with_structured_output.assert_called_once_with(
-        FinalResult,
+        CandidateResult,
         method="function_calling",
     )
 
@@ -114,17 +120,18 @@ def test_graph_finalizes_when_agent_returns_tool_calls(tmp_path: Path) -> None:
     initial_state = create_initial_state(
         tmp_path,
         str(user_message.content),
-        max_tool_calls=3,
-        max_iterations=3,
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=3,
     )
 
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
+    assert final_state["evaluation_report"].passed is True
     assert final_state["stop_reason"] is None
-    assert final_state["tool_call_count"] == 1
-    assert final_state["iteration_count"] == 2
+    assert final_state["step_tool_call_count"] == 1
+    assert final_state["step_explorer_call_count"] == 2
     assert len(messages) == 4
     assert messages[1] == tool_request
     assert isinstance(messages[2], ToolMessage)
@@ -134,7 +141,7 @@ def test_graph_finalizes_when_agent_returns_tool_calls(tmp_path: Path) -> None:
     assert "repo_path" not in tree_call["args"]
     model.bind_tools.assert_called_once()
     model.with_structured_output.assert_called_once_with(
-        FinalResult,
+        CandidateResult,
         method="function_calling",
     )
 
@@ -171,17 +178,17 @@ def test_graph_rejects_batch_exceeding_budget_and_finalizes(
     initial_state = create_initial_state(
         tmp_path,
         str(user_message.content),
-        max_tool_calls=1,
-        max_iterations=3,
+        max_tool_calls_per_step=1,
+        max_explorer_calls_per_step=3,
     )
 
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
-    assert final_state["stop_reason"] == "tool_call_budget_exhausted"
-    assert final_state["tool_call_count"] == 0
-    assert final_state["iteration_count"] == 1
+    assert final_state["stop_reason"] == "step_tool_call_budget_exhausted"
+    assert final_state["step_tool_call_count"] == 0
+    assert final_state["step_explorer_call_count"] == 1
     assert len(messages) == 4
     assert isinstance(messages[0], HumanMessage)
     assert messages[0].content == user_message.content
@@ -242,8 +249,8 @@ def test_graph_handles_mixed_invalid_batch_without_executing_valid_calls(
     initial_state = create_initial_state(
         tmp_path,
         str(user_message.content),
-        max_tool_calls=3,
-        max_iterations=3,
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=3,
     )
 
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
@@ -251,8 +258,8 @@ def test_graph_handles_mixed_invalid_batch_without_executing_valid_calls(
 
     assert final_state["final_result"] == expected_result
     assert final_state["stop_reason"] is None
-    assert final_state["tool_call_count"] == 2
-    assert final_state["iteration_count"] == 2
+    assert final_state["step_tool_call_count"] == 2
+    assert final_state["step_explorer_call_count"] == 2
     assert len(messages) == 5
     assert isinstance(messages[0], HumanMessage)
     assert messages[0].content == user_message.content
@@ -301,8 +308,8 @@ def test_graph_returns_recoverable_tool_invocation_error_to_agent(
     initial_state = create_initial_state(
         tmp_path,
         str(user_message.content),
-        max_tool_calls=3,
-        max_iterations=3,
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=3,
     )
 
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
@@ -310,8 +317,8 @@ def test_graph_returns_recoverable_tool_invocation_error_to_agent(
 
     assert final_state["final_result"] == expected_result
     assert final_state["stop_reason"] is None
-    assert final_state["tool_call_count"] == 1
-    assert final_state["iteration_count"] == 2
+    assert final_state["step_tool_call_count"] == 1
+    assert final_state["step_explorer_call_count"] == 2
     assert len(messages) == 4
     assert isinstance(messages[0], HumanMessage)
     assert messages[0].content == user_message.content
@@ -357,21 +364,21 @@ def test_graph_finalizes_without_extra_agent_invocation_at_iteration_limit(
     model = MagicMock(spec=BaseChatModel)
     model.bind_tools.return_value = RunnableLambda(one_agent_response)
     model.with_structured_output.return_value = RunnableLambda(
-        lambda _: expected_result
+        lambda _: candidate_from_final_result(expected_result)
     )
     user_message = HumanMessage(content="Find the authentication logic.")
     initial_state = create_initial_state(
         tmp_path,
         str(user_message.content),
-        max_tool_calls=3,
-        max_iterations=1,
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=1,
     )
 
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
 
     assert len(agent_inputs) == 1
-    assert final_state["iteration_count"] == 1
-    assert final_state["tool_call_count"] == 1
-    assert final_state["stop_reason"] == "iteration_budget_exhausted"
+    assert final_state["step_explorer_call_count"] == 1
+    assert final_state["step_tool_call_count"] == 1
+    assert final_state["stop_reason"] == "step_explorer_budget_exhausted"
     assert final_state["final_result"] == expected_result
     assert isinstance(final_state["messages"][-1], ToolMessage)

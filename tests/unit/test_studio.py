@@ -9,12 +9,12 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableLambda
 
 from repocompass import studio
-from repocompass.agent.contracts import FinalResult
-from repocompass.agent.state import (
-    DEFAULT_MAX_ITERATIONS,
-    DEFAULT_MAX_TOOL_CALLS,
+from repocompass.agent.runner import (
+    DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
+    DEFAULT_MAX_TOOL_CALLS_PER_STEP,
 )
-from tests.model_doubles import with_scripted_planner
+from repocompass.agent.result import FinalResult
+from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
 
 def _create_scripted_model(final_result: FinalResult) -> MagicMock:
@@ -22,7 +22,9 @@ def _create_scripted_model(final_result: FinalResult) -> MagicMock:
     model.bind_tools.return_value = RunnableLambda(
         lambda _: AIMessage(content="Enough evidence is available.")
     )
-    model.with_structured_output.return_value = RunnableLambda(lambda _: final_result)
+    model.with_structured_output.return_value = RunnableLambda(
+        lambda _: candidate_from_final_result(final_result)
+    )
     return model
 
 
@@ -48,10 +50,14 @@ def test_studio_graph_accepts_public_input_and_applies_defaults(
 
     assert final_state["repo_path"] == tmp_path.resolve()
     assert final_state["objective"] == "Inspect the source package."
-    assert final_state["max_tool_calls"] == DEFAULT_MAX_TOOL_CALLS
-    assert final_state["max_iterations"] == DEFAULT_MAX_ITERATIONS
-    assert final_state["tool_call_count"] == 0
-    assert final_state["iteration_count"] == 1
+    assert final_state["max_tool_calls_per_step"] == DEFAULT_MAX_TOOL_CALLS_PER_STEP
+    assert (
+        final_state["max_explorer_calls_per_step"]
+        == DEFAULT_MAX_EXPLORER_CALLS_PER_STEP
+    )
+    assert final_state["step_tool_call_count"] == 0
+    assert final_state["step_explorer_call_count"] == 1
+    assert final_state["evaluation_report"] is not None
     assert final_state["final_result"] == final_result
     first_message = final_state["messages"][0]
     assert isinstance(first_message, HumanMessage)
@@ -74,11 +80,11 @@ def test_studio_graph_exposes_only_public_input_fields() -> None:
     assert set(schema["properties"]) == {
         "repo_path",
         "objective",
-        "max_tool_calls",
-        "max_iterations",
+        "max_tool_calls_per_step",
+        "max_explorer_calls_per_step",
     }
-    assert schema["properties"]["max_tool_calls"]["default"] == 8
-    assert schema["properties"]["max_iterations"]["default"] == 4
+    assert schema["properties"]["max_tool_calls_per_step"]["default"] == 16
+    assert schema["properties"]["max_explorer_calls_per_step"]["default"] == 8
 
 
 def test_studio_graph_rejects_file_as_repository_path(tmp_path: Path) -> None:

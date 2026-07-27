@@ -14,10 +14,11 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import RunnableLambda
 
+from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.graph import create_agent_graph
-from repocompass.agent.contracts import FinalResult
+from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
-from tests.model_doubles import with_scripted_planner
+from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
 AUTH_PROJECT = Path(__file__).parents[1] / "fixtures" / "auth_project"
 
@@ -81,24 +82,25 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
     model = MagicMock(spec=BaseChatModel)
     model.bind_tools.return_value = RunnableLambda(next_agent_response)
     model.with_structured_output.return_value = RunnableLambda(
-        lambda _: expected_result
+        lambda _: candidate_from_final_result(expected_result)
     )
 
     user_message = HumanMessage(content="Find and explain the authentication logic.")
     initial_state = create_initial_state(
         AUTH_PROJECT,
         str(user_message.content),
-        max_tool_calls=3,
-        max_iterations=4,
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=4,
     )
 
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
+    assert final_state["evaluation_report"].passed is True
     assert final_state["stop_reason"] is None
-    assert final_state["tool_call_count"] == 3
-    assert final_state["iteration_count"] == 4
+    assert final_state["step_tool_call_count"] == 3
+    assert final_state["step_explorer_call_count"] == 4
     assert final_state["repo_path"] == AUTH_PROJECT.resolve()
     assert len(messages) == 8
     assert isinstance(messages[0], HumanMessage)
@@ -143,6 +145,6 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
     )
     model.bind_tools.assert_called_once()
     model.with_structured_output.assert_called_once_with(
-        FinalResult,
+        CandidateResult,
         method="function_calling",
     )

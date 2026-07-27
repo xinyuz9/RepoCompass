@@ -1,36 +1,48 @@
-"""Node factories for the RepoCompass agent graph."""
+"""State-mutating nodes and node factories for the RepoCompass graph."""
 
+import json
 from collections.abc import Callable
+from pathlib import Path
 from typing import TypedDict
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AnyMessage, HumanMessage, ToolMessage
+from langchain_core.messages import (
+    AnyMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
+from langgraph.graph import MessagesState
 
+from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.evaluation import (
+    EvaluationReport,
+    EvidenceExcerpt,
+    SemanticAssessment,
+    ValidationIssue,
+    validate_candidate,
+)
+from repocompass.agent.planning import InvestigationPlan
 from repocompass.agent.prompts import (
-    FINALIZATION_INSTRUCTION,
-    build_agent_messages,
-    build_planner_messages,
+    CANDIDATE_BUILDING_REQUEST_TEMPLATE,
+    CANDIDATE_BUILDING_SYSTEM_PROMPT,
+    EVALUATION_REQUEST_TEMPLATE,
+    EVALUATION_SYSTEM_PROMPT,
+    INVESTIGATION_CONTEXT_TEMPLATE,
+    INVESTIGATION_SYSTEM_PROMPT,
+    PLANNING_REQUEST_TEMPLATE,
+    PLANNING_SYSTEM_PROMPT,
 )
-from repocompass.agent.contracts import FinalResult, InvestigationPlan
-from repocompass.agent.state import (
-    AgentInvocationInput,
-    AgentNodeInput,
-    FinalizerInput,
-    InvalidToolBatchInput,
-    PlannerInput,
-    ToolBudgetInput,
-    ToolRejectionInput,
-)
+from repocompass.agent.result import FinalResult
 from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
 
 
-class AgentNodeUpdate(TypedDict):
-    messages: list[AnyMessage]
-    iteration_count: int
+class PlannerInput(TypedDict):
+    """Minimal initial-planning view without repository content or messages."""
 
-
-AgentNode = Callable[[AgentNodeInput], AgentNodeUpdate]
-ToolCountUpdate = dict[str, int]
+    objective: str
+    max_tool_calls_per_step: int
+    max_explorer_calls_per_step: int
 
 
 class PlannerNodeUpdate(TypedDict):
@@ -41,67 +53,161 @@ class PlannerNodeUpdate(TypedDict):
 PlannerNode = Callable[[PlannerInput], PlannerNodeUpdate]
 
 
-class ToolRejectionUpdate(TypedDict):
-    messages: list[ToolMessage]
-    stop_reason: str
+def build_planner_messages(state: PlannerInput) -> list[AnyMessage]:
+    """Build an isolated initial-planning invocation."""
+
+    return [
+        SystemMessage(content=PLANNING_SYSTEM_PROMPT),
+        HumanMessage(
+            content=PLANNING_REQUEST_TEMPLATE.format(
+                objective=state["objective"],
+                max_tool_calls_per_step=state["max_tool_calls_per_step"],
+                max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
+            )
+        ),
+    ]
 
 
-class InvalidToolBatchUpdate(TypedDict):
-    messages: list[ToolMessage]
-    tool_call_count: int
+def create_plan_investigation_node(model: BaseChatModel) -> PlannerNode:
+    """Create the node that generates the initial investigation plan."""
+
+    structured_model = model.with_structured_output(
+        InvestigationPlan,
+        method="function_calling",
+    )
+
+    def planner_node(state: PlannerInput) -> PlannerNodeUpdate:
+        """Generate the initial plan and activate its designated step."""
+
+        response = structured_model.invoke(build_planner_messages(state))
+        if not isinstance(response, InvestigationPlan):
+            raise TypeError("Planner model did not return InvestigationPlan")
+
+        active_step = next(
+            step for step in response.steps if step.id == response.active_step_id
+        )
+        return {
+            "investigation_plan": response,
+            "active_objective": active_step.objective,
+        }
+
+    return planner_node
 
 
-class FinalizeNodeUpdate(TypedDict):
-    final_result: FinalResult
+class AgentNodeInput(MessagesState):
+    """State visible to one Explorer model invocation."""
+
+    objective: str
+    active_objective: str
+    investigation_plan: InvestigationPlan | None
+    step_tool_call_count: int
+    max_tool_calls_per_step: int
+    step_explorer_call_count: int
+    max_explorer_calls_per_step: int
 
 
-class IterationBudgetUpdate(TypedDict):
-    stop_reason: str
+class AgentNodeUpdate(TypedDict):
+    messages: list[AnyMessage]
+    step_explorer_call_count: int
 
 
-FinalizeNode = Callable[[FinalizerInput], FinalizeNodeUpdate]
+AgentNode = Callable[[AgentNodeInput], AgentNodeUpdate]
+
+
+def build_agent_messages(state: AgentNodeInput) -> list[AnyMessage]:
+    """Build one Explorer invocation without mutating persistent messages."""
+
+    investigation_plan = (
+        "No investigation plan is available."
+        if not state["investigation_plan"]
+        else state["investigation_plan"].model_dump_json(indent=2)
+    )
+    investigation_context = INVESTIGATION_CONTEXT_TEMPLATE.format(
+        objective=state["objective"],
+        active_objective=state["active_objective"],
+        investigation_plan=investigation_plan,
+        remaining_tool_calls=max(
+            0,
+            state["max_tool_calls_per_step"] - state["step_tool_call_count"],
+        ),
+        remaining_explorer_calls=max(
+            0,
+            state["max_explorer_calls_per_step"] - state["step_explorer_call_count"],
+        ),
+    )
+    return [
+        SystemMessage(
+            content=f"{INVESTIGATION_SYSTEM_PROMPT}\n\n{investigation_context}"
+        ),
+        *state["messages"],
+    ]
 
 
 def create_agent_node(model: BaseChatModel) -> AgentNode:
-    """Bind repository tools once and create the graph's agent node."""
+    """Bind repository tools once and create the graph's Explorer node."""
 
-    _bound_model = model.bind_tools(REPOSITORY_TOOLS)
+    bound_model = model.bind_tools(REPOSITORY_TOOLS)
 
     def agent_node(state: AgentNodeInput) -> AgentNodeUpdate:
-        """Call the tool-bound model once and return its message as a state update."""
+        """Call the tool-bound model once and return its state update."""
 
-        messages_for_agent = build_agent_messages(state)
-        response = _bound_model.invoke(messages_for_agent)
+        response = bound_model.invoke(build_agent_messages(state))
         return {
             "messages": [response],
-            "iteration_count": state["iteration_count"] + 1,
+            "step_explorer_call_count": state["step_explorer_call_count"] + 1,
         }
 
     return agent_node
 
 
-def mark_iteration_budget_exhausted(
-    _state: AgentInvocationInput,
-) -> IterationBudgetUpdate:
-    """Record that another Agent model invocation was not allowed."""
+class ExplorerBudgetInput(TypedDict):
+    step_explorer_call_count: int
+    max_explorer_calls_per_step: int
 
-    return {"stop_reason": "iteration_budget_exhausted"}
+
+class ExplorerBudgetUpdate(TypedDict):
+    stop_reason: str
+
+
+def mark_step_explorer_budget_exhausted(
+    _state: ExplorerBudgetInput,
+) -> ExplorerBudgetUpdate:
+    """Record that the active step cannot invoke Explorer again."""
+
+    return {"stop_reason": "step_explorer_budget_exhausted"}
+
+
+class ToolBudgetInput(MessagesState):
+    step_tool_call_count: int
+
+
+ToolCountUpdate = dict[str, int]
 
 
 def reserve_tool_budget(state: ToolBudgetInput) -> ToolCountUpdate:
     """Reserve budget for every tool call in the latest AI message."""
 
     batch_tool_call_count = len(state["messages"][-1].tool_calls)
-    return {"tool_call_count": batch_tool_call_count + state["tool_call_count"]}
+    return {
+        "step_tool_call_count": batch_tool_call_count + state["step_tool_call_count"]
+    }
+
+
+class ToolRejectionInput(MessagesState):
+    pass
+
+
+class ToolRejectionUpdate(TypedDict):
+    messages: list[ToolMessage]
+    stop_reason: str
 
 
 def reject_pending_tool_calls(
     state: ToolRejectionInput,
 ) -> ToolRejectionUpdate:
-    """Return error messages for tool calls rejected by the execution budget."""
+    """Return error messages for calls rejected by the execution budget."""
 
     last_message = state["messages"][-1]
-
     messages: list[ToolMessage] = []
     for tool_call in last_message.tool_calls + last_message.invalid_tool_calls:
         messages.append(
@@ -118,8 +224,17 @@ def reject_pending_tool_calls(
 
     return {
         "messages": messages,
-        "stop_reason": "tool_call_budget_exhausted",
+        "stop_reason": "step_tool_call_budget_exhausted",
     }
+
+
+class InvalidToolBatchInput(MessagesState):
+    step_tool_call_count: int
+
+
+class InvalidToolBatchUpdate(TypedDict):
+    messages: list[ToolMessage]
+    step_tool_call_count: int
 
 
 def handle_invalid_tool_batch(
@@ -166,70 +281,192 @@ def handle_invalid_tool_batch(
 
     return {
         "messages": messages,
-        "tool_call_count": batch_tool_call_count + state["tool_call_count"],
+        "step_tool_call_count": batch_tool_call_count + state["step_tool_call_count"],
     }
 
 
-def create_finalize_node(model: BaseChatModel) -> FinalizeNode:
-    """Create a node that turns collected repository evidence into a final report."""
+class CandidateBuilderInput(MessagesState):
+    """Evidence-bearing state visible to candidate construction."""
 
-    _structured_model = model.with_structured_output(
-        FinalResult,
+    objective: str
+    active_objective: str
+    investigation_plan: InvestigationPlan | None
+    stop_reason: str | None
+
+
+class CandidateBuilderUpdate(TypedDict):
+    candidate_result: CandidateResult
+
+
+CandidateBuilderNode = Callable[[CandidateBuilderInput], CandidateBuilderUpdate]
+
+
+def build_candidate_messages(state: CandidateBuilderInput) -> list[AnyMessage]:
+    """Build an isolated structured-candidate invocation."""
+
+    investigation_plan = (
+        "No investigation plan is available."
+        if not state["investigation_plan"]
+        else state["investigation_plan"].model_dump_json(indent=2)
+    )
+    stop_reason = state["stop_reason"] or "none"
+    return [
+        SystemMessage(content=CANDIDATE_BUILDING_SYSTEM_PROMPT),
+        *state["messages"],
+        HumanMessage(
+            content=CANDIDATE_BUILDING_REQUEST_TEMPLATE.format(
+                objective=state["objective"],
+                active_objective=state["active_objective"],
+                investigation_plan=investigation_plan,
+                stop_reason=stop_reason,
+            )
+        ),
+    ]
+
+
+def create_build_candidate_node(model: BaseChatModel) -> CandidateBuilderNode:
+    """Create a node that turns Explorer evidence into an internal candidate."""
+
+    structured_model = model.with_structured_output(
+        CandidateResult,
         method="function_calling",
     )
 
-    def finalize_node(state: FinalizerInput) -> FinalizeNodeUpdate:
-        """Generate a structured final-result update from the message history."""
+    def build_candidate_node(
+        state: CandidateBuilderInput,
+    ) -> CandidateBuilderUpdate:
+        """Generate one structured candidate from the collected evidence."""
 
-        messages_for_finalizer = [
-            *state["messages"],
-            HumanMessage(content=FINALIZATION_INSTRUCTION),
-        ]
+        response = structured_model.invoke(build_candidate_messages(state))
+        if not isinstance(response, CandidateResult):
+            raise TypeError("Candidate builder model did not return CandidateResult")
 
-        response = _structured_model.invoke(messages_for_finalizer)
+        return {"candidate_result": response}
 
-        if not isinstance(response, FinalResult):
-            raise TypeError("Finalizer model did not return FinalResult")
+    return build_candidate_node
 
-        return {
-            "final_result": response,
+
+class EvaluatorInput(TypedDict):
+    """Minimal trusted state visible to candidate evaluation."""
+
+    repo_path: Path
+    objective: str
+    candidate_result: CandidateResult | None
+
+
+class EvaluationPromptInput(TypedDict):
+    """Validated data rendered into one isolated evaluator invocation."""
+
+    objective: str
+    candidate_result: CandidateResult
+    deterministic_issues: tuple[ValidationIssue, ...]
+    evidence_pack: tuple[EvidenceExcerpt, ...]
+
+
+class EvaluatorNodeUpdate(TypedDict):
+    evaluation_report: EvaluationReport
+
+
+EvaluatorNode = Callable[[EvaluatorInput], EvaluatorNodeUpdate]
+
+
+def build_evaluator_messages(state: EvaluationPromptInput) -> list[AnyMessage]:
+    """Build one evaluator invocation without Explorer message history."""
+
+    deterministic_issues = [
+        issue.model_dump(mode="json") for issue in state["deterministic_issues"]
+    ]
+    evidence_pack = [
+        excerpt.model_dump(mode="json") for excerpt in state["evidence_pack"]
+    ]
+    return [
+        SystemMessage(content=EVALUATION_SYSTEM_PROMPT),
+        HumanMessage(
+            content=EVALUATION_REQUEST_TEMPLATE.format(
+                objective=state["objective"],
+                candidate_result=state["candidate_result"].model_dump_json(indent=2),
+                deterministic_issues=json.dumps(
+                    deterministic_issues,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                evidence_pack=json.dumps(
+                    evidence_pack,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+        ),
+    ]
+
+
+def create_evaluate_candidate_node(model: BaseChatModel) -> EvaluatorNode:
+    """Create the isolated semantic evaluator with deterministic validation."""
+
+    structured_model = model.with_structured_output(
+        SemanticAssessment,
+        method="function_calling",
+    )
+
+    def evaluate_candidate_node(state: EvaluatorInput) -> EvaluatorNodeUpdate:
+        """Validate one candidate and return a merged evaluation report."""
+
+        candidate = state["candidate_result"]
+        if candidate is None:
+            raise ValueError("Cannot evaluate without a CandidateResult")
+
+        validation = validate_candidate(state["repo_path"], candidate)
+        prompt_input: EvaluationPromptInput = {
+            "objective": state["objective"],
+            "candidate_result": candidate,
+            "deterministic_issues": validation.issues,
+            "evidence_pack": validation.evidence_pack,
         }
+        response = structured_model.invoke(build_evaluator_messages(prompt_input))
+        if not isinstance(response, SemanticAssessment):
+            raise TypeError("Evaluator model did not return SemanticAssessment")
 
-    return finalize_node
-
-
-def create_plan_investigation_node(
-    model: BaseChatModel,
-) -> PlannerNode:
-    """Create a node that generates the initial structured investigation plan.
-
-    The model produces an :class:`InvestigationPlan`. The returned node converts
-    that domain object into a partial graph update and derives
-    ``active_objective`` from the plan's validated active step.
-    """
-
-    _structured_model = model.with_structured_output(
-        InvestigationPlan,
-        method="function_calling",
-    )
-
-    def planner_node(state: PlannerInput) -> PlannerNodeUpdate:
-        """Generate the initial plan and activate its designated step."""
-
-        messages_for_planner = build_planner_messages(state)
-
-        response = _structured_model.invoke(messages_for_planner)
-
-        if not isinstance(response, InvestigationPlan):
-            raise TypeError("Planner model did not return InvestigationPlan")
-
-        active_step = next(
-            step for step in response.steps if step.id == response.active_step_id
+        passed = (
+            not validation.issues
+            and response.answers_objective
+            and response.evidence_supports_summary
+            and not response.has_critical_omissions
         )
-
         return {
-            "investigation_plan": response,
-            "active_objective": active_step.objective,
+            "evaluation_report": EvaluationReport(
+                deterministic_issues=list(validation.issues),
+                semantic_assessment=response,
+                missing_evidence=response.missing_evidence,
+                recommended_focus=response.recommended_focus,
+                passed=passed,
+            )
         }
 
-    return planner_node
+    return evaluate_candidate_node
+
+
+class FinalizerInput(TypedDict):
+    """Minimal input for deterministic candidate publication."""
+
+    candidate_result: CandidateResult | None
+
+
+class FinalizeNodeUpdate(TypedDict):
+    final_result: FinalResult
+
+
+def finalize_candidate(state: FinalizerInput) -> FinalizeNodeUpdate:
+    """Publish the current candidate through the stable public result contract."""
+
+    candidate = state["candidate_result"]
+    if candidate is None:
+        raise ValueError("Cannot finalize without a CandidateResult")
+
+    return {
+        "final_result": FinalResult(
+            relevant_files=candidate.relevant_files,
+            evidence=[item.claim for item in candidate.evidence],
+            summary=candidate.summary,
+            unresolved_questions=candidate.unresolved_questions,
+        )
+    }
