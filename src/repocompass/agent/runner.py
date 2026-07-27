@@ -1,6 +1,6 @@
 """Orchestration boundary for one RepoCompass investigation run.
 
-The Runner will connect trusted input, AgentState construction, LangGraph
+The Runner will connect trusted input, RepoCompassState construction, LangGraph
 execution, and the local domain trace. It must reuse graph behavior rather than
 duplicating node routing, tool execution, or budget enforcement.
 """
@@ -11,14 +11,13 @@ from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
-from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from repocompass.agent.contracts import FinalResult
 from repocompass.agent.graph import create_agent_graph
-from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
 from repocompass.agent.trace import RunTrace, TraceEventKind
+from repocompass.models import WorkflowModels
 
 RunIdFactory = Callable[[], str]
 
@@ -60,10 +59,7 @@ def _to_json_value(value: object) -> JsonValue:
         return cast(JsonValue, value.model_dump(mode="json"))
 
     if isinstance(value, Mapping):
-        return {
-            str(key): _to_json_value(item)
-            for key, item in value.items()
-        }
+        return {str(key): _to_json_value(item) for key, item in value.items()}
 
     if isinstance(value, (list, tuple)):
         return [_to_json_value(item) for item in value]
@@ -76,10 +72,7 @@ def _to_json_value(value: object) -> JsonValue:
 def _normalize_update(update: Mapping[str, object]) -> dict[str, JsonValue]:
     """Return a JSON-compatible copy of one node's partial state update."""
 
-    return {
-        key: _to_json_value(value)
-        for key, value in update.items()
-    }
+    return {key: _to_json_value(value) for key, value in update.items()}
 
 
 class RunRequest(BaseModel):
@@ -115,7 +108,7 @@ class RunOutcome:
         stop_reason: Graph stop reason, or ``None`` after normal completion.
         trace: Ordered local domain trace for this run.
 
-    ``RunOutcome`` deliberately omits the complete AgentState so persistent
+    ``RunOutcome`` deliberately omits the complete RepoCompassState so persistent
     message history and internal orchestration data do not become public API.
     """
 
@@ -129,14 +122,14 @@ class AgentRunner:
 
     def __init__(
         self,
-        model: BaseChatModel,
+        models: WorkflowModels,
         *,
         run_id_factory: RunIdFactory = generate_run_id,
     ) -> None:
         """Create a reusable Runner with explicit dependencies.
 
         Args:
-            model: Chat model used to compile the RepoCompass graph.
+            models: Explicit model roles used to compile the workflow.
             run_id_factory: Zero-argument factory for run IDs. Tests can inject
                 a deterministic factory; production uses UUID strings.
 
@@ -148,7 +141,7 @@ class AgentRunner:
             graph, create traces, or access the repository.
         """
 
-        self._model = model
+        self._models = models
         self._run_id_factory = run_id_factory
 
     def run(self, request: RunRequest) -> RunOutcome:
@@ -191,11 +184,11 @@ class AgentRunner:
 
         initial_state = create_initial_state(
             repo_path,
-            [HumanMessage(content=request.objective)],
+            request.objective,
             request.max_tool_calls,
             request.max_iterations,
         )
-        graph = create_agent_graph(self._model)
+        graph = create_agent_graph(self._models)
         final_result: FinalResult | None = None
         stop_reason: str | None = None
 
@@ -211,9 +204,7 @@ class AgentRunner:
                 if node_name.startswith("__"):
                     continue
                 if not isinstance(update, Mapping):
-                    raise TypeError(
-                        f"Node {node_name!r} returned a non-mapping update"
-                    )
+                    raise TypeError(f"Node {node_name!r} returned a non-mapping update")
 
                 trace.record(
                     TraceEventKind.NODE_COMPLETED,

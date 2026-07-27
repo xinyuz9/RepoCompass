@@ -1,10 +1,10 @@
-from langgraph.graph import START, StateGraph, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
-from langchain_core.language_models import BaseChatModel
 
 from repocompass.agent.nodes import (
     create_agent_node,
     create_finalize_node,
+    create_plan_investigation_node,
     handle_invalid_tool_batch,
     mark_iteration_budget_exhausted,
     reject_pending_tool_calls,
@@ -12,15 +12,20 @@ from repocompass.agent.nodes import (
 )
 from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
 from repocompass.agent.routing import route_agent_invocation, route_tool_calls
-from repocompass.agent.state import AgentState
+from repocompass.agent.state import RepoCompassState
+from repocompass.models import WorkflowModels
 
 
-def create_agent_graph(model: BaseChatModel):
-    """Compile the M0 repository tool-calling graph for the provided model."""
+def create_agent_graph(models: WorkflowModels):
+    """Compile the current graph from explicit workflow model roles."""
 
-    builder = StateGraph(AgentState)
+    builder = StateGraph(RepoCompassState)
 
-    builder.add_node("agent", create_agent_node(model))
+    builder.add_node(
+        "plan_investigation",
+        create_plan_investigation_node(models.planner),
+    )
+    builder.add_node("agent", create_agent_node(models.explorer))
     builder.add_node("reject_tools", reject_pending_tool_calls)
     builder.add_node("handle_invalid_tools", handle_invalid_tool_batch)
     builder.add_node("authorize_tools", reserve_tool_budget)
@@ -29,14 +34,15 @@ def create_agent_graph(model: BaseChatModel):
         "iteration_budget_exhausted",
         mark_iteration_budget_exhausted,
     )
-    builder.add_node("finalize", create_finalize_node(model))
+    builder.add_node("finalize", create_finalize_node(models.explorer))
 
     agent_invocation_routes = {
         "agent": "agent",
         "iteration_budget_exhausted": "iteration_budget_exhausted",
     }
+    builder.add_edge(START, "plan_investigation")
     builder.add_conditional_edges(
-        START,
+        "plan_investigation",
         route_agent_invocation,
         agent_invocation_routes,
     )
@@ -65,6 +71,6 @@ def create_agent_graph(model: BaseChatModel):
     builder.add_edge("iteration_budget_exhausted", "finalize")
     builder.add_edge("finalize", END)
 
-    compiled = builder.compile(name="repocompass_m0")
+    compiled = builder.compile(name="repocompass_m1")
 
     return compiled

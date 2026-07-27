@@ -10,6 +10,7 @@ from repocompass.models.config import (
     ModelProvider,
     OpenAIModelSettings,
 )
+from repocompass.models.factory import WorkflowModels
 
 MODEL_ENVIRONMENT_VARIABLES = (
     "REPOCOMPASS_MODEL_PROVIDER",
@@ -167,3 +168,30 @@ def test_create_chat_model_dispatches_by_settings_type(
 
     assert result is expected
     provider_factory.assert_called_once_with(settings)
+
+
+def test_workflow_models_from_single_model_preserves_explicit_roles() -> None:
+    model = MagicMock()
+
+    models = WorkflowModels.from_single_model(model)
+
+    assert models.explorer is model
+    assert models.planner is model
+    assert models.evaluator is model
+
+
+def test_create_workflow_models_constructs_one_shared_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = OpenAIModelSettings(
+        model="test-openai-model",
+        api_key="openai-test-key",
+    )
+    model = MagicMock()
+    create_chat_model = MagicMock(return_value=model)
+    monkeypatch.setattr(factory, "create_chat_model", create_chat_model)
+
+    models = factory.create_workflow_models(settings)
+
+    assert models == WorkflowModels.from_single_model(model)
+    create_chat_model.assert_called_once_with(settings)

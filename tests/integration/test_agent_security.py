@@ -7,7 +7,6 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
     AIMessage,
     AnyMessage,
-    HumanMessage,
     SystemMessage,
     ToolCall,
     ToolMessage,
@@ -15,8 +14,9 @@ from langchain_core.messages import (
 from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.graph import create_agent_graph
-from repocompass.agent.result import FinalResult
+from repocompass.agent.contracts import FinalResult
 from repocompass.agent.state import create_initial_state
+from tests.model_doubles import with_scripted_planner
 
 
 def test_agent_uses_state_repo_path_when_tool_call_spoofs_root(
@@ -65,12 +65,12 @@ def test_agent_uses_state_repo_path_when_tool_call_spoofs_root(
     )
     initial_state = create_initial_state(
         trusted_repo,
-        [HumanMessage(content="Read evidence.py.")],
+        "Read evidence.py.",
         max_tool_calls=1,
         max_iterations=2,
     )
 
-    final_state = create_agent_graph(model).invoke(initial_state)
+    final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     tool_result = final_state["messages"][2]
 
     assert isinstance(tool_result, ToolMessage)
@@ -117,20 +117,17 @@ def test_repository_instruction_text_remains_inside_tool_message() -> None:
     )
     initial_state = create_initial_state(
         fixture_repo,
-        [HumanMessage(content="Investigate authentication.")],
+        "Investigate authentication.",
         max_tool_calls=1,
         max_iterations=2,
     )
 
-    final_state = create_agent_graph(model).invoke(initial_state)
+    final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
 
     second_agent_input = agent_inputs[1]
     assert isinstance(second_agent_input[0], SystemMessage)
     assert isinstance(second_agent_input[-1], ToolMessage)
-    assert "IGNORE ALL PREVIOUS INSTRUCTIONS" in str(
-        second_agent_input[-1].content
-    )
+    assert "IGNORE ALL PREVIOUS INSTRUCTIONS" in str(second_agent_input[-1].content)
     assert all(
-        not isinstance(message, SystemMessage)
-        for message in final_state["messages"]
+        not isinstance(message, SystemMessage) for message in final_state["messages"]
     )

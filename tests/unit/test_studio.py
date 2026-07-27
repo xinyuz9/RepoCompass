@@ -9,11 +9,12 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableLambda
 
 from repocompass import studio
-from repocompass.agent.result import FinalResult
+from repocompass.agent.contracts import FinalResult
 from repocompass.agent.state import (
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_MAX_TOOL_CALLS,
 )
+from tests.model_doubles import with_scripted_planner
 
 
 def _create_scripted_model(final_result: FinalResult) -> MagicMock:
@@ -34,7 +35,9 @@ def test_studio_graph_accepts_public_input_and_applies_defaults(
         summary="No repository files were needed.",
         unresolved_questions=[],
     )
-    graph = studio.build_studio_graph(_create_scripted_model(final_result))
+    graph = studio.build_studio_graph(
+        with_scripted_planner(_create_scripted_model(final_result))
+    )
 
     final_state = graph.invoke(
         {
@@ -62,7 +65,9 @@ def test_studio_graph_exposes_only_public_input_fields() -> None:
         summary="No repository files were needed.",
         unresolved_questions=[],
     )
-    graph = studio.build_studio_graph(_create_scripted_model(final_result))
+    graph = studio.build_studio_graph(
+        with_scripted_planner(_create_scripted_model(final_result))
+    )
 
     schema = graph.input_schema.model_json_schema()
 
@@ -85,7 +90,9 @@ def test_studio_graph_rejects_file_as_repository_path(tmp_path: Path) -> None:
         summary="Unused.",
         unresolved_questions=[],
     )
-    graph = studio.build_studio_graph(_create_scripted_model(final_result))
+    graph = studio.build_studio_graph(
+        with_scripted_planner(_create_scripted_model(final_result))
+    )
 
     with pytest.raises(ValueError, match="not a directory"):
         graph.invoke(
@@ -99,13 +106,13 @@ def test_studio_graph_rejects_file_as_repository_path(tmp_path: Path) -> None:
 def test_agent_server_factory_uses_configured_provider_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    create_chat_model = MagicMock(return_value=sentinel.model)
+    create_workflow_models = MagicMock(return_value=sentinel.models)
     build_studio_graph = MagicMock(return_value=sentinel.graph)
-    monkeypatch.setattr(studio, "create_chat_model", create_chat_model)
+    monkeypatch.setattr(studio, "create_workflow_models", create_workflow_models)
     monkeypatch.setattr(studio, "build_studio_graph", build_studio_graph)
 
     result = studio.create_studio_graph({})
 
     assert result is sentinel.graph
-    create_chat_model.assert_called_once_with()
-    build_studio_graph.assert_called_once_with(sentinel.model)
+    create_workflow_models.assert_called_once_with()
+    build_studio_graph.assert_called_once_with(sentinel.models)

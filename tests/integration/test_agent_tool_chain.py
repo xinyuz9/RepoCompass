@@ -15,8 +15,9 @@ from langchain_core.messages import (
 from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.graph import create_agent_graph
-from repocompass.agent.result import FinalResult
+from repocompass.agent.contracts import FinalResult
 from repocompass.agent.state import create_initial_state
+from tests.model_doubles import with_scripted_planner
 
 AUTH_PROJECT = Path(__file__).parents[1] / "fixtures" / "auth_project"
 
@@ -86,12 +87,12 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
     user_message = HumanMessage(content="Find and explain the authentication logic.")
     initial_state = create_initial_state(
         AUTH_PROJECT,
-        [user_message],
+        str(user_message.content),
         max_tool_calls=3,
         max_iterations=4,
     )
 
-    final_state = create_agent_graph(model).invoke(initial_state)
+    final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
@@ -100,7 +101,8 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
     assert final_state["iteration_count"] == 4
     assert final_state["repo_path"] == AUTH_PROJECT.resolve()
     assert len(messages) == 8
-    assert messages[0] == user_message
+    assert isinstance(messages[0], HumanMessage)
+    assert messages[0].content == user_message.content
     assert messages[1] == tree_request
     assert messages[3] == search_request
     assert messages[5] == read_request
@@ -128,13 +130,13 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
         sum(isinstance(message, SystemMessage) for message in messages) == 1
         for messages in agent_inputs
     )
-    assert agent_inputs[0][1:] == [user_message]
+    assert len(agent_inputs[0][1:]) == 1
+    assert agent_inputs[0][1].content == user_message.content
     assert agent_inputs[1][-1] == tree_result
     assert agent_inputs[2][-1] == search_result
     assert agent_inputs[3][-1] == read_result
     assert all(
-        not isinstance(message, SystemMessage)
-        for message in final_state["messages"]
+        not isinstance(message, SystemMessage) for message in final_state["messages"]
     )
     assert all(
         "repo_path" not in call["args"] for call in (tree_call, search_call, read_call)

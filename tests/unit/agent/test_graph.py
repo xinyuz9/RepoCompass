@@ -14,8 +14,9 @@ from langchain_core.messages import (
 from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.graph import create_agent_graph
-from repocompass.agent.result import FinalResult
+from repocompass.agent.contracts import FinalResult
 from repocompass.agent.state import create_initial_state
+from tests.model_doubles import with_scripted_planner
 
 
 def _create_scripted_model(
@@ -47,18 +48,21 @@ def test_graph_finalizes_when_agent_returns_no_tool_calls(tmp_path: Path) -> Non
     user_message = HumanMessage(content="Find the relevant implementation.")
     initial_state = create_initial_state(
         tmp_path,
-        [user_message],
+        str(user_message.content),
         max_tool_calls=3,
         max_iterations=3,
     )
 
-    final_state = create_agent_graph(model).invoke(initial_state)
+    final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
 
     assert final_state["final_result"] == expected_result
     assert final_state["stop_reason"] is None
     assert final_state["tool_call_count"] == 0
     assert final_state["iteration_count"] == 1
-    assert final_state["messages"] == [user_message, agent_response]
+    messages = final_state["messages"]
+    assert isinstance(messages[0], HumanMessage)
+    assert messages[0].content == user_message.content
+    assert messages[1] == agent_response
     model.bind_tools.assert_called_once()
     model.with_structured_output.assert_called_once_with(
         FinalResult,
@@ -109,12 +113,12 @@ def test_graph_finalizes_when_agent_returns_tool_calls(tmp_path: Path) -> None:
     user_message = HumanMessage(content="Find the relevant implementation.")
     initial_state = create_initial_state(
         tmp_path,
-        [user_message],
+        str(user_message.content),
         max_tool_calls=3,
         max_iterations=3,
     )
 
-    final_state = create_agent_graph(model).invoke(initial_state)
+    final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
@@ -166,12 +170,12 @@ def test_graph_rejects_batch_exceeding_budget_and_finalizes(
     user_message = HumanMessage(content="Find the authentication logic.")
     initial_state = create_initial_state(
         tmp_path,
-        [user_message],
+        str(user_message.content),
         max_tool_calls=1,
         max_iterations=3,
     )
 
-    final_state = create_agent_graph(model).invoke(initial_state)
+    final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
@@ -179,7 +183,9 @@ def test_graph_rejects_batch_exceeding_budget_and_finalizes(
     assert final_state["tool_call_count"] == 0
     assert final_state["iteration_count"] == 1
     assert len(messages) == 4
-    assert messages[:2] == [user_message, oversized_request]
+    assert isinstance(messages[0], HumanMessage)
+    assert messages[0].content == user_message.content
+    assert messages[1] == oversized_request
     first_rejection = messages[2]
     second_rejection = messages[3]
     assert isinstance(first_rejection, ToolMessage)
@@ -235,12 +241,12 @@ def test_graph_handles_mixed_invalid_batch_without_executing_valid_calls(
     user_message = HumanMessage(content="Find the authentication logic.")
     initial_state = create_initial_state(
         tmp_path,
-        [user_message],
+        str(user_message.content),
         max_tool_calls=3,
         max_iterations=3,
     )
 
-    final_state = create_agent_graph(model).invoke(initial_state)
+    final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
@@ -248,7 +254,9 @@ def test_graph_handles_mixed_invalid_batch_without_executing_valid_calls(
     assert final_state["tool_call_count"] == 2
     assert final_state["iteration_count"] == 2
     assert len(messages) == 5
-    assert messages[:2] == [user_message, mixed_request]
+    assert isinstance(messages[0], HumanMessage)
+    assert messages[0].content == user_message.content
+    assert messages[1] == mixed_request
     invalid_error = messages[2]
     withheld_valid_call = messages[3]
     assert isinstance(invalid_error, ToolMessage)
@@ -292,12 +300,12 @@ def test_graph_returns_recoverable_tool_invocation_error_to_agent(
     user_message = HumanMessage(content="Inspect the repository.")
     initial_state = create_initial_state(
         tmp_path,
-        [user_message],
+        str(user_message.content),
         max_tool_calls=3,
         max_iterations=3,
     )
 
-    final_state = create_agent_graph(model).invoke(initial_state)
+    final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
@@ -305,7 +313,9 @@ def test_graph_returns_recoverable_tool_invocation_error_to_agent(
     assert final_state["tool_call_count"] == 1
     assert final_state["iteration_count"] == 2
     assert len(messages) == 4
-    assert messages[:2] == [user_message, invalid_request]
+    assert isinstance(messages[0], HumanMessage)
+    assert messages[0].content == user_message.content
+    assert messages[1] == invalid_request
     tool_error = messages[2]
     assert isinstance(tool_error, ToolMessage)
     assert tool_error.name == "list_tree"
@@ -352,12 +362,12 @@ def test_graph_finalizes_without_extra_agent_invocation_at_iteration_limit(
     user_message = HumanMessage(content="Find the authentication logic.")
     initial_state = create_initial_state(
         tmp_path,
-        [user_message],
+        str(user_message.content),
         max_tool_calls=3,
         max_iterations=1,
     )
 
-    final_state = create_agent_graph(model).invoke(initial_state)
+    final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
 
     assert len(agent_inputs) == 1
     assert final_state["iteration_count"] == 1

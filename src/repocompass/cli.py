@@ -11,7 +11,7 @@ from repocompass.agent.state import (
     DEFAULT_MAX_TOOL_CALLS,
 )
 from repocompass.agent.trace_sink import JsonlTraceSink
-from repocompass.models import create_chat_model
+from repocompass.models import create_workflow_models
 
 DEFAULT_TRACE_DIRECTORY = Path(".repocompass/traces")
 
@@ -83,7 +83,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             max_tool_calls=arguments.max_tool_calls,
             max_iterations=arguments.max_iterations,
         )
-        runner = AgentRunner(create_chat_model())
+        runner = AgentRunner(create_workflow_models())
         outcome = runner.run(request)
         trace_path = JsonlTraceSink().write(
             outcome.trace,

@@ -1,0 +1,1 @@
+"""RepoCompass test support package."""

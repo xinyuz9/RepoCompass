@@ -7,13 +7,19 @@ from repocompass.models.config import (
     OpenAIModelSettings,
     load_model_settings,
 )
-from repocompass.models.factory import create_chat_model
+from repocompass.models.factory import (
+    WorkflowModels,
+    create_chat_model,
+    create_workflow_models,
+)
 
 __all__ = [
     "DeepSeekModelSettings",
     "ModelProvider",
     "ModelSettings",
     "OpenAIModelSettings",
+    "WorkflowModels",
     "create_chat_model",
+    "create_workflow_models",
     "load_model_settings",
 ]

@@ -1,6 +1,6 @@
 """Unit tests for the repository tool-call routing decision table."""
 
-from pathlib import Path
+from typing import get_type_hints
 
 import pytest
 from langchain_core.messages import (
@@ -16,26 +16,33 @@ from repocompass.agent.routing import (
     route_agent_invocation,
     route_tool_calls,
 )
-from repocompass.agent.state import AgentState, create_initial_state
+from repocompass.agent.state import (
+    AgentInvocationInput,
+    ToolRoutingInput,
+)
+
+
+def test_route_tool_calls_declares_narrow_input_schema() -> None:
+    assert get_type_hints(route_tool_calls)["state"] is ToolRoutingInput
+
+
+def test_route_agent_invocation_declares_narrow_input_schema() -> None:
+    assert get_type_hints(route_agent_invocation)["state"] is AgentInvocationInput
 
 
 def _state_for_message(
-    repo_path: Path,
     message: AIMessage,
     *,
     used_tool_calls: int,
     max_tool_calls: int,
-) -> AgentState:
-    """Build a complete state for one router decision."""
+) -> ToolRoutingInput:
+    """Build only the state fields required for tool-call routing."""
 
-    state = create_initial_state(
-        repo_path,
-        [message],
-        max_tool_calls=max_tool_calls,
-        max_iterations=3,
-    )
-    state["tool_call_count"] = used_tool_calls
-    return state
+    return {
+        "messages": [message],
+        "tool_call_count": used_tool_calls,
+        "max_tool_calls": max_tool_calls,
+    }
 
 
 @pytest.mark.parametrize(
@@ -109,7 +116,6 @@ def _state_for_message(
     ],
 )
 def test_route_tool_calls_decision_table(
-    tmp_path: Path,
     message: AIMessage,
     used_tool_calls: int,
     max_tool_calls: int,
@@ -118,7 +124,6 @@ def test_route_tool_calls_decision_table(
     """Route each valid state according to calls, validity, and budget."""
 
     state = _state_for_message(
-        tmp_path,
         message,
         used_tool_calls=used_tool_calls,
         max_tool_calls=max_tool_calls,
@@ -162,13 +167,11 @@ def test_route_tool_calls_decision_table(
     ],
 )
 def test_route_tool_calls_rejects_missing_call_id(
-    tmp_path: Path,
     message: AIMessage,
 ) -> None:
     """Every pending call needs an ID so a ToolMessage can answer it."""
 
     state = _state_for_message(
-        tmp_path,
         message,
         used_tool_calls=0,
         max_tool_calls=3,
@@ -178,29 +181,27 @@ def test_route_tool_calls_rejects_missing_call_id(
         route_tool_calls(state)
 
 
-def test_route_tool_calls_rejects_empty_history(tmp_path: Path) -> None:
+def test_route_tool_calls_rejects_empty_history() -> None:
     """Routing without an Agent response is a graph wiring error."""
 
-    state = create_initial_state(
-        tmp_path,
-        [],
-        max_tool_calls=3,
-        max_iterations=3,
-    )
+    state: ToolRoutingInput = {
+        "messages": [],
+        "tool_call_count": 0,
+        "max_tool_calls": 3,
+    }
 
     with pytest.raises(ValueError, match="Message list is empty"):
         route_tool_calls(state)
 
 
-def test_route_tool_calls_requires_ai_message(tmp_path: Path) -> None:
+def test_route_tool_calls_requires_ai_message() -> None:
     """The router must run immediately after Agent, not after another node."""
 
-    state = create_initial_state(
-        tmp_path,
-        [HumanMessage(content="Inspect the repository.")],
-        max_tool_calls=3,
-        max_iterations=3,
-    )
+    state: ToolRoutingInput = {
+        "messages": [HumanMessage(content="Inspect the repository.")],
+        "tool_call_count": 0,
+        "max_tool_calls": 3,
+    }
 
     with pytest.raises(TypeError, match="Last message is not an AIMessage"):
         route_tool_calls(state)
@@ -220,17 +221,13 @@ def test_route_tool_calls_requires_ai_message(tmp_path: Path) -> None:
     ],
 )
 def test_route_agent_invocation_enforces_iteration_budget(
-    tmp_path: Path,
     iteration_count: int,
     max_iterations: int,
     expected_route: AgentInvocationRoute,
 ) -> None:
-    state = create_initial_state(
-        tmp_path,
-        [HumanMessage(content="Inspect the repository.")],
-        max_tool_calls=3,
-        max_iterations=max_iterations,
-    )
-    state["iteration_count"] = iteration_count
+    state: AgentInvocationInput = {
+        "iteration_count": iteration_count,
+        "max_iterations": max_iterations,
+    }
 
     assert route_agent_invocation(state) == expected_route

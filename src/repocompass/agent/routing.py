@@ -4,7 +4,7 @@ from typing import Literal
 
 from langchain_core.messages import AIMessage
 
-from repocompass.agent.state import AgentState
+from repocompass.agent.state import AgentInvocationInput, ToolRoutingInput
 
 ToolCallRoute = Literal[
     "authorize_tools",
@@ -15,7 +15,7 @@ ToolCallRoute = Literal[
 AgentInvocationRoute = Literal["agent", "iteration_budget_exhausted"]
 
 
-def route_agent_invocation(state: AgentState) -> AgentInvocationRoute:
+def route_agent_invocation(state: AgentInvocationInput) -> AgentInvocationRoute:
     """Allow Agent reasoning only while an iteration remains."""
 
     if state["iteration_count"] < state["max_iterations"]:
@@ -24,7 +24,7 @@ def route_agent_invocation(state: AgentState) -> AgentInvocationRoute:
     return "iteration_budget_exhausted"
 
 
-def route_tool_calls(state: AgentState) -> ToolCallRoute:
+def route_tool_calls(state: ToolRoutingInput) -> ToolCallRoute:
     """Choose the next tool-call path without modifying agent state."""
 
     if not state["messages"]:

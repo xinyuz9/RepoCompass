@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from repocompass import cli
-from repocompass.agent.result import FinalResult
+from repocompass.agent.contracts import FinalResult
 from repocompass.agent.runner import RunOutcome
 from repocompass.agent.trace import RunTrace, TraceEventKind
 
@@ -35,9 +35,9 @@ def test_main_runs_investigation_and_writes_trace(
     runner = MagicMock()
     runner.run.return_value = outcome
     runner_factory = MagicMock(return_value=runner)
-    create_model = MagicMock(return_value=model)
+    create_models = MagicMock(return_value=model)
     monkeypatch.setattr(cli, "AgentRunner", runner_factory)
-    monkeypatch.setattr(cli, "create_chat_model", create_model)
+    monkeypatch.setattr(cli, "create_workflow_models", create_models)
     trace_directory = tmp_path / "traces"
 
     exit_code = cli.main(
@@ -58,7 +58,7 @@ def test_main_runs_investigation_and_writes_trace(
     request = runner.run.call_args.args[0]
     trace_path = trace_directory / "cli-run.jsonl"
     assert exit_code == 0
-    assert create_model.call_count == 1
+    assert create_models.call_count == 1
     runner_factory.assert_called_once_with(model)
     assert request.repo_path == tmp_path
     assert request.objective == "Inspect authentication."
@@ -76,8 +76,8 @@ def test_main_reports_configuration_error(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    create_model = MagicMock(side_effect=ValueError("missing model settings"))
-    monkeypatch.setattr(cli, "create_chat_model", create_model)
+    create_models = MagicMock(side_effect=ValueError("missing model settings"))
+    monkeypatch.setattr(cli, "create_workflow_models", create_models)
 
     exit_code = cli.main(
         [

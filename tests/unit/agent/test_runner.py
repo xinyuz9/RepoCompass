@@ -8,9 +8,10 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, ToolCall
 from langchain_core.runnables import RunnableLambda
 
-from repocompass.agent.result import FinalResult
+from repocompass.agent.contracts import FinalResult
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.trace import TraceEventKind
+from tests.model_doubles import with_scripted_planner
 
 
 def _create_scripted_model(
@@ -20,9 +21,7 @@ def _create_scripted_model(
     responses = iter(agent_responses)
     model = MagicMock(spec=BaseChatModel)
     model.bind_tools.return_value = RunnableLambda(lambda _: next(responses))
-    model.with_structured_output.return_value = RunnableLambda(
-        lambda _: final_result
-    )
+    model.with_structured_output.return_value = RunnableLambda(lambda _: final_result)
     return model
 
 
@@ -37,7 +36,10 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         unresolved_questions=[],
     )
     model = _create_scripted_model([agent_response], final_result)
-    runner = AgentRunner(model, run_id_factory=lambda: "fixed-run")
+    runner = AgentRunner(
+        with_scripted_planner(model),
+        run_id_factory=lambda: "fixed-run",
+    )
     request = RunRequest(
         repo_path=tmp_path,
         objective="  Inspect the repository.  ",
@@ -55,10 +57,12 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         TraceEventKind.RUN_STARTED,
         TraceEventKind.NODE_COMPLETED,
         TraceEventKind.NODE_COMPLETED,
+        TraceEventKind.NODE_COMPLETED,
         TraceEventKind.RUN_FINISHED,
     ]
     assert [event.node for event in events] == [
         None,
+        "plan_investigation",
         "agent",
         "finalize",
         None,
@@ -69,10 +73,11 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         "max_tool_calls": 3,
         "max_iterations": 2,
     }
-    assert events[1].payload["iteration_count"] == 1
-    assert events[2].payload["final_result"] == final_result.model_dump(
-        mode="json"
+    assert events[1].payload["active_objective"] == (
+        "Collect repository evidence for the objective."
     )
+    assert events[2].payload["iteration_count"] == 1
+    assert events[3].payload["final_result"] == final_result.model_dump(mode="json")
     assert events[-1].payload == {"stop_reason": None}
     assert all(event.model_dump_json() for event in events)
 
@@ -102,7 +107,10 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
         [tool_request, final_response],
         final_result,
     )
-    runner = AgentRunner(model, run_id_factory=lambda: "tool-run")
+    runner = AgentRunner(
+        with_scripted_planner(model),
+        run_id_factory=lambda: "tool-run",
+    )
     request = RunRequest(
         repo_path=tmp_path,
         objective="Find authentication.",
@@ -112,22 +120,21 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
 
     outcome = runner.run(request)
     node_events = [
-        event
-        for event in outcome.trace
-        if event.kind is TraceEventKind.NODE_COMPLETED
+        event for event in outcome.trace if event.kind is TraceEventKind.NODE_COMPLETED
     ]
 
     assert [event.node for event in node_events] == [
+        "plan_investigation",
         "agent",
         "authorize_tools",
         "tools",
         "agent",
         "finalize",
     ]
-    first_agent_message = node_events[0].payload["messages"][0]
+    first_agent_message = node_events[1].payload["messages"][0]
     assert first_agent_message["tool_calls"][0]["name"] == "list_tree"
-    assert node_events[1].payload == {"tool_call_count": 1}
-    tool_message = node_events[2].payload["messages"][0]
+    assert node_events[2].payload == {"tool_call_count": 1}
+    tool_message = node_events[3].payload["messages"][0]
     assert tool_message["tool_call_id"] == "call-tree"
     assert "auth.py" in tool_message["content"]
     assert outcome.stop_reason is None
@@ -152,7 +159,10 @@ def test_runner_preserves_iteration_budget_stop_reason(
         [AIMessage(content="", tool_calls=[tree_call])],
         final_result,
     )
-    runner = AgentRunner(model, run_id_factory=lambda: "budget-run")
+    runner = AgentRunner(
+        with_scripted_planner(model),
+        run_id_factory=lambda: "budget-run",
+    )
     request = RunRequest(
         repo_path=tmp_path,
         objective="Inspect the repository.",
@@ -171,7 +181,9 @@ def test_runner_preserves_iteration_budget_stop_reason(
 def test_runner_rejects_file_as_repository_path(tmp_path: Path) -> None:
     file_path = tmp_path / "not-a-repository"
     file_path.write_text("not a directory", encoding="utf-8")
-    runner = AgentRunner(MagicMock(spec=BaseChatModel))
+    runner = AgentRunner(
+        with_scripted_planner(MagicMock(spec=BaseChatModel))
+    )
     request = RunRequest(
         repo_path=file_path,
         objective="Inspect the repository.",
