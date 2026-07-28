@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from repocompass.agent.candidate import CandidateResult
+from repocompass.tools.repository import read_code
 
 
 class ValidationIssue(BaseModel):
@@ -139,4 +140,75 @@ def validate_candidate(
     candidate: CandidateResult,
 ) -> CandidateValidation:
     """Validate candidate locations and build bounded source excerpts."""
-    ...
+
+    issues = []
+    evidence_pack = []
+
+    if not candidate.evidence:
+        issues.append(
+            ValidationIssue(
+                code="evidence_empty",
+                message="Candidate contains no evidence.",
+            )
+        )
+
+    for evidence_index, evidence in enumerate(candidate.evidence):
+        relative_path, path_issue = _validate_repository_file(
+            repo_path,
+            evidence.path,
+            evidence_index=evidence_index,
+        )
+
+        if path_issue is not None:
+            issues.append(path_issue)
+            continue
+
+        if evidence.line_start is None:
+            # line_range_missing
+            issues.append(
+                ValidationIssue(
+                    code="line_range_missing",
+                    message="Start line or End line missing",
+                    path=evidence.path,
+                    evidence_index=evidence_index,
+                )
+            )
+            continue
+
+        assert relative_path is not None
+        line_end = (
+            evidence.line_start if evidence.line_end is None else evidence.line_end
+        )
+
+        try:
+            read_result = read_code(
+                repo_path, relative_path, evidence.line_start, line_end
+            )
+
+        except ValueError as error:
+            issues.append(
+                ValidationIssue(
+                    code="line_range_invalid",
+                    message=str(error),
+                    path=evidence.path,
+                    evidence_index=evidence_index,
+                )
+            )
+            continue
+
+        evidence_pack.append(
+            EvidenceExcerpt(
+                evidence_index=evidence_index,
+                path=read_result["path"],
+                line_start=read_result["start_line"],
+                line_end=read_result["end_line"],
+                symbol=evidence.symbol,
+                claim=evidence.claim,
+                content=read_result["content"],
+            )
+        )
+
+    return CandidateValidation(
+        issues=tuple(issues),
+        evidence_pack=tuple(evidence_pack),
+    )
