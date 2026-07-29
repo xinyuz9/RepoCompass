@@ -8,6 +8,7 @@ from pathlib import Path
 from repocompass.agent.runner import (
     AgentRunner,
     DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
+    DEFAULT_MAX_PLAN_REVISIONS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     RunRequest,
 )
@@ -70,6 +71,14 @@ def create_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-plan-revisions",
+        type=_positive_int,
+        default=DEFAULT_MAX_PLAN_REVISIONS,
+        help=(
+            f"model-based plan-revision budget (default: {DEFAULT_MAX_PLAN_REVISIONS})"
+        ),
+    )
+    parser.add_argument(
         "--trace-dir",
         type=Path,
         default=DEFAULT_TRACE_DIRECTORY,
@@ -89,6 +98,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             objective=arguments.objective,
             max_tool_calls_per_step=arguments.max_tool_calls_per_step,
             max_explorer_calls_per_step=(arguments.max_explorer_calls_per_step),
+            max_plan_revisions=arguments.max_plan_revisions,
         )
         runner = AgentRunner(create_workflow_models())
         outcome = runner.run(request)
@@ -102,7 +112,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print(outcome.final_result.model_dump_json(indent=2))
     print(f"Run ID: {outcome.trace.run_id}", file=sys.stderr)
-    print(f"Stop reason: {outcome.stop_reason or 'completed'}", file=sys.stderr)
+    print(f"Status: {outcome.termination_status}", file=sys.stderr)
+    print(
+        f"Last step stop reason: {outcome.step_stop_reason or 'none'}",
+        file=sys.stderr,
+    )
     print(f"Trace: {trace_path}", file=sys.stderr)
     return 0
 

@@ -5,6 +5,29 @@ from typing import Literal, TypedDict
 from langchain_core.messages import AIMessage
 from langgraph.graph import MessagesState
 
+ControllerAction = Literal[
+    "accepted",
+    "continue_step",
+    "advance_step",
+    "revise_plan",
+    "exhausted",
+]
+TerminationStatus = Literal["accepted", "exhausted"]
+
+
+class ControllerRoutingInput(TypedDict):
+    next_action: ControllerAction | None
+
+
+def route_controller(state: ControllerRoutingInput) -> ControllerAction:
+    """Route using the decision already recorded by the Controller node."""
+
+    next_action = state["next_action"]
+    if next_action is None:
+        raise ValueError("Controller did not select a next action")
+
+    return next_action
+
 
 class ExplorerInvocationInput(TypedDict):
     step_explorer_call_count: int

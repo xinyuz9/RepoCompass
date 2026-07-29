@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from repocompass.agent.candidate import CandidateResult, EvidenceItem
+from repocompass.agent.evaluation import EvaluationReport
 from repocompass.agent.planning import MAX_PLAN_STEPS, InvestigationPlan, PlanStep
 from repocompass.agent.result import FinalResult
 
@@ -13,6 +14,20 @@ VALID_RESULT = {
     "summary": "The relevant implementation was identified.",
     "unresolved_questions": [],
 }
+
+
+def test_internal_contract_fields_are_minimal() -> None:
+    assert set(InvestigationPlan.model_fields) == {"steps"}
+    assert set(CandidateResult.model_fields) == {
+        "evidence",
+        "summary",
+        "unresolved_questions",
+    }
+    assert set(EvaluationReport.model_fields) == {
+        "deterministic_issues",
+        "semantic_assessment",
+    }
+    assert set(EvaluationReport.model_computed_fields) == {"passed"}
 
 
 @pytest.mark.parametrize("missing_field", VALID_RESULT)
@@ -34,7 +49,7 @@ def test_final_result_rejects_extra_fields() -> None:
         FinalResult.model_validate(
             {
                 **VALID_RESULT,
-                "stop_reason": "step_tool_call_budget_exhausted",
+                "step_stop_reason": "step_tool_call_budget_exhausted",
             }
         )
 
@@ -49,7 +64,6 @@ def test_candidate_result_contains_structured_evidence() -> None:
     )
 
     candidate = CandidateResult(
-        relevant_files=["src/auth.py"],
         evidence=[evidence],
         summary="Authentication is handled by authenticate.",
         unresolved_questions=[],
@@ -97,17 +111,13 @@ def _step(
 
 def test_investigation_plan_accepts_one_matching_active_step() -> None:
     plan = InvestigationPlan(
-        task_summary="Locate and explain authentication.",
-        success_criteria=["Identify the entry point."],
         steps=[
             _step("locate", status="active"),
             _step("explain", status="pending"),
         ],
-        active_step_id="locate",
     )
 
-    assert plan.active_step_id == "locate"
-    assert plan.steps[0].status == "active"
+    assert plan.active_step == plan.steps[0]
 
 
 def test_investigation_plan_rejects_duplicate_step_ids() -> None:
@@ -116,29 +126,23 @@ def test_investigation_plan_rejects_duplicate_step_ids() -> None:
         match="step IDs must be unique",
     ):
         InvestigationPlan(
-            task_summary="Locate authentication.",
-            success_criteria=["Identify the entry point."],
             steps=[
                 _step("locate", status="active"),
                 _step("locate", status="pending"),
             ],
-            active_step_id="locate",
         )
 
 
-def test_investigation_plan_rejects_non_active_selected_step() -> None:
+def test_investigation_plan_rejects_missing_active_step() -> None:
     with pytest.raises(
         ValidationError,
-        match="must identify an active step",
+        match="exactly one active step",
     ):
         InvestigationPlan(
-            task_summary="Locate authentication.",
-            success_criteria=["Identify the entry point."],
             steps=[
                 _step("locate", status="pending"),
-                _step("explain", status="active"),
+                _step("explain", status="pending"),
             ],
-            active_step_id="locate",
         )
 
 
@@ -148,13 +152,10 @@ def test_investigation_plan_rejects_multiple_active_steps() -> None:
         match="exactly one active step",
     ):
         InvestigationPlan(
-            task_summary="Locate authentication.",
-            success_criteria=["Identify the entry point."],
             steps=[
                 _step("locate", status="active"),
                 _step("explain", status="active"),
             ],
-            active_step_id="locate",
         )
 
 
@@ -166,8 +167,5 @@ def test_investigation_plan_rejects_too_many_steps() -> None:
 
     with pytest.raises(ValidationError):
         InvestigationPlan(
-            task_summary="Overly long plan.",
-            success_criteria=["Stay within the plan-size contract."],
             steps=steps,
-            active_step_id="active",
         )

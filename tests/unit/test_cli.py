@@ -26,10 +26,14 @@ def test_main_runs_investigation_and_writes_trace(
     )
     trace = RunTrace("cli-run")
     trace.record(TraceEventKind.RUN_STARTED)
-    trace.record(TraceEventKind.RUN_FINISHED, payload={"stop_reason": None})
+    trace.record(
+        TraceEventKind.RUN_FINISHED,
+        payload={"termination_status": "accepted", "step_stop_reason": None},
+    )
     outcome = RunOutcome(
         final_result=final_result,
-        stop_reason=None,
+        termination_status="accepted",
+        step_stop_reason=None,
         trace=trace,
     )
     runner = MagicMock()
@@ -64,9 +68,11 @@ def test_main_runs_investigation_and_writes_trace(
     assert request.objective == "Inspect authentication."
     assert request.max_tool_calls_per_step == 3
     assert request.max_explorer_calls_per_step == 2
+    assert request.max_plan_revisions == 2
     assert json.loads(captured.out) == final_result.model_dump(mode="json")
     assert "Run ID: cli-run" in captured.err
-    assert "Stop reason: completed" in captured.err
+    assert "Status: accepted" in captured.err
+    assert "Last step stop reason: none" in captured.err
     assert f"Trace: {trace_path.resolve()}" in captured.err
     assert len(trace_path.read_text(encoding="utf-8").splitlines()) == 2
 

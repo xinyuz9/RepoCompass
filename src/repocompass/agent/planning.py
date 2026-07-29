@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-PlanStepStatus = Literal["pending", "active", "completed", "blocked"]
+PlanStepStatus = Literal["pending", "active", "completed"]
 MAX_PLAN_STEPS = 5
 
 
@@ -34,24 +34,35 @@ class InvestigationPlan(BaseModel):
         str_strip_whitespace=True,
     )
 
-    task_summary: str = Field(min_length=1)
-    success_criteria: list[str] = Field(min_length=1)
     steps: list[PlanStep] = Field(min_length=1, max_length=MAX_PLAN_STEPS)
-    active_step_id: str = Field(min_length=1)
+
+    @property
+    def active_step(self) -> PlanStep:
+        """Return the plan's single active step."""
+
+        return next(step for step in self.steps if step.status == "active")
+
+    def next_pending_step(self) -> PlanStep | None:
+        active_index = next(
+            index for index, step in enumerate(self.steps) if step.status == "active"
+        )
+
+        return next(
+            (
+                step
+                for step in self.steps[active_index + 1 :]
+                if step.status == "pending"
+            ),
+            None,
+        )
 
     @model_validator(mode="after")
-    def validate_active_step(self) -> "InvestigationPlan":
-        """Require unique step IDs and exactly one matching active step."""
+    def validate_plan_structure(self) -> "InvestigationPlan":
+        """Require unique step IDs and exactly one active step."""
 
         step_ids = [step.id for step in self.steps]
         if len(step_ids) != len(set(step_ids)):
             raise ValueError("Investigation plan step IDs must be unique")
-
-        matching_steps = [step for step in self.steps if step.id == self.active_step_id]
-        if not matching_steps:
-            raise ValueError("Active step ID must identify a plan step")
-        if matching_steps[0].status != "active":
-            raise ValueError("Active step ID must identify an active step")
 
         active_steps = [step for step in self.steps if step.status == "active"]
         if len(active_steps) != 1:

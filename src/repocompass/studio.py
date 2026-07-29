@@ -1,5 +1,6 @@
 """LangSmith Studio development entry point for RepoCompass."""
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from langchain_core.runnables import RunnableConfig
@@ -9,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.runner import (
     DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
+    DEFAULT_MAX_PLAN_REVISIONS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     RunRequest,
     resolve_repository_path,
@@ -47,13 +49,15 @@ class StudioRunInput(BaseModel):
         strict=True,
         description="Maximum Explorer invocations per active plan step.",
     )
+    max_plan_revisions: int = Field(
+        default=DEFAULT_MAX_PLAN_REVISIONS,
+        gt=0,
+        strict=True,
+        description="Maximum model-based plan revisions for one run.",
+    )
 
 
-class StudioState(RepoCompassState):
-    """Studio-visible state containing public input and internal workflow state."""
-
-
-def initialize_studio_run(state: StudioState) -> StudioState:
+def initialize_studio_run(state: Mapping[str, object]) -> RepoCompassState:
     """Validate Studio input and construct the internal RepoCompass state."""
 
     public_input = {
@@ -67,6 +71,7 @@ def initialize_studio_run(state: StudioState) -> StudioState:
         objective=studio_input.objective,
         max_tool_calls_per_step=studio_input.max_tool_calls_per_step,
         max_explorer_calls_per_step=studio_input.max_explorer_calls_per_step,
+        max_plan_revisions=studio_input.max_plan_revisions,
     )
     repo_path = resolve_repository_path(request.repo_path)
     initial_state = create_initial_state(
@@ -74,6 +79,7 @@ def initialize_studio_run(state: StudioState) -> StudioState:
         request.objective,
         request.max_tool_calls_per_step,
         request.max_explorer_calls_per_step,
+        request.max_plan_revisions,
     )
     return initial_state
 
@@ -81,7 +87,7 @@ def initialize_studio_run(state: StudioState) -> StudioState:
 def build_studio_graph(models: WorkflowModels):
     """Build the Studio adapter around the existing investigation graph."""
 
-    builder = StateGraph(StudioState, input_schema=StudioRunInput)
+    builder = StateGraph(RepoCompassState, input_schema=StudioRunInput)
     builder.add_node("initialize_run", initialize_studio_run)
     builder.add_node("investigate_repository", create_agent_graph(models))
     builder.add_edge(START, "initialize_run")

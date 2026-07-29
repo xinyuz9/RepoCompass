@@ -12,7 +12,6 @@ def test_validate_candidate_builds_bounded_evidence_pack(tmp_path: Path) -> None
         encoding="utf-8",
     )
     candidate = CandidateResult(
-        relevant_files=["auth.py"],
         evidence=[
             EvidenceItem(
                 path="auth.py",
@@ -44,7 +43,6 @@ def test_validate_candidate_rejects_path_outside_repository(
     outside_file = tmp_path.parent / f"{tmp_path.name}-outside.py"
     outside_file.write_text("secret = True\n", encoding="utf-8")
     candidate = CandidateResult(
-        relevant_files=[f"../{outside_file.name}"],
         evidence=[
             EvidenceItem(
                 path=f"../{outside_file.name}",
@@ -67,7 +65,6 @@ def test_validate_candidate_reports_missing_and_invalid_lines(
 ) -> None:
     (tmp_path / "auth.py").write_text("value = True\n", encoding="utf-8")
     candidate = CandidateResult(
-        relevant_files=["auth.py"],
         evidence=[
             EvidenceItem(
                 path="auth.py",

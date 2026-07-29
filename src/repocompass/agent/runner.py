@@ -15,13 +15,15 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.result import FinalResult
+from repocompass.agent.routing import TerminationStatus
 from repocompass.agent.state import create_initial_state
 from repocompass.agent.trace import RunTrace, TraceEventKind
 from repocompass.models import WorkflowModels
 
 RunIdFactory = Callable[[], str]
 DEFAULT_MAX_TOOL_CALLS_PER_STEP = 16
-DEFAULT_MAX_EXPLORER_CALLS_PER_STEP = 8
+DEFAULT_MAX_EXPLORER_CALLS_PER_STEP = 12
+DEFAULT_MAX_PLAN_REVISIONS = 2
 
 
 def generate_run_id() -> str:
@@ -88,6 +90,8 @@ class RunRequest(BaseModel):
             step.
         max_explorer_calls_per_step: Positive Explorer invocation budget for one
             active plan step.
+        max_plan_revisions: Positive global budget for model-based plan
+            revisions.
     """
 
     model_config = ConfigDict(
@@ -100,6 +104,7 @@ class RunRequest(BaseModel):
     objective: str = Field(min_length=1)
     max_tool_calls_per_step: int = Field(gt=0)
     max_explorer_calls_per_step: int = Field(gt=0)
+    max_plan_revisions: int = Field(default=DEFAULT_MAX_PLAN_REVISIONS, gt=0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,7 +113,8 @@ class RunOutcome:
 
     Attributes:
         final_result: Structured repository investigation report.
-        stop_reason: Graph stop reason, or ``None`` after normal completion.
+        termination_status: Final accepted or exhausted run status.
+        step_stop_reason: Reason the final active step stopped exploring, if any.
         trace: Ordered local domain trace for this run.
 
     ``RunOutcome`` deliberately omits the complete RepoCompassState so persistent
@@ -116,7 +122,8 @@ class RunOutcome:
     """
 
     final_result: FinalResult
-    stop_reason: str | None
+    termination_status: TerminationStatus
+    step_stop_reason: str | None
     trace: RunTrace
 
 
@@ -157,8 +164,8 @@ class AgentRunner:
             request: Already validated investigation input.
 
         Returns:
-            A :class:`RunOutcome` containing the structured result, final stop
-            reason, and complete in-memory domain trace.
+            A :class:`RunOutcome` containing the structured result, terminal
+            status, final step stop reason, and complete in-memory domain trace.
 
         Raises:
             ValueError: If the repository, run ID, or final graph state is
@@ -182,6 +189,7 @@ class AgentRunner:
                 "objective": request.objective,
                 "max_tool_calls_per_step": request.max_tool_calls_per_step,
                 "max_explorer_calls_per_step": (request.max_explorer_calls_per_step),
+                "max_plan_revisions": request.max_plan_revisions,
             },
         )
 
@@ -190,10 +198,12 @@ class AgentRunner:
             request.objective,
             request.max_tool_calls_per_step,
             request.max_explorer_calls_per_step,
+            request.max_plan_revisions,
         )
         graph = create_agent_graph(self._models)
         final_result: FinalResult | None = None
-        stop_reason: str | None = None
+        step_stop_reason: str | None = None
+        termination_status: TerminationStatus | None = None
 
         for part in graph.stream(
             initial_state,
@@ -215,13 +225,23 @@ class AgentRunner:
                     payload=_normalize_update(update),
                 )
 
-                if "stop_reason" in update:
-                    candidate_stop_reason = update["stop_reason"]
-                    if candidate_stop_reason is not None and not isinstance(
-                        candidate_stop_reason, str
+                if "step_stop_reason" in update:
+                    candidate_step_stop_reason = update["step_stop_reason"]
+                    if candidate_step_stop_reason is not None and not isinstance(
+                        candidate_step_stop_reason, str
                     ):
-                        raise TypeError("Graph stop_reason is not a string or None")
-                    stop_reason = candidate_stop_reason
+                        raise TypeError(
+                            "Graph step_stop_reason is not a string or None"
+                        )
+                    step_stop_reason = candidate_step_stop_reason
+
+                if "termination_status" in update:
+                    candidate_termination_status = update["termination_status"]
+                    if candidate_termination_status not in ("accepted", "exhausted"):
+                        raise TypeError(
+                            "Graph termination_status is not accepted or exhausted"
+                        )
+                    termination_status = candidate_termination_status
 
                 if "final_result" in update:
                     graph_final_result = update["final_result"]
@@ -231,14 +251,20 @@ class AgentRunner:
 
         if final_result is None:
             raise ValueError("Graph finished without a FinalResult")
+        if termination_status is None:
+            raise ValueError("Graph finished without a termination status")
 
         trace.record(
             TraceEventKind.RUN_FINISHED,
-            payload={"stop_reason": stop_reason},
+            payload={
+                "termination_status": termination_status,
+                "step_stop_reason": step_stop_reason,
+            },
         )
 
         return RunOutcome(
             final_result=final_result,
-            stop_reason=stop_reason,
+            termination_status=termination_status,
+            step_stop_reason=step_stop_reason,
             trace=trace,
         )

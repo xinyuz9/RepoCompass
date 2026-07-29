@@ -100,15 +100,18 @@ def test_repository_instruction_text_remains_inside_tool_message() -> None:
     scripted_responses = iter([tool_request, final_response])
     agent_inputs: list[list[AnyMessage]] = []
     expected_result = FinalResult(
-        relevant_files=[],
-        evidence=[],
+        relevant_files=["README.md"],
+        evidence=["README.md contains untrusted instruction text."],
         summary="No code claim was established from the untrusted README text.",
         unresolved_questions=["Which code implements authentication?"],
     )
 
     def next_response(messages: list[AnyMessage]) -> AIMessage:
         agent_inputs.append(list(messages))
-        return next(scripted_responses)
+        try:
+            return next(scripted_responses)
+        except StopIteration:
+            return AIMessage(content="No additional repository evidence is available.")
 
     model = MagicMock(spec=BaseChatModel)
     model.bind_tools.return_value = RunnableLambda(next_response)

@@ -11,6 +11,7 @@ from langchain_core.runnables import RunnableLambda
 from repocompass import studio
 from repocompass.agent.runner import (
     DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
+    DEFAULT_MAX_PLAN_REVISIONS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
 )
 from repocompass.agent.result import FinalResult
@@ -31,10 +32,11 @@ def _create_scripted_model(final_result: FinalResult) -> MagicMock:
 def test_studio_graph_accepts_public_input_and_applies_defaults(
     tmp_path: Path,
 ) -> None:
+    (tmp_path / "example.py").write_text("value = True\n", encoding="utf-8")
     final_result = FinalResult(
-        relevant_files=[],
-        evidence=[],
-        summary="No repository files were needed.",
+        relevant_files=["example.py"],
+        evidence=["example.py contains the relevant implementation."],
+        summary="The relevant implementation is in example.py.",
         unresolved_questions=[],
     )
     graph = studio.build_studio_graph(
@@ -55,6 +57,8 @@ def test_studio_graph_accepts_public_input_and_applies_defaults(
         final_state["max_explorer_calls_per_step"]
         == DEFAULT_MAX_EXPLORER_CALLS_PER_STEP
     )
+    assert final_state["max_plan_revisions"] == DEFAULT_MAX_PLAN_REVISIONS
+    assert final_state["plan_revision_count"] == 0
     assert final_state["step_tool_call_count"] == 0
     assert final_state["step_explorer_call_count"] == 1
     assert final_state["evaluation_report"] is not None
@@ -82,9 +86,14 @@ def test_studio_graph_exposes_only_public_input_fields() -> None:
         "objective",
         "max_tool_calls_per_step",
         "max_explorer_calls_per_step",
+        "max_plan_revisions",
     }
     assert schema["properties"]["max_tool_calls_per_step"]["default"] == 16
-    assert schema["properties"]["max_explorer_calls_per_step"]["default"] == 8
+    assert (
+        schema["properties"]["max_explorer_calls_per_step"]["default"]
+        == DEFAULT_MAX_EXPLORER_CALLS_PER_STEP
+    )
+    assert schema["properties"]["max_plan_revisions"]["default"] == 2
 
 
 def test_studio_graph_rejects_file_as_repository_path(tmp_path: Path) -> None:

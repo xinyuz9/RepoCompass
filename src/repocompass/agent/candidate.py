@@ -63,9 +63,6 @@ class CandidateResult(BaseModel):
         str_strip_whitespace=True,
     )
 
-    relevant_files: list[str] = Field(
-        description="Repository-relative paths relevant to the candidate answer."
-    )
     evidence: list[EvidenceItem] = Field(
         description="Structured source locations and claims supporting the candidate."
     )

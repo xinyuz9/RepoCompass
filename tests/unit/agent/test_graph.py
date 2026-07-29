@@ -14,7 +14,9 @@ from langchain_core.messages import (
 from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.evaluation import SemanticAssessment
 from repocompass.agent.graph import create_agent_graph
+from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
 from tests.model_doubles import candidate_from_final_result, with_scripted_planner
@@ -27,17 +29,43 @@ def _create_scripted_model(
     """Create a model double with deterministic Explorer and candidate responses."""
 
     response_iterator = iter(agent_responses)
+
+    def next_agent_response(_: object) -> AIMessage:
+        try:
+            return next(response_iterator)
+        except StopIteration:
+            return AIMessage(content="No additional repository evidence is available.")
+
     model = MagicMock(spec=BaseChatModel)
-    model.bind_tools.return_value = RunnableLambda(lambda _: next(response_iterator))
+    model.bind_tools.return_value = RunnableLambda(next_agent_response)
     model.with_structured_output.return_value = RunnableLambda(
         lambda _: candidate_from_final_result(final_result)
     )
     return model
 
 
+def _semantic_assessment(
+    *,
+    active_step_completed: bool,
+    answers_objective: bool,
+) -> SemanticAssessment:
+    return SemanticAssessment(
+        active_step_completed=active_step_completed,
+        answers_objective=answers_objective,
+        evidence_supports_summary=answers_objective,
+        has_critical_omissions=not answers_objective,
+        missing_evidence=[] if answers_objective else ["More evidence is required."],
+        recommended_focus=[] if answers_objective else ["Continue repository search."],
+        summary="Accepted." if answers_objective else "More investigation is required.",
+    )
+
+
 def test_graph_finalizes_when_agent_returns_no_tool_calls(tmp_path: Path) -> None:
     """A tool-free agent response should be finalized and terminate normally."""
 
+    source_dir = tmp_path / "src"
+    source_dir.mkdir()
+    (source_dir / "example.py").write_text("value = True\n", encoding="utf-8")
     agent_response = AIMessage(content="Enough evidence is already available.")
     expected_result = FinalResult(
         relevant_files=["src/example.py"],
@@ -62,7 +90,8 @@ def test_graph_finalizes_when_agent_returns_no_tool_calls(tmp_path: Path) -> Non
     assert final_state["candidate_result"] == candidate_from_final_result(
         expected_result
     )
-    assert final_state["stop_reason"] is None
+    assert final_state["step_stop_reason"] is None
+    assert final_state["termination_status"] == "accepted"
     assert final_state["step_tool_call_count"] == 0
     assert final_state["step_explorer_call_count"] == 1
     messages = final_state["messages"]
@@ -129,7 +158,7 @@ def test_graph_finalizes_when_agent_returns_tool_calls(tmp_path: Path) -> None:
 
     assert final_state["final_result"] == expected_result
     assert final_state["evaluation_report"].passed is True
-    assert final_state["stop_reason"] is None
+    assert final_state["step_stop_reason"] is None
     assert final_state["step_tool_call_count"] == 1
     assert final_state["step_explorer_call_count"] == 2
     assert len(messages) == 4
@@ -146,10 +175,10 @@ def test_graph_finalizes_when_agent_returns_tool_calls(tmp_path: Path) -> None:
     )
 
 
-def test_graph_rejects_batch_exceeding_budget_and_finalizes(
+def test_graph_rejects_batch_exceeding_budget_then_exhausts_revisions(
     tmp_path: Path,
 ) -> None:
-    """An oversized batch should be rejected without consuming or executing it."""
+    """An oversized batch is rejected before bounded retries eventually exhaust."""
 
     tree_call = ToolCall(
         name="list_tree",
@@ -186,10 +215,13 @@ def test_graph_rejects_batch_exceeding_budget_and_finalizes(
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
-    assert final_state["stop_reason"] == "step_tool_call_budget_exhausted"
+    assert final_state["step_stop_reason"] is None
+    assert final_state["termination_status"] == "exhausted"
+    assert final_state["plan_revision_count"] == 2
+    assert final_state["next_action"] == "exhausted"
     assert final_state["step_tool_call_count"] == 0
     assert final_state["step_explorer_call_count"] == 1
-    assert len(messages) == 4
+    assert len(messages) == 6
     assert isinstance(messages[0], HumanMessage)
     assert messages[0].content == user_message.content
     assert messages[1] == oversized_request
@@ -203,6 +235,7 @@ def test_graph_rejects_batch_exceeding_budget_and_finalizes(
     assert second_rejection.status == "error"
     assert "budget was exhausted" in str(first_rejection.content)
     assert "budget was exhausted" in str(second_rejection.content)
+    assert all(isinstance(message, AIMessage) for message in messages[4:])
 
 
 def test_graph_handles_mixed_invalid_batch_without_executing_valid_calls(
@@ -236,10 +269,10 @@ def test_graph_handles_mixed_invalid_batch_without_executing_valid_calls(
         content="Continue using only the evidence already available."
     )
     expected_result = FinalResult(
-        relevant_files=[],
-        evidence=[],
-        summary="No repository evidence was collected from the rejected batch.",
-        unresolved_questions=["Which files contain the authentication logic?"],
+        relevant_files=["auth.py"],
+        evidence=["auth.py contains the authentication implementation."],
+        summary="Authentication is implemented in auth.py.",
+        unresolved_questions=[],
     )
     model = _create_scripted_model(
         [mixed_request, corrected_response],
@@ -257,7 +290,8 @@ def test_graph_handles_mixed_invalid_batch_without_executing_valid_calls(
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
-    assert final_state["stop_reason"] is None
+    assert final_state["step_stop_reason"] is None
+    assert final_state["termination_status"] == "accepted"
     assert final_state["step_tool_call_count"] == 2
     assert final_state["step_explorer_call_count"] == 2
     assert len(messages) == 5
@@ -283,6 +317,10 @@ def test_graph_returns_recoverable_tool_invocation_error_to_agent(
 ) -> None:
     """A schema error should become a ToolMessage before Agent runs again."""
 
+    (tmp_path / "auth.py").write_text(
+        "def authenticate():\n    return True\n",
+        encoding="utf-8",
+    )
     invalid_schema_call = ToolCall(
         name="list_tree",
         args={"max_depth": "not-an-int", "max_entries": 10},
@@ -295,10 +333,10 @@ def test_graph_returns_recoverable_tool_invocation_error_to_agent(
     )
     recovered_response = AIMessage(content="Answer using the available evidence.")
     expected_result = FinalResult(
-        relevant_files=[],
-        evidence=[],
-        summary="The invalid tool request was handled without ending the graph.",
-        unresolved_questions=["Which repository files are relevant?"],
+        relevant_files=["auth.py"],
+        evidence=["auth.py defines authenticate."],
+        summary="The invalid request was recovered and authentication was located.",
+        unresolved_questions=[],
     )
     model = _create_scripted_model(
         [invalid_request, recovered_response],
@@ -316,7 +354,8 @@ def test_graph_returns_recoverable_tool_invocation_error_to_agent(
     messages = final_state["messages"]
 
     assert final_state["final_result"] == expected_result
-    assert final_state["stop_reason"] is None
+    assert final_state["step_stop_reason"] is None
+    assert final_state["termination_status"] == "accepted"
     assert final_state["step_tool_call_count"] == 1
     assert final_state["step_explorer_call_count"] == 2
     assert len(messages) == 4
@@ -379,6 +418,182 @@ def test_graph_finalizes_without_extra_agent_invocation_at_iteration_limit(
     assert len(agent_inputs) == 1
     assert final_state["step_explorer_call_count"] == 1
     assert final_state["step_tool_call_count"] == 1
-    assert final_state["stop_reason"] == "step_explorer_budget_exhausted"
+    assert final_state["step_stop_reason"] == "step_explorer_budget_exhausted"
+    assert final_state["termination_status"] == "accepted"
     assert final_state["final_result"] == expected_result
     assert isinstance(final_state["messages"][-1], ToolMessage)
+
+
+def test_graph_continues_the_active_step_after_incomplete_evaluation(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "auth.py").write_text("value = True\n", encoding="utf-8")
+    expected_result = FinalResult(
+        relevant_files=["auth.py"],
+        evidence=["auth.py contains the relevant implementation."],
+        summary="The relevant implementation is in auth.py.",
+        unresolved_questions=[],
+    )
+    model = _create_scripted_model(
+        [
+            AIMessage(content="Initial evidence collected."),
+            AIMessage(content="The missing evidence has now been addressed."),
+        ],
+        expected_result,
+    )
+    models = with_scripted_planner(
+        model,
+        semantic_assessments=[
+            _semantic_assessment(
+                active_step_completed=False,
+                answers_objective=False,
+            ),
+            _semantic_assessment(
+                active_step_completed=True,
+                answers_objective=True,
+            ),
+        ],
+    )
+    initial_state = create_initial_state(
+        tmp_path,
+        "Find the relevant implementation.",
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=3,
+    )
+
+    final_state = create_agent_graph(models).invoke(initial_state)
+
+    assert final_state["next_action"] == "accepted"
+    assert final_state["termination_status"] == "accepted"
+    assert final_state["step_explorer_call_count"] == 2
+    assert final_state["plan_revision_count"] == 0
+    assert final_state["evaluation_report"].passed is True
+
+
+def test_graph_advances_to_the_next_plan_step(tmp_path: Path) -> None:
+    (tmp_path / "auth.py").write_text("value = True\n", encoding="utf-8")
+    plan = InvestigationPlan(
+        steps=[
+            PlanStep(
+                id="locate",
+                objective="Locate the implementation.",
+                expected_evidence=["A repository source location."],
+                status="active",
+            ),
+            PlanStep(
+                id="explain",
+                objective="Explain the verified implementation.",
+                expected_evidence=["Evidence-backed behavior."],
+                status="pending",
+            ),
+        ]
+    )
+    expected_result = FinalResult(
+        relevant_files=["auth.py"],
+        evidence=["auth.py contains the relevant implementation."],
+        summary="The relevant implementation is in auth.py.",
+        unresolved_questions=[],
+    )
+    model = _create_scripted_model(
+        [
+            AIMessage(content="The implementation was located."),
+            AIMessage(content="The implementation was explained."),
+        ],
+        expected_result,
+    )
+    models = with_scripted_planner(
+        model,
+        plan=plan,
+        semantic_assessments=[
+            _semantic_assessment(
+                active_step_completed=True,
+                answers_objective=True,
+            ),
+            _semantic_assessment(
+                active_step_completed=True,
+                answers_objective=True,
+            ),
+        ],
+    )
+    initial_state = create_initial_state(
+        tmp_path,
+        "Locate and explain the implementation.",
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=3,
+    )
+
+    final_state = create_agent_graph(models).invoke(initial_state)
+
+    final_plan = final_state["investigation_plan"]
+    assert [step.status for step in final_plan.steps] == ["completed", "active"]
+    assert final_plan.active_step.id == "explain"
+    assert final_state["step_explorer_call_count"] == 1
+    assert final_state["plan_revision_count"] == 0
+    assert final_state["next_action"] == "accepted"
+    assert final_state["termination_status"] == "accepted"
+
+
+def test_graph_revises_a_blocked_plan_before_retrying(tmp_path: Path) -> None:
+    (tmp_path / "auth.py").write_text("value = True\n", encoding="utf-8")
+    initial_plan = InvestigationPlan(
+        steps=[
+            PlanStep(
+                id="locate",
+                objective="Locate the implementation.",
+                expected_evidence=["A repository source location."],
+                status="active",
+            )
+        ]
+    )
+    revised_plan = InvestigationPlan(
+        steps=[
+            PlanStep(
+                id="retry",
+                objective="Try a focused implementation search.",
+                expected_evidence=["A verified repository source location."],
+                status="active",
+            )
+        ]
+    )
+    expected_result = FinalResult(
+        relevant_files=["auth.py"],
+        evidence=["auth.py contains the relevant implementation."],
+        summary="The relevant implementation is in auth.py.",
+        unresolved_questions=[],
+    )
+    model = _create_scripted_model(
+        [
+            AIMessage(content="The initial search was insufficient."),
+            AIMessage(content="The revised search found the implementation."),
+        ],
+        expected_result,
+    )
+    models = with_scripted_planner(
+        model,
+        plan=initial_plan,
+        revised_plans=[revised_plan],
+        semantic_assessments=[
+            _semantic_assessment(
+                active_step_completed=False,
+                answers_objective=False,
+            ),
+            _semantic_assessment(
+                active_step_completed=True,
+                answers_objective=True,
+            ),
+        ],
+    )
+    initial_state = create_initial_state(
+        tmp_path,
+        "Find the relevant implementation.",
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=1,
+    )
+
+    final_state = create_agent_graph(models).invoke(initial_state)
+
+    assert final_state["investigation_plan"] == revised_plan
+    assert final_state["plan_revision_count"] == 1
+    assert final_state["step_explorer_call_count"] == 1
+    assert final_state["next_action"] == "accepted"
+    assert final_state["termination_status"] == "accepted"

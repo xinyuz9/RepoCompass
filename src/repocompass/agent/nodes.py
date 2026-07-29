@@ -22,18 +22,22 @@ from repocompass.agent.evaluation import (
     ValidationIssue,
     validate_candidate,
 )
-from repocompass.agent.planning import InvestigationPlan
+from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.prompts import (
     CANDIDATE_BUILDING_REQUEST_TEMPLATE,
     CANDIDATE_BUILDING_SYSTEM_PROMPT,
     EVALUATION_REQUEST_TEMPLATE,
     EVALUATION_SYSTEM_PROMPT,
     INVESTIGATION_CONTEXT_TEMPLATE,
+    INVESTIGATION_FEEDBACK_TEMPLATE,
     INVESTIGATION_SYSTEM_PROMPT,
     PLANNING_REQUEST_TEMPLATE,
     PLANNING_SYSTEM_PROMPT,
+    REPLANNING_REQUEST_TEMPLATE,
+    REPLANNING_SYSTEM_PROMPT,
 )
 from repocompass.agent.result import FinalResult
+from repocompass.agent.routing import ControllerAction, TerminationStatus
 from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
 
 
@@ -47,7 +51,6 @@ class PlannerInput(TypedDict):
 
 class PlannerNodeUpdate(TypedDict):
     investigation_plan: InvestigationPlan
-    active_objective: str
 
 
 PlannerNode = Callable[[PlannerInput], PlannerNodeUpdate]
@@ -83,13 +86,7 @@ def create_plan_investigation_node(model: BaseChatModel) -> PlannerNode:
         if not isinstance(response, InvestigationPlan):
             raise TypeError("Planner model did not return InvestigationPlan")
 
-        active_step = next(
-            step for step in response.steps if step.id == response.active_step_id
-        )
-        return {
-            "investigation_plan": response,
-            "active_objective": active_step.objective,
-        }
+        return {"investigation_plan": response}
 
     return planner_node
 
@@ -98,12 +95,12 @@ class AgentNodeInput(MessagesState):
     """State visible to one Explorer model invocation."""
 
     objective: str
-    active_objective: str
     investigation_plan: InvestigationPlan | None
     step_tool_call_count: int
     max_tool_calls_per_step: int
     step_explorer_call_count: int
     max_explorer_calls_per_step: int
+    evaluation_report: EvaluationReport | None
 
 
 class AgentNodeUpdate(TypedDict):
@@ -117,15 +114,14 @@ AgentNode = Callable[[AgentNodeInput], AgentNodeUpdate]
 def build_agent_messages(state: AgentNodeInput) -> list[AnyMessage]:
     """Build one Explorer invocation without mutating persistent messages."""
 
-    investigation_plan = (
-        "No investigation plan is available."
-        if not state["investigation_plan"]
-        else state["investigation_plan"].model_dump_json(indent=2)
-    )
+    investigation_plan = state["investigation_plan"]
+    if investigation_plan is None:
+        raise ValueError("Cannot investigate without an InvestigationPlan")
+
     investigation_context = INVESTIGATION_CONTEXT_TEMPLATE.format(
         objective=state["objective"],
-        active_objective=state["active_objective"],
-        investigation_plan=investigation_plan,
+        active_objective=investigation_plan.active_step.objective,
+        active_step=investigation_plan.active_step.model_dump_json(indent=2),
         remaining_tool_calls=max(
             0,
             state["max_tool_calls_per_step"] - state["step_tool_call_count"],
@@ -135,12 +131,32 @@ def build_agent_messages(state: AgentNodeInput) -> list[AnyMessage]:
             state["max_explorer_calls_per_step"] - state["step_explorer_call_count"],
         ),
     )
-    return [
+    messages: list[AnyMessage] = [
         SystemMessage(
             content=f"{INVESTIGATION_SYSTEM_PROMPT}\n\n{investigation_context}"
         ),
         *state["messages"],
     ]
+    evaluation_report = state["evaluation_report"]
+    if evaluation_report is not None and not evaluation_report.passed:
+        messages.append(
+            HumanMessage(
+                content=INVESTIGATION_FEEDBACK_TEMPLATE.format(
+                    missing_evidence=json.dumps(
+                        evaluation_report.semantic_assessment.missing_evidence,
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    recommended_focus=json.dumps(
+                        evaluation_report.semantic_assessment.recommended_focus,
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                )
+            )
+        )
+
+    return messages
 
 
 def create_agent_node(model: BaseChatModel) -> AgentNode:
@@ -161,12 +177,11 @@ def create_agent_node(model: BaseChatModel) -> AgentNode:
 
 
 class ExplorerBudgetInput(TypedDict):
-    step_explorer_call_count: int
-    max_explorer_calls_per_step: int
+    """Empty state view for a constant budget-exhaustion update."""
 
 
 class ExplorerBudgetUpdate(TypedDict):
-    stop_reason: str
+    step_stop_reason: str
 
 
 def mark_step_explorer_budget_exhausted(
@@ -174,7 +189,7 @@ def mark_step_explorer_budget_exhausted(
 ) -> ExplorerBudgetUpdate:
     """Record that the active step cannot invoke Explorer again."""
 
-    return {"stop_reason": "step_explorer_budget_exhausted"}
+    return {"step_stop_reason": "step_explorer_budget_exhausted"}
 
 
 class ToolBudgetInput(MessagesState):
@@ -199,7 +214,7 @@ class ToolRejectionInput(MessagesState):
 
 class ToolRejectionUpdate(TypedDict):
     messages: list[ToolMessage]
-    stop_reason: str
+    step_stop_reason: str
 
 
 def reject_pending_tool_calls(
@@ -224,7 +239,7 @@ def reject_pending_tool_calls(
 
     return {
         "messages": messages,
-        "stop_reason": "step_tool_call_budget_exhausted",
+        "step_stop_reason": "step_tool_call_budget_exhausted",
     }
 
 
@@ -289,9 +304,8 @@ class CandidateBuilderInput(MessagesState):
     """Evidence-bearing state visible to candidate construction."""
 
     objective: str
-    active_objective: str
     investigation_plan: InvestigationPlan | None
-    stop_reason: str | None
+    step_stop_reason: str | None
 
 
 class CandidateBuilderUpdate(TypedDict):
@@ -302,23 +316,38 @@ CandidateBuilderNode = Callable[[CandidateBuilderInput], CandidateBuilderUpdate]
 
 
 def build_candidate_messages(state: CandidateBuilderInput) -> list[AnyMessage]:
-    """Build an isolated structured-candidate invocation."""
+    """Build an isolated structured-candidate invocation.
 
-    investigation_plan = (
-        "No investigation plan is available."
-        if not state["investigation_plan"]
-        else state["investigation_plan"].model_dump_json(indent=2)
-    )
-    stop_reason = state["stop_reason"] or "none"
+    Tool results are rendered as ordinary JSON data so historical repository
+    tool calls cannot be mistaken for tools available to the structured model.
+    """
+
+    investigation_plan = state["investigation_plan"]
+    if investigation_plan is None:
+        raise ValueError("Cannot build a candidate without an InvestigationPlan")
+
+    collected_tool_results = [
+        {
+            "tool": message.name,
+            "content": message.content,
+        }
+        for message in state["messages"]
+        if isinstance(message, ToolMessage) and message.status == "success"
+    ]
+    step_stop_reason = state["step_stop_reason"] or "none"
     return [
         SystemMessage(content=CANDIDATE_BUILDING_SYSTEM_PROMPT),
-        *state["messages"],
         HumanMessage(
             content=CANDIDATE_BUILDING_REQUEST_TEMPLATE.format(
                 objective=state["objective"],
-                active_objective=state["active_objective"],
-                investigation_plan=investigation_plan,
-                stop_reason=stop_reason,
+                active_objective=investigation_plan.active_step.objective,
+                active_step=investigation_plan.active_step.model_dump_json(indent=2),
+                step_stop_reason=step_stop_reason,
+                collected_tool_results=json.dumps(
+                    collected_tool_results,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
             )
         ),
     ]
@@ -351,6 +380,7 @@ class EvaluatorInput(TypedDict):
 
     repo_path: Path
     objective: str
+    investigation_plan: InvestigationPlan | None
     candidate_result: CandidateResult | None
 
 
@@ -358,6 +388,7 @@ class EvaluationPromptInput(TypedDict):
     """Validated data rendered into one isolated evaluator invocation."""
 
     objective: str
+    active_step: PlanStep
     candidate_result: CandidateResult
     deterministic_issues: tuple[ValidationIssue, ...]
     evidence_pack: tuple[EvidenceExcerpt, ...]
@@ -384,6 +415,12 @@ def build_evaluator_messages(state: EvaluationPromptInput) -> list[AnyMessage]:
         HumanMessage(
             content=EVALUATION_REQUEST_TEMPLATE.format(
                 objective=state["objective"],
+                active_objective=state["active_step"].objective,
+                expected_evidence=json.dumps(
+                    state["active_step"].expected_evidence,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
                 candidate_result=state["candidate_result"].model_dump_json(indent=2),
                 deterministic_issues=json.dumps(
                     deterministic_issues,
@@ -414,10 +451,14 @@ def create_evaluate_candidate_node(model: BaseChatModel) -> EvaluatorNode:
         candidate = state["candidate_result"]
         if candidate is None:
             raise ValueError("Cannot evaluate without a CandidateResult")
+        investigation_plan = state["investigation_plan"]
+        if investigation_plan is None:
+            raise ValueError("Cannot evaluate without an InvestigationPlan")
 
         validation = validate_candidate(state["repo_path"], candidate)
         prompt_input: EvaluationPromptInput = {
             "objective": state["objective"],
+            "active_step": investigation_plan.active_step,
             "candidate_result": candidate,
             "deterministic_issues": validation.issues,
             "evidence_pack": validation.evidence_pack,
@@ -426,23 +467,234 @@ def create_evaluate_candidate_node(model: BaseChatModel) -> EvaluatorNode:
         if not isinstance(response, SemanticAssessment):
             raise TypeError("Evaluator model did not return SemanticAssessment")
 
-        passed = (
-            not validation.issues
-            and response.answers_objective
-            and response.evidence_supports_summary
-            and not response.has_critical_omissions
-        )
         return {
             "evaluation_report": EvaluationReport(
                 deterministic_issues=list(validation.issues),
                 semantic_assessment=response,
-                missing_evidence=response.missing_evidence,
-                recommended_focus=response.recommended_focus,
-                passed=passed,
             )
         }
 
     return evaluate_candidate_node
+
+
+class ControllerInput(TypedDict):
+    """State required for one deterministic post-evaluation decision."""
+
+    investigation_plan: InvestigationPlan | None
+    evaluation_report: EvaluationReport | None
+    step_stop_reason: str | None
+    step_explorer_call_count: int
+    max_explorer_calls_per_step: int
+    plan_revision_count: int
+    max_plan_revisions: int
+
+
+class ControllerNodeUpdate(TypedDict):
+    next_action: ControllerAction
+
+
+def decide_next_action(state: ControllerInput) -> ControllerNodeUpdate:
+    """Select the next workflow action after one active-step evaluation.
+
+    A completed active step advances before the overall answer can be accepted,
+    so pending plan work cannot be bypassed. This deterministic node must not
+    call a model or mutate the investigation plan.
+    """
+    if state["investigation_plan"] is None:
+        raise ValueError("InvestigationPlan is missing")
+
+    if state["evaluation_report"] is None:
+        raise ValueError("EvaluationReport is missing")
+
+    report = state["evaluation_report"]
+    plan = state["investigation_plan"]
+    semantic_assessment = report.semantic_assessment
+
+    has_revision_budget = state["plan_revision_count"] < state["max_plan_revisions"]
+
+    if semantic_assessment.active_step_completed:
+        if plan.next_pending_step() is not None:
+            return {"next_action": "advance_step"}
+
+        if report.passed:
+            return {"next_action": "accepted"}
+
+    elif (
+        state["step_stop_reason"] is None
+        and state["step_explorer_call_count"] < state["max_explorer_calls_per_step"]
+    ):
+        return {"next_action": "continue_step"}
+
+    return {"next_action": "revise_plan" if has_revision_budget else "exhausted"}
+
+
+class PlanAdvanceInput(TypedDict):
+    """State required to complete the active step and activate the next one."""
+
+    investigation_plan: InvestigationPlan | None
+
+
+class PlanAdvanceUpdate(TypedDict):
+    investigation_plan: InvestigationPlan
+    step_tool_call_count: int
+    step_explorer_call_count: int
+    step_stop_reason: None
+    candidate_result: None
+    evaluation_report: None
+    next_action: None
+
+
+def advance_plan_step(state: PlanAdvanceInput) -> PlanAdvanceUpdate:
+    """Complete the active step, activate its successor, and reset local state."""
+
+    plan = state["investigation_plan"]
+    if plan is None:
+        raise ValueError("Cannot advance without an InvestigationPlan")
+
+    active_step = plan.active_step
+    next_step = plan.next_pending_step()
+    if next_step is None:
+        raise ValueError("Cannot advance without a pending plan step")
+
+    revised_steps = []
+    for step in plan.steps:
+        if step.id == active_step.id:
+            step = step.model_copy(update={"status": "completed"})
+        elif step.id == next_step.id:
+            step = step.model_copy(update={"status": "active"})
+        revised_steps.append(step)
+
+    revised_plan = InvestigationPlan(steps=revised_steps)
+
+    return {
+        "investigation_plan": revised_plan,
+        "step_tool_call_count": 0,
+        "step_explorer_call_count": 0,
+        "step_stop_reason": None,
+        "candidate_result": None,
+        "evaluation_report": None,
+        "next_action": None,
+    }
+
+
+class ReplannerInput(TypedDict):
+    """Validated state visible to the model-based replanner."""
+
+    objective: str
+    investigation_plan: InvestigationPlan | None
+    candidate_result: CandidateResult | None
+    evaluation_report: EvaluationReport | None
+    max_tool_calls_per_step: int
+    max_explorer_calls_per_step: int
+    plan_revision_count: int
+    max_plan_revisions: int
+
+
+class ReplannerNodeUpdate(TypedDict):
+    investigation_plan: InvestigationPlan
+    step_tool_call_count: int
+    step_explorer_call_count: int
+    plan_revision_count: int
+    step_stop_reason: None
+    candidate_result: None
+    evaluation_report: None
+    next_action: None
+
+
+ReplannerNode = Callable[[ReplannerInput], ReplannerNodeUpdate]
+
+
+def build_replanner_messages(state: ReplannerInput) -> list[AnyMessage]:
+    """Build an isolated replanning invocation from evaluated state."""
+
+    investigation_plan = state["investigation_plan"]
+    candidate = state["candidate_result"]
+    evaluation_report = state["evaluation_report"]
+    if investigation_plan is None:
+        raise ValueError("Cannot revise without an InvestigationPlan")
+    if candidate is None:
+        raise ValueError("Cannot revise without a CandidateResult")
+    if evaluation_report is None:
+        raise ValueError("Cannot revise without an EvaluationReport")
+
+    return [
+        SystemMessage(content=REPLANNING_SYSTEM_PROMPT),
+        HumanMessage(
+            content=REPLANNING_REQUEST_TEMPLATE.format(
+                objective=state["objective"],
+                investigation_plan=investigation_plan.model_dump_json(indent=2),
+                candidate_result=candidate.model_dump_json(indent=2),
+                evaluation_report=evaluation_report.model_dump_json(indent=2),
+                plan_revision_count=state["plan_revision_count"],
+                max_tool_calls_per_step=state["max_tool_calls_per_step"],
+                max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
+            )
+        ),
+    ]
+
+
+def create_revise_plan_node(model: BaseChatModel) -> ReplannerNode:
+    """Create the model node that revises only unfinished plan work."""
+
+    structured_model = model.with_structured_output(
+        InvestigationPlan,
+        method="function_calling",
+    )
+
+    def revise_plan_node(state: ReplannerInput) -> ReplannerNodeUpdate:
+        """Generate a bounded revision and reset step-local execution state."""
+
+        current_plan = state["investigation_plan"]
+        if current_plan is None:
+            raise ValueError("Cannot revise without an InvestigationPlan")
+        if state["plan_revision_count"] >= state["max_plan_revisions"]:
+            raise ValueError(
+                "Cannot revise after the plan-revision budget is exhausted"
+            )
+
+        response = structured_model.invoke(build_replanner_messages(state))
+        if not isinstance(response, InvestigationPlan):
+            raise TypeError("Replanner model did not return InvestigationPlan")
+
+        revised_by_id = {step.id: step for step in response.steps}
+        for completed_step in (
+            step for step in current_plan.steps if step.status == "completed"
+        ):
+            if revised_by_id.get(completed_step.id) != completed_step:
+                raise ValueError("Replanner modified a completed plan step")
+
+        return {
+            "investigation_plan": response,
+            "step_tool_call_count": 0,
+            "step_explorer_call_count": 0,
+            "plan_revision_count": state["plan_revision_count"] + 1,
+            "step_stop_reason": None,
+            "candidate_result": None,
+            "evaluation_report": None,
+            "next_action": None,
+        }
+
+    return revise_plan_node
+
+
+class TerminationInput(TypedDict):
+    """Empty state view for a constant terminal update."""
+
+
+class TerminationUpdate(TypedDict):
+    termination_status: TerminationStatus
+
+
+def mark_investigation_accepted(_state: TerminationInput) -> TerminationUpdate:
+    """Record that the evaluated investigation result was accepted."""
+
+    return {"termination_status": "accepted"}
+
+
+def mark_investigation_exhausted(_state: TerminationInput) -> TerminationUpdate:
+    """Record that no bounded retry or plan revision remains."""
+
+    return {"termination_status": "exhausted"}
 
 
 class FinalizerInput(TypedDict):
@@ -464,7 +716,9 @@ def finalize_candidate(state: FinalizerInput) -> FinalizeNodeUpdate:
 
     return {
         "final_result": FinalResult(
-            relevant_files=candidate.relevant_files,
+            relevant_files=list(
+                dict.fromkeys(item.path for item in candidate.evidence)
+            ),
             evidence=[item.claim for item in candidate.evidence],
             summary=candidate.summary,
             unresolved_questions=candidate.unresolved_questions,

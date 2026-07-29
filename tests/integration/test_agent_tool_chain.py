@@ -98,7 +98,8 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
 
     assert final_state["final_result"] == expected_result
     assert final_state["evaluation_report"].passed is True
-    assert final_state["stop_reason"] is None
+    assert final_state["step_stop_reason"] is None
+    assert final_state["termination_status"] == "accepted"
     assert final_state["step_tool_call_count"] == 3
     assert final_state["step_explorer_call_count"] == 4
     assert final_state["repo_path"] == AUTH_PROJECT.resolve()

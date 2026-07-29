@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.candidate import CandidateResult, EvidenceItem
@@ -36,6 +36,19 @@ from repocompass.agent.prompts import (
 from repocompass.agent.result import FinalResult
 
 
+def _active_plan(objective: str = "Inspect the repository.") -> InvestigationPlan:
+    return InvestigationPlan(
+        steps=[
+            PlanStep(
+                id="active-step",
+                objective=objective,
+                expected_evidence=["Repository evidence for the active step."],
+                status="active",
+            )
+        ]
+    )
+
+
 def test_agent_node_declares_narrow_input_schema() -> None:
     model = MagicMock(spec=BaseChatModel)
 
@@ -49,12 +62,12 @@ def test_agent_invocation_prepends_ephemeral_investigation_prompt() -> None:
     state: AgentNodeInput = {
         "messages": [user_message],
         "objective": "Inspect the repository.",
-        "active_objective": "Inspect the repository.",
-        "investigation_plan": None,
+        "investigation_plan": _active_plan(),
         "step_tool_call_count": 0,
         "max_tool_calls_per_step": 3,
         "step_explorer_call_count": 0,
         "max_explorer_calls_per_step": 2,
+        "evaluation_report": None,
     }
     received_inputs: list[list[object]] = []
     response = AIMessage(content="Enough evidence is available.")
@@ -96,7 +109,6 @@ def test_candidate_builder_declares_narrow_input_schema() -> None:
 
 def test_candidate_builder_returns_internal_structured_result() -> None:
     candidate = CandidateResult(
-        relevant_files=["src/auth.py"],
         evidence=[
             EvidenceItem(
                 path="src/auth.py",
@@ -110,7 +122,26 @@ def test_candidate_builder_returns_internal_structured_result() -> None:
     )
     original_messages = [
         HumanMessage(content="Find authentication."),
-        AIMessage(content="Enough evidence is available."),
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "read_code",
+                    "args": {
+                        "relative_path": "src/auth.py",
+                        "start_line": 4,
+                        "end_line": 8,
+                    },
+                    "id": "call-read",
+                    "type": "tool_call",
+                }
+            ],
+        ),
+        ToolMessage(
+            content="File: src/auth.py\nLines: 4-8\n4 | def authenticate():",
+            tool_call_id="call-read",
+            name="read_code",
+        ),
     ]
     received_messages: list[list[object]] = []
 
@@ -123,9 +154,8 @@ def test_candidate_builder_returns_internal_structured_result() -> None:
     state: CandidateBuilderInput = {
         "messages": original_messages.copy(),
         "objective": "Find authentication.",
-        "active_objective": "Locate the authentication entry point.",
-        "investigation_plan": None,
-        "stop_reason": None,
+        "investigation_plan": _active_plan("Locate the authentication entry point."),
+        "step_stop_reason": None,
     }
 
     update = create_build_candidate_node(model)(state)
@@ -133,8 +163,15 @@ def test_candidate_builder_returns_internal_structured_result() -> None:
     assert update == {"candidate_result": candidate}
     assert isinstance(received_messages[0][0], SystemMessage)
     assert received_messages[0][0].content == CANDIDATE_BUILDING_SYSTEM_PROMPT
-    assert received_messages[0][1:-1] == original_messages
-    assert state["objective"] in str(received_messages[0][-1].content)
+    assert len(received_messages[0]) == 2
+    request = str(received_messages[0][-1].content)
+    assert state["objective"] in request
+    assert '"tool": "read_code"' in request
+    assert "4 | def authenticate():" in request
+    assert all(not isinstance(message, ToolMessage) for message in received_messages[0])
+    assert all(
+        not getattr(message, "tool_calls", []) for message in received_messages[0]
+    )
     assert state["messages"] == original_messages
     model.with_structured_output.assert_called_once_with(
         CandidateResult,
@@ -148,9 +185,8 @@ def test_candidate_builder_rejects_non_candidate_model_response() -> None:
     state: CandidateBuilderInput = {
         "messages": [HumanMessage(content="Inspect the repository.")],
         "objective": "Inspect the repository.",
-        "active_objective": "Inspect the repository.",
-        "investigation_plan": None,
-        "stop_reason": None,
+        "investigation_plan": _active_plan(),
+        "step_stop_reason": None,
     }
 
     with pytest.raises(
@@ -162,7 +198,6 @@ def test_candidate_builder_rejects_non_candidate_model_response() -> None:
 
 def test_finalize_candidate_is_a_deterministic_public_adapter() -> None:
     candidate = CandidateResult(
-        relevant_files=["src/auth.py"],
         evidence=[
             EvidenceItem(
                 path="src/auth.py",
@@ -209,7 +244,6 @@ def test_evaluator_merges_deterministic_and_semantic_results(
         encoding="utf-8",
     )
     candidate = CandidateResult(
-        relevant_files=["auth.py"],
         evidence=[
             EvidenceItem(
                 path="auth.py",
@@ -223,6 +257,7 @@ def test_evaluator_merges_deterministic_and_semantic_results(
         unresolved_questions=[],
     )
     assessment = SemanticAssessment(
+        active_step_completed=True,
         answers_objective=True,
         evidence_supports_summary=True,
         has_critical_omissions=False,
@@ -241,6 +276,16 @@ def test_evaluator_merges_deterministic_and_semantic_results(
     state: EvaluatorInput = {
         "repo_path": tmp_path,
         "objective": "Find authentication.",
+        "investigation_plan": InvestigationPlan(
+            steps=[
+                PlanStep(
+                    id="locate-auth",
+                    objective="Locate the authentication implementation.",
+                    expected_evidence=["A source file and line range."],
+                    status="active",
+                )
+            ],
+        ),
         "candidate_result": candidate,
     }
 
@@ -250,9 +295,6 @@ def test_evaluator_merges_deterministic_and_semantic_results(
         "evaluation_report": EvaluationReport(
             deterministic_issues=[],
             semantic_assessment=assessment,
-            missing_evidence=[],
-            recommended_focus=[],
-            passed=True,
         )
     }
     assert len(received_messages[0]) == 2
@@ -269,7 +311,6 @@ def test_evaluator_cannot_pass_candidate_with_deterministic_issues(
 ) -> None:
     (tmp_path / "auth.py").write_text("value = True\n", encoding="utf-8")
     candidate = CandidateResult(
-        relevant_files=["auth.py"],
         evidence=[
             EvidenceItem(
                 path="auth.py",
@@ -280,6 +321,7 @@ def test_evaluator_cannot_pass_candidate_with_deterministic_issues(
         unresolved_questions=[],
     )
     assessment = SemanticAssessment(
+        active_step_completed=True,
         answers_objective=True,
         evidence_supports_summary=True,
         has_critical_omissions=False,
@@ -292,6 +334,16 @@ def test_evaluator_cannot_pass_candidate_with_deterministic_issues(
     state: EvaluatorInput = {
         "repo_path": tmp_path,
         "objective": "Find the relevant behavior.",
+        "investigation_plan": InvestigationPlan(
+            steps=[
+                PlanStep(
+                    id="locate-behavior",
+                    objective="Locate the relevant behavior.",
+                    expected_evidence=["A supported source location."],
+                    status="active",
+                )
+            ],
+        ),
         "candidate_result": candidate,
     }
 
@@ -308,6 +360,7 @@ def test_evaluator_requires_candidate_result() -> None:
     state: EvaluatorInput = {
         "repo_path": Path("."),
         "objective": "Inspect the repository.",
+        "investigation_plan": None,
         "candidate_result": None,
     }
 
@@ -323,10 +376,8 @@ def test_planner_node_declares_narrow_input_schema() -> None:
     assert get_type_hints(node)["state"] is PlannerInput
 
 
-def test_planner_node_returns_plan_and_derived_active_objective() -> None:
+def test_planner_node_returns_only_the_investigation_plan() -> None:
     plan = InvestigationPlan(
-        task_summary="Investigate authentication.",
-        success_criteria=["Explain authentication using repository evidence."],
         steps=[
             PlanStep(
                 id="locate-entry",
@@ -341,7 +392,6 @@ def test_planner_node_returns_plan_and_derived_active_objective() -> None:
                 status="pending",
             ),
         ],
-        active_step_id="locate-entry",
     )
     received_messages: list[list[object]] = []
 
@@ -359,10 +409,7 @@ def test_planner_node_returns_plan_and_derived_active_objective() -> None:
 
     update = create_plan_investigation_node(model)(state)
 
-    assert update == {
-        "investigation_plan": plan,
-        "active_objective": "Locate the authentication entry point.",
-    }
+    assert update == {"investigation_plan": plan}
     assert isinstance(received_messages[0][0], SystemMessage)
     assert received_messages[0][0].content == PLANNING_SYSTEM_PROMPT
     assert state["objective"] in str(received_messages[0][1].content)

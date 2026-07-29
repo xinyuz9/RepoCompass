@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.tools.repository import read_code
@@ -45,7 +45,7 @@ class EvidenceExcerpt(BaseModel):
 
 
 class SemanticAssessment(BaseModel):
-    """Independent model assessment of candidate relevance and support."""
+    """Model-produced assessment of step progress and overall answer quality."""
 
     model_config = ConfigDict(
         extra="forbid",
@@ -54,11 +54,41 @@ class SemanticAssessment(BaseModel):
         str_strip_whitespace=True,
     )
 
-    answers_objective: bool
-    evidence_supports_summary: bool
-    has_critical_omissions: bool
-    missing_evidence: list[str]
-    recommended_focus: list[str]
+    active_step_completed: bool = Field(
+        description=(
+            "Whether the candidate contains enough evidence to complete the active "
+            "plan step."
+        )
+    )
+    answers_objective: bool = Field(
+        description=(
+            "Whether the candidate directly answers the original investigation "
+            "objective."
+        )
+    )
+    evidence_supports_summary: bool = Field(
+        description=(
+            "Whether the validated source excerpts support the candidate summary."
+        )
+    )
+    has_critical_omissions: bool = Field(
+        description=(
+            "Whether a missing fact or relationship prevents accepting the overall "
+            "answer."
+        )
+    )
+    missing_evidence: list[str] = Field(
+        description=(
+            "Concrete evidence still required to complete the active step or "
+            "overall answer."
+        )
+    )
+    recommended_focus: list[str] = Field(
+        description=(
+            "Focused repository-investigation targets for the next Explorer or "
+            "replanner invocation."
+        )
+    )
     summary: str = Field(
         min_length=1,
         description="Concise assessment, not a hidden reasoning transcript.",
@@ -66,7 +96,7 @@ class SemanticAssessment(BaseModel):
 
 
 class EvaluationReport(BaseModel):
-    """Merged deterministic and semantic evaluation of one candidate."""
+    """Code-merged deterministic validation and model-produced assessment."""
 
     model_config = ConfigDict(
         extra="forbid",
@@ -75,11 +105,34 @@ class EvaluationReport(BaseModel):
         str_strip_whitespace=True,
     )
 
-    deterministic_issues: list[ValidationIssue]
-    semantic_assessment: SemanticAssessment
-    missing_evidence: list[str]
-    recommended_focus: list[str]
-    passed: bool
+    deterministic_issues: list[ValidationIssue] = Field(
+        description=(
+            "Authoritative path, line-range, and evidence defects found by code."
+        )
+    )
+    semantic_assessment: SemanticAssessment = Field(
+        description="Independent model assessment of the validated candidate."
+    )
+
+    @computed_field(
+        description=(
+            "Final code-computed acceptance gate. True only when deterministic "
+            "validation succeeds and the semantic assessment answers the objective, "
+            "is evidence-supported, and has no critical omissions."
+        ),
+        return_type=bool,
+    )
+    @property
+    def passed(self) -> bool:
+        """Return the deterministic aggregate acceptance decision."""
+
+        assessment = self.semantic_assessment
+        return (
+            not self.deterministic_issues
+            and assessment.answers_objective
+            and assessment.evidence_supports_summary
+            and not assessment.has_critical_omissions
+        )
 
 
 @dataclass(frozen=True, slots=True)

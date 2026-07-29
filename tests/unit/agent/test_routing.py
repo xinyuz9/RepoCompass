@@ -11,10 +11,12 @@ from langchain_core.messages import (
 )
 
 from repocompass.agent.routing import (
+    ControllerRoutingInput,
     ExplorerInvocationInput,
     ExplorerInvocationRoute,
-    ToolRoutingInput,
     ToolCallRoute,
+    ToolRoutingInput,
+    route_controller,
     route_explorer_invocation,
     route_tool_calls,
 )
@@ -26,6 +28,19 @@ def test_route_tool_calls_declares_narrow_input_schema() -> None:
 
 def test_route_explorer_invocation_declares_narrow_input_schema() -> None:
     assert get_type_hints(route_explorer_invocation)["state"] is ExplorerInvocationInput
+
+
+def test_route_controller_returns_precomputed_action() -> None:
+    state: ControllerRoutingInput = {"next_action": "revise_plan"}
+
+    assert route_controller(state) == "revise_plan"
+
+
+def test_route_controller_requires_precomputed_action() -> None:
+    state: ControllerRoutingInput = {"next_action": None}
+
+    with pytest.raises(ValueError, match="did not select"):
+        route_controller(state)
 
 
 def _state_for_message(
