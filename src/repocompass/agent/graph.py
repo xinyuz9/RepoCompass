@@ -1,3 +1,4 @@
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
@@ -27,8 +28,12 @@ from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
 from repocompass.models import WorkflowModels
 
 
-def create_agent_graph(models: WorkflowModels):
-    """Compile the current graph from explicit workflow model roles."""
+def create_agent_graph(
+    models: WorkflowModels,
+    *,
+    checkpointer: BaseCheckpointSaver | None = None,
+):
+    """Compile the current graph with an optional persistence dependency."""
 
     builder = StateGraph(RepoCompassState)
 
@@ -112,6 +117,9 @@ def create_agent_graph(models: WorkflowModels):
     builder.add_edge("mark_investigation_exhausted", "finalize")
     builder.add_edge("finalize", END)
 
-    compiled = builder.compile(name="repocompass_m1")
+    compiled = builder.compile(
+        checkpointer=checkpointer,
+        name="repocompass_m1",
+    )
 
     return compiled

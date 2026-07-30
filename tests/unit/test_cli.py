@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pytest
 
@@ -31,6 +31,7 @@ def test_main_runs_investigation_and_writes_trace(
         payload={"termination_status": "accepted", "step_stop_reason": None},
     )
     outcome = RunOutcome(
+        thread_id="thread-123",
         final_result=final_result,
         termination_status="accepted",
         step_stop_reason=None,
@@ -55,6 +56,8 @@ def test_main_runs_investigation_and_writes_trace(
             "2",
             "--trace-dir",
             str(trace_directory),
+            "--checkpoint-db",
+            str(tmp_path / "checkpoints.sqlite"),
         ]
     )
 
@@ -63,13 +66,14 @@ def test_main_runs_investigation_and_writes_trace(
     trace_path = trace_directory / "cli-run.jsonl"
     assert exit_code == 0
     assert create_models.call_count == 1
-    runner_factory.assert_called_once_with(model)
+    runner_factory.assert_called_once_with(model, checkpointer=ANY)
     assert request.repo_path == tmp_path
     assert request.objective == "Inspect authentication."
     assert request.max_tool_calls_per_step == 3
     assert request.max_explorer_calls_per_step == 2
     assert request.max_plan_revisions == 2
     assert json.loads(captured.out) == final_result.model_dump(mode="json")
+    assert "Thread ID: thread-123" in captured.err
     assert "Run ID: cli-run" in captured.err
     assert "Status: accepted" in captured.err
     assert "Last step stop reason: none" in captured.err
@@ -90,6 +94,8 @@ def test_main_reports_configuration_error(
             str(tmp_path),
             "--objective",
             "Inspect the repository.",
+            "--checkpoint-db",
+            str(tmp_path / "checkpoints.sqlite"),
         ]
     )
 
@@ -97,6 +103,54 @@ def test_main_reports_configuration_error(
     assert exit_code == 1
     assert captured.out == ""
     assert captured.err == "repocompass: error: missing model settings\n"
+
+
+def test_main_routes_resume_without_rebuilding_start_request(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    final_result = FinalResult(
+        relevant_files=[],
+        evidence=[],
+        summary="Recovered result.",
+        unresolved_questions=[],
+    )
+    trace = RunTrace("resume-attempt")
+    trace.record(TraceEventKind.RUN_STARTED)
+    trace.record(
+        TraceEventKind.RUN_FINISHED,
+        payload={"termination_status": "accepted", "step_stop_reason": None},
+    )
+    outcome = RunOutcome(
+        thread_id="persisted-thread",
+        final_result=final_result,
+        termination_status="accepted",
+        step_stop_reason=None,
+        trace=trace,
+    )
+    runner = MagicMock()
+    runner.resume.return_value = outcome
+    monkeypatch.setattr(cli, "AgentRunner", MagicMock(return_value=runner))
+    monkeypatch.setattr(cli, "create_workflow_models", MagicMock(return_value=object()))
+
+    exit_code = cli.main(
+        [
+            "--resume",
+            "persisted-thread",
+            "--checkpoint-db",
+            str(tmp_path / "checkpoints.sqlite"),
+            "--trace-dir",
+            str(tmp_path / "traces"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    resume_request = runner.resume.call_args.args[0]
+    assert exit_code == 0
+    assert runner.run.call_count == 0
+    assert resume_request.thread_id == "persisted-thread"
+    assert "Thread ID: persisted-thread" in captured.err
 
 
 def test_main_rejects_non_positive_budget(
