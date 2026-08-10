@@ -5,6 +5,7 @@ from langgraph.graph import MessagesState
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.evaluation import EvaluationReport
+from repocompass.agent.lifecycle import HumanReviewPolicy, TurnRecord
 from repocompass.agent.planning import InvestigationPlan
 from repocompass.agent.result import FinalResult
 from repocompass.agent.routing import ControllerAction, TerminationStatus
@@ -15,6 +16,9 @@ class RepoCompassState(MessagesState):
 
     repo_path: Path
     objective: str
+    turn_number: int
+    turn_history: list[TurnRecord]
+    human_review_policy: HumanReviewPolicy
     investigation_plan: InvestigationPlan | None
 
     step_tool_call_count: int
@@ -38,6 +42,7 @@ def create_initial_state(
     max_tool_calls_per_step: int,
     max_explorer_calls_per_step: int,
     max_plan_revisions: int = 2,
+    human_review_policy: HumanReviewPolicy = HumanReviewPolicy.NEVER,
 ) -> RepoCompassState:
     objective = objective.strip()
     if not objective:
@@ -60,6 +65,9 @@ def create_initial_state(
         "messages": [HumanMessage(content=objective)],
         "repo_path": repo_path.resolve(),
         "objective": objective,
+        "turn_number": 1,
+        "turn_history": [],
+        "human_review_policy": human_review_policy,
         "investigation_plan": None,
         "step_tool_call_count": 0,
         "max_tool_calls_per_step": max_tool_calls_per_step,

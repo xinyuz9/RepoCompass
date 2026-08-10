@@ -17,6 +17,11 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from repocompass.agent.graph import create_agent_graph
+from repocompass.agent.lifecycle import (
+    ExecutionStatus,
+    HumanReviewPolicy,
+    HumanReviewRequest,
+)
 from repocompass.agent.result import FinalResult
 from repocompass.agent.routing import TerminationStatus
 from repocompass.agent.state import RepoCompassState, create_initial_state
@@ -122,6 +127,8 @@ class RunRequest(BaseModel):
             active plan step.
         max_plan_revisions: Positive global budget for model-based plan
             revisions.
+        human_review_policy: Optional review gate. M2.1 defines the contract,
+            while M2.3 will connect it to a Graph interrupt.
     """
 
     model_config = ConfigDict(
@@ -135,6 +142,7 @@ class RunRequest(BaseModel):
     max_tool_calls_per_step: int = Field(gt=0)
     max_explorer_calls_per_step: int = Field(gt=0)
     max_plan_revisions: int = Field(default=DEFAULT_MAX_PLAN_REVISIONS, gt=0)
+    human_review_policy: HumanReviewPolicy = HumanReviewPolicy.NEVER
 
 
 class ResumeRequest(BaseModel):
@@ -155,20 +163,51 @@ class RunOutcome:
 
     Attributes:
         thread_id: Stable checkpoint identity of the logical investigation.
-        final_result: Structured repository investigation report.
-        termination_status: Final accepted or exhausted run status.
+        final_result: Structured report for a completed attempt, otherwise None.
+        termination_status: Final accepted or exhausted status, otherwise None.
         step_stop_reason: Reason the final active step stopped exploring, if any.
         trace: Ordered local domain trace for this run.
+        execution_status: Whether this attempt completed or paused at review.
+        human_review_request: Pending public review payload when interrupted.
 
     ``RunOutcome`` deliberately omits the complete RepoCompassState so persistent
     message history and internal orchestration data do not become public API.
     """
 
     thread_id: str
-    final_result: FinalResult
-    termination_status: TerminationStatus
+    final_result: FinalResult | None
+    termination_status: TerminationStatus | None
     step_stop_reason: str | None
     trace: RunTrace
+    execution_status: ExecutionStatus = ExecutionStatus.COMPLETED
+    human_review_request: HumanReviewRequest | None = None
+
+    def __post_init__(self) -> None:
+        """Reject ambiguous combinations of terminal and interrupt fields."""
+
+        if self.execution_status is ExecutionStatus.COMPLETED:
+            if self.final_result is None or self.termination_status is None:
+                raise ValueError(
+                    "Completed outcome requires final_result and termination_status"
+                )
+            if self.human_review_request is not None:
+                raise ValueError(
+                    "Completed outcome must not contain a human review request"
+                )
+            return
+
+        if self.execution_status is ExecutionStatus.INTERRUPTED:
+            if self.human_review_request is None:
+                raise ValueError(
+                    "Interrupted outcome requires a human review request"
+                )
+            if self.final_result is not None or self.termination_status is not None:
+                raise ValueError(
+                    "Interrupted outcome must not contain terminal result fields"
+                )
+            return
+
+        raise ValueError(f"Unknown execution status: {self.execution_status!r}")
 
 
 class AgentRunner:
@@ -238,6 +277,7 @@ class AgentRunner:
             request.max_tool_calls_per_step,
             request.max_explorer_calls_per_step,
             request.max_plan_revisions,
+            request.human_review_policy,
         )
         graph = create_agent_graph(
             self._models,
