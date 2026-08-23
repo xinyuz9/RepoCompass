@@ -12,6 +12,7 @@ from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.lifecycle import ContinueRequest, TurnRecord
 from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, RunRequest
+from repocompass.agent.trace import TraceEventKind
 from repocompass.models import WorkflowModels
 from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
@@ -76,15 +77,24 @@ def test_runner_continues_completed_thread_after_reopening_sqlite(
     assert second_outcome.thread_id == "sqlite-thread"
     assert second_outcome.trace.run_id == "continued-run"
     assert second_outcome.final_result == second_result
+    assert second_outcome.trace.events[0].kind is TraceEventKind.RUN_STARTED
+    assert second_outcome.trace.events[0].payload["thread_id"] == "sqlite-thread"
+    assert second_outcome.trace.events[0].payload["execution_mode"] == "continue"
+    assert second_outcome.trace.events[0].payload["turn_number"] == 2
+    assert second_outcome.trace.events[-1].kind is TraceEventKind.RUN_FINISHED
+    assert second_outcome.trace.events[-1].payload == {
+        "thread_id": "sqlite-thread",
+        "execution_mode": "continue",
+        "termination_status": "accepted",
+        "step_stop_reason": None,
+    }
 
     with open_sqlite_checkpointer(database_path) as checkpointer:
         graph = create_agent_graph(
             _models_for(second_result),
             checkpointer=checkpointer,
         )
-        snapshot = graph.get_state(
-            {"configurable": {"thread_id": "sqlite-thread"}}
-        )
+        snapshot = graph.get_state({"configurable": {"thread_id": "sqlite-thread"}})
 
     assert snapshot.values["objective"] == "Second objective"
     assert snapshot.values["turn_number"] == 2

@@ -97,6 +97,7 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
     assert events[0].payload == {
         "thread_id": "fixed-thread",
         "execution_mode": "start",
+        "turn_number": 1,
         "repo_path": str(tmp_path.resolve()),
         "objective": "Inspect the repository.",
         "max_tool_calls_per_step": 3,
@@ -117,20 +118,66 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
     assert events[6].payload == {
         "human_review_payload": None,
         "human_decision_action": None,
-        "human_feedback": None,
+        "human_feedback_provided": False,
     }
     assert events[7].payload == {
         "human_review_policy": "never",
         "human_decision_action": "approve",
-        "human_feedback": None,
+        "human_feedback_provided": False,
     }
     assert events[8].payload == {"termination_status": "accepted"}
     assert events[9].payload["final_result"] == final_result.model_dump(mode="json")
     assert events[-1].payload == {
+        "thread_id": "fixed-thread",
+        "execution_mode": "start",
         "termination_status": "accepted",
         "step_stop_reason": None,
     }
     assert all(event.model_dump_json() for event in events)
+
+
+def test_runner_omits_hidden_reasoning_and_secret_metadata_from_trace(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "example.py").write_text("value = True\n", encoding="utf-8")
+    agent_response = AIMessage(
+        content="Enough evidence is available.",
+        additional_kwargs={
+            "reasoning_content": "private chain of thought",
+            "safe_marker": "retained",
+        },
+        response_metadata={
+            "authorization": "Bearer private-token",
+            "model_name": "scripted-model",
+        },
+    )
+    final_result = FinalResult(
+        relevant_files=["example.py"],
+        evidence=["example.py contains the relevant implementation."],
+        summary="The relevant implementation is in example.py.",
+        unresolved_questions=[],
+    )
+    runner = AgentRunner(
+        with_scripted_planner(_create_scripted_model([agent_response], final_result)),
+        checkpointer=InMemorySaver(),
+    )
+
+    outcome = runner.run(
+        RunRequest(
+            repo_path=tmp_path,
+            objective="Inspect the repository.",
+            max_tool_calls_per_step=2,
+            max_explorer_calls_per_step=2,
+        )
+    )
+
+    agent_event = next(event for event in outcome.trace.events if event.node == "agent")
+    message = agent_event.payload["messages"][0]
+    assert message["additional_kwargs"] == {"safe_marker": "retained"}
+    assert message["response_metadata"] == {"model_name": "scripted-model"}
+    serialized_trace = "\n".join(event.model_dump_json() for event in outcome.trace)
+    assert "private chain of thought" not in serialized_trace
+    assert "private-token" not in serialized_trace
 
 
 def test_runner_records_tool_loop_updates_without_extra_event_kinds(
@@ -239,6 +286,8 @@ def test_runner_preserves_step_explorer_budget_step_stop_reason(
     assert outcome.termination_status == "accepted"
     assert outcome.step_stop_reason == "step_explorer_budget_exhausted"
     assert outcome.trace.events[-1].payload == {
+        "thread_id": outcome.thread_id,
+        "execution_mode": "start",
         "termination_status": "accepted",
         "step_stop_reason": "step_explorer_budget_exhausted",
     }
@@ -315,3 +364,10 @@ def test_runner_reads_completed_result_when_resuming_finished_thread(
         TraceEventKind.RUN_FINISHED,
     ]
     assert resumed_outcome.trace.events[0].payload["execution_mode"] == "resume"
+    assert resumed_outcome.trace.events[0].payload["turn_number"] == 1
+    assert resumed_outcome.trace.events[-1].payload == {
+        "thread_id": "persisted-thread",
+        "execution_mode": "resume",
+        "termination_status": "accepted",
+        "step_stop_reason": None,
+    }

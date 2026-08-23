@@ -12,10 +12,11 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 
 class TraceEventKind(StrEnum):
-    """Finite event vocabulary for the minimal M0 domain trace."""
+    """Finite event vocabulary for one observable execution attempt."""
 
     RUN_STARTED = "run_started"
     NODE_COMPLETED = "node_completed"
+    RUN_INTERRUPTED = "run_interrupted"
     RUN_FINISHED = "run_finished"
 
 
@@ -44,11 +45,11 @@ class TraceEvent(BaseModel):
 
 
 class RunTrace:
-    """Own the ordered in-memory domain events for exactly one run.
+    """Own the ordered in-memory domain events for one execution attempt.
 
     The class must not invoke the graph, inspect LangChain messages, write files,
-    or send data to LangSmith. A future Runner will translate graph updates into
-    calls to :meth:`record`.
+    or send data to LangSmith. The Runner translates lifecycle and graph updates
+    into calls to :meth:`record`.
     """
 
     def __init__(self, run_id: str) -> None:

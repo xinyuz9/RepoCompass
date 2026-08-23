@@ -10,18 +10,18 @@ from repocompass.agent.trace import RunTrace
 
 
 class JsonlTraceSink:
-    """Persist a completed :class:`RunTrace` as newline-delimited JSON.
+    """Persist one execution-attempt trace as newline-delimited JSON.
 
     This concrete M0 sink deliberately has no database abstraction, buffering
-    policy, or LangSmith integration. Each call writes one completed run to one
-    caller-selected file.
+    policy, or LangSmith integration. Each call writes one execution attempt to
+    one caller-selected file.
     """
 
     def write(self, trace: RunTrace, destination: Path) -> Path:
         """Write ``trace`` to a new UTF-8 JSONL file.
 
         Args:
-            trace: Completed in-memory trace. Events must be written in their
+            trace: In-memory attempt trace. Events must be written in their
                 existing sequence order without mutation.
             destination: Exact output file selected by the caller. Its parent
                 directory may not exist yet.

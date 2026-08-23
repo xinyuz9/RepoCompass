@@ -13,6 +13,7 @@ from repocompass.agent.checkpoint import (
 from repocompass.agent.evaluation import (
     EvaluationReport,
     SemanticAssessment,
+    ValidationIssue,
 )
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 
@@ -38,6 +39,7 @@ def test_open_sqlite_checkpointer_creates_parent_and_database(
                 EvidenceItem,
                 EvaluationReport,
                 SemanticAssessment,
+                ValidationIssue,
                 InvestigationPlan,
                 PlanStep,
             )
@@ -48,6 +50,7 @@ def test_open_sqlite_checkpointer_creates_parent_and_database(
 )
 def test_checkpoint_serializer_rehydrates_strict_models_for_repeated_writes(
     serializer: JsonPlusSerializer,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     candidate = CandidateResult(
         evidence=[
@@ -63,7 +66,14 @@ def test_checkpoint_serializer_rehydrates_strict_models_for_repeated_writes(
         unresolved_questions=[],
     )
     evaluation_report = EvaluationReport(
-        deterministic_issues=[],
+        deterministic_issues=[
+            ValidationIssue(
+                code="example_issue",
+                message="The example requires deterministic review.",
+                path="src/example.py",
+                evidence_index=0,
+            )
+        ],
         semantic_assessment=SemanticAssessment(
             active_step_completed=True,
             answers_objective=True,
@@ -108,3 +118,4 @@ def test_checkpoint_serializer_rehydrates_strict_models_for_repeated_writes(
     )
     assert isinstance(restored_plan, InvestigationPlan)
     assert isinstance(restored_plan.active_step, PlanStep)
+    assert "Blocked deserialization" not in caplog.text

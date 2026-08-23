@@ -14,17 +14,25 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.checkpoint.sqlite import SqliteSaver
 from pydantic import BaseModel
 
-from repocompass.agent.candidate import CandidateResult
-from repocompass.agent.evaluation import EvaluationReport
+from repocompass.agent.candidate import CandidateResult, EvidenceItem
+from repocompass.agent.evaluation import (
+    EvaluationReport,
+    SemanticAssessment,
+    ValidationIssue,
+)
 from repocompass.agent.lifecycle import HumanReviewPolicy, TurnRecord
-from repocompass.agent.planning import InvestigationPlan
+from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.result import FinalResult
 
 
 _CHECKPOINT_MODEL_TYPES: tuple[type[BaseModel], ...] = (
     CandidateResult,
+    EvidenceItem,
     EvaluationReport,
+    ValidationIssue,
+    SemanticAssessment,
     InvestigationPlan,
+    PlanStep,
     FinalResult,
     TurnRecord,
 )

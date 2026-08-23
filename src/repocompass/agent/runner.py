@@ -8,7 +8,7 @@ duplicating node routing, tool execution, or budget enforcement.
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal
 from uuid import uuid4
 
 from langchain_core.runnables import RunnableConfig
@@ -21,6 +21,7 @@ from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.lifecycle import (
     ContinueRequest,
     ExecutionStatus,
+    HumanDecision,
     HumanResponseRequest,
     HumanReviewPolicy,
     HumanReviewRequest,
@@ -43,6 +44,22 @@ ExecutionMode = Literal["start", "resume", "continue", "respond"]
 DEFAULT_MAX_TOOL_CALLS_PER_STEP = 16
 DEFAULT_MAX_EXPLORER_CALLS_PER_STEP = 12
 DEFAULT_MAX_PLAN_REVISIONS = 2
+
+_SENSITIVE_TRACE_KEYS = frozenset(
+    {
+        "access_token",
+        "api_key",
+        "authorization",
+        "chain_of_thought",
+        "password",
+        "proxy_authorization",
+        "reasoning",
+        "reasoning_content",
+        "refresh_token",
+        "secret",
+        "token",
+    }
+)
 
 
 def generate_run_id() -> str:
@@ -94,6 +111,21 @@ def resolve_repository_path(repo_path: Path) -> Path:
     return resolved_path
 
 
+def _is_sensitive_trace_key(key: str) -> bool:
+    """Return whether one mapping key must be omitted from local traces."""
+
+    normalized = key.casefold().replace("-", "_")
+    return normalized in _SENSITIVE_TRACE_KEYS or normalized.endswith(
+        (
+            "_access_token",
+            "_api_key",
+            "_password",
+            "_refresh_token",
+            "_secret",
+        )
+    )
+
+
 def _to_json_value(value: object) -> JsonValue:
     """Convert supported graph-update values to JSON-compatible data."""
 
@@ -104,10 +136,16 @@ def _to_json_value(value: object) -> JsonValue:
         return str(value)
 
     if isinstance(value, BaseModel):
-        return cast(JsonValue, value.model_dump(mode="json"))
+        return _to_json_value(value.model_dump(mode="json"))
 
     if isinstance(value, Mapping):
-        return {str(key): _to_json_value(item) for key, item in value.items()}
+        normalized: dict[str, JsonValue] = {}
+        for key, item in value.items():
+            normalized_key = str(key)
+            if _is_sensitive_trace_key(normalized_key):
+                continue
+            normalized[normalized_key] = _to_json_value(item)
+        return normalized
 
     if isinstance(value, (list, tuple)):
         return [_to_json_value(item) for item in value]
@@ -120,7 +158,15 @@ def _to_json_value(value: object) -> JsonValue:
 def _normalize_update(update: Mapping[str, object]) -> dict[str, JsonValue]:
     """Return a JSON-compatible copy of one node's partial state update."""
 
-    return {key: _to_json_value(value) for key, value in update.items()}
+    normalized: dict[str, JsonValue] = {}
+    for key, value in update.items():
+        if key == "human_feedback":
+            normalized["human_feedback_provided"] = value is not None
+            continue
+        if _is_sensitive_trace_key(key):
+            continue
+        normalized[key] = _to_json_value(value)
+    return normalized
 
 
 class RunRequest(BaseModel):
@@ -237,6 +283,7 @@ def _build_interrupted_outcome(
     *,
     thread_id: str,
     trace: RunTrace,
+    execution_mode: ExecutionMode,
 ) -> RunOutcome:
     """Map one pending checkpoint interrupt to the public Runner contract."""
 
@@ -251,6 +298,22 @@ def _build_interrupted_outcome(
     ):
         raise ValueError("Interrupted graph contains terminal result fields")
 
+    pending_interrupt = snapshot.interrupts[0]
+    interrupt_id = _normalize_identifier(
+        pending_interrupt.id,
+        name="interrupt_id",
+    )
+    review_request = decode_human_review_interrupt(pending_interrupt.value)
+    trace.record(
+        TraceEventKind.RUN_INTERRUPTED,
+        payload={
+            "thread_id": thread_id,
+            "execution_mode": execution_mode,
+            "interrupt_id": interrupt_id,
+            "turn_number": review_request.turn_number,
+        },
+    )
+
     return RunOutcome(
         thread_id=thread_id,
         final_result=None,
@@ -258,13 +321,8 @@ def _build_interrupted_outcome(
         step_stop_reason=_read_step_stop_reason(snapshot.values),
         trace=trace,
         execution_status=ExecutionStatus.INTERRUPTED,
-        human_review_request=decode_human_review_interrupt(
-            snapshot.interrupts[0].value
-        ),
-        interrupt_id=_normalize_identifier(
-            snapshot.interrupts[0].id,
-            name="interrupt_id",
-        ),
+        human_review_request=review_request,
+        interrupt_id=interrupt_id,
     )
 
 
@@ -426,6 +484,7 @@ class AgentRunner:
             Command(resume=encode_human_decision(request.decision)),
             thread_id=thread_id,
             execution_mode="respond",
+            human_decision=request.decision,
         )
 
     def continue_thread(self, request: ContinueRequest) -> RunOutcome:
@@ -466,8 +525,9 @@ class AgentRunner:
         *,
         thread_id: str,
         execution_mode: ExecutionMode,
+        human_decision: HumanDecision | None = None,
     ) -> RunOutcome:
-        """Stream one start or resume attempt and publish its terminal state."""
+        """Stream one lifecycle attempt and publish its observable outcome."""
 
         config = _thread_config(thread_id)
         metadata_state: Mapping[str, object]
@@ -484,24 +544,26 @@ class AgentRunner:
                 name="run_id",
             )
         )
-        trace.record(
-            TraceEventKind.RUN_STARTED,
-            payload={
-                "thread_id": thread_id,
-                "execution_mode": execution_mode,
-                "repo_path": _to_json_value(metadata_state["repo_path"]),
-                "objective": _to_json_value(metadata_state["objective"]),
-                "max_tool_calls_per_step": _to_json_value(
-                    metadata_state["max_tool_calls_per_step"]
-                ),
-                "max_explorer_calls_per_step": _to_json_value(
-                    metadata_state["max_explorer_calls_per_step"]
-                ),
-                "max_plan_revisions": _to_json_value(
-                    metadata_state["max_plan_revisions"]
-                ),
-            },
-        )
+        started_payload: dict[str, JsonValue] = {
+            "thread_id": thread_id,
+            "execution_mode": execution_mode,
+            "turn_number": _to_json_value(metadata_state["turn_number"]),
+            "repo_path": _to_json_value(metadata_state["repo_path"]),
+            "objective": _to_json_value(metadata_state["objective"]),
+            "max_tool_calls_per_step": _to_json_value(
+                metadata_state["max_tool_calls_per_step"]
+            ),
+            "max_explorer_calls_per_step": _to_json_value(
+                metadata_state["max_explorer_calls_per_step"]
+            ),
+            "max_plan_revisions": _to_json_value(metadata_state["max_plan_revisions"]),
+        }
+        if human_decision is not None:
+            started_payload["human_decision"] = {
+                "action": human_decision.action.value,
+                "feedback_provided": human_decision.feedback is not None,
+            }
+        trace.record(TraceEventKind.RUN_STARTED, payload=started_payload)
 
         if (
             graph_input is None
@@ -512,6 +574,7 @@ class AgentRunner:
                 existing_snapshot,
                 thread_id=thread_id,
                 trace=trace,
+                execution_mode=execution_mode,
             )
 
         for part in graph.stream(
@@ -545,6 +608,7 @@ class AgentRunner:
                 snapshot,
                 thread_id=thread_id,
                 trace=trace,
+                execution_mode=execution_mode,
             )
 
         final_result = final_state.get("final_result")
@@ -558,6 +622,8 @@ class AgentRunner:
         trace.record(
             TraceEventKind.RUN_FINISHED,
             payload={
+                "thread_id": thread_id,
+                "execution_mode": execution_mode,
                 "termination_status": termination_status,
                 "step_stop_reason": step_stop_reason,
             },

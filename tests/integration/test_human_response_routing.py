@@ -130,6 +130,16 @@ def test_approve_finalizes_without_model_calls_and_rejects_replay(
     assert outcome.final_result == result
     assert outcome.interrupt_id is None
     assert outcome.trace.events[0].payload["execution_mode"] == "respond"
+    assert outcome.trace.events[0].payload["human_decision"] == {
+        "action": "approve",
+        "feedback_provided": False,
+    }
+    assert outcome.trace.events[-1].payload == {
+        "thread_id": "approve-thread",
+        "execution_mode": "respond",
+        "termination_status": "accepted",
+        "step_stop_reason": None,
+    }
     assert [
         event.node
         for event in outcome.trace.events
@@ -257,7 +267,7 @@ def test_revise_passes_feedback_to_replanner_and_pauses_at_new_review(
         thread_id=interrupted.thread_id,
         interrupt_id=interrupted.interrupt_id,
         action=HumanDecisionAction.REVISE,
-        feedback="Inspect middleware registration.",
+        feedback="PRIVATE reviewer note: inspect middleware registration.",
     )
 
     with open_sqlite_checkpointer(database_path) as checkpointer:
@@ -286,7 +296,7 @@ def test_revise_passes_feedback_to_replanner_and_pauses_at_new_review(
     assert snapshot.values["investigation_plan"] == revised_plan
     assert len(captured_replanner_messages) == 1
     replanner_prompt = captured_replanner_messages[0][-1].content
-    assert "Inspect middleware registration." in replanner_prompt
+    assert "PRIVATE reviewer note" in replanner_prompt
     node_names = [
         event.node
         for event in outcome.trace.events
@@ -296,3 +306,24 @@ def test_revise_passes_feedback_to_replanner_and_pauses_at_new_review(
     assert "revise_plan" in node_names
     assert "mark_investigation_accepted" not in node_names
     assert "finalize" not in node_names
+    assert outcome.trace.events[0].payload["human_decision"] == {
+        "action": "revise",
+        "feedback_provided": True,
+    }
+    assert outcome.trace.events[-1].kind is TraceEventKind.RUN_INTERRUPTED
+    assert outcome.trace.events[-1].payload == {
+        "thread_id": "revise-thread",
+        "execution_mode": "respond",
+        "interrupt_id": outcome.interrupt_id,
+        "turn_number": 1,
+    }
+    serialized_trace = "\n".join(
+        event.model_dump_json() for event in outcome.trace.events
+    )
+    assert "PRIVATE reviewer note" not in serialized_trace
+    review_event = next(
+        event
+        for event in outcome.trace.events
+        if event.node == "review_final_candidate"
+    )
+    assert review_event.payload["human_feedback_provided"] is True

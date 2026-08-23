@@ -74,7 +74,34 @@ def test_cli_interrupts_then_approves_from_a_new_process(tmp_path: Path) -> None
     }
     assert f"Thread ID: {interrupted_payload['thread_id']}" in approved.stderr
     assert "Status: accepted" in approved.stderr
-    assert len(list(trace_directory.glob("*.jsonl"))) == 2
+
+    traces = [
+        [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        for path in trace_directory.glob("*.jsonl")
+    ]
+    assert len(traces) == 2
+    interrupted_trace = next(
+        trace for trace in traces if trace[-1]["kind"] == "run_interrupted"
+    )
+    approved_trace = next(
+        trace for trace in traces if trace[-1]["kind"] == "run_finished"
+    )
+    assert interrupted_trace[-1]["payload"] == {
+        "thread_id": interrupted_payload["thread_id"],
+        "execution_mode": "start",
+        "interrupt_id": interrupted_payload["interrupt_id"],
+        "turn_number": 1,
+    }
+    assert approved_trace[0]["payload"]["human_decision"] == {
+        "action": "approve",
+        "feedback_provided": False,
+    }
+    assert approved_trace[-1]["payload"] == {
+        "thread_id": interrupted_payload["thread_id"],
+        "execution_mode": "respond",
+        "termination_status": "accepted",
+        "step_stop_reason": None,
+    }
 
 
 def test_cli_reports_missing_thread_without_a_traceback(tmp_path: Path) -> None:

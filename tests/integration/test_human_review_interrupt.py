@@ -118,6 +118,13 @@ def test_runner_returns_structured_interrupt_before_terminal_nodes(
     assert all(
         event.kind is not TraceEventKind.RUN_FINISHED for event in outcome.trace.events
     )
+    assert outcome.trace.events[-1].kind is TraceEventKind.RUN_INTERRUPTED
+    assert outcome.trace.events[-1].payload == {
+        "thread_id": "review-thread",
+        "execution_mode": "start",
+        "interrupt_id": outcome.interrupt_id,
+        "turn_number": 1,
+    }
 
 
 def test_runner_reads_same_interrupt_after_reopening_sqlite_without_reexecution(
@@ -153,5 +160,13 @@ def test_runner_reads_same_interrupt_after_reopening_sqlite_without_reexecution(
     assert second_outcome.termination_status is None
     assert second_outcome.trace.run_id == "read-interrupt-attempt"
     assert [event.kind for event in second_outcome.trace.events] == [
-        TraceEventKind.RUN_STARTED
+        TraceEventKind.RUN_STARTED,
+        TraceEventKind.RUN_INTERRUPTED,
     ]
+    assert second_outcome.trace.events[0].payload["execution_mode"] == "resume"
+    assert second_outcome.trace.events[-1].payload == {
+        "thread_id": "durable-review-thread",
+        "execution_mode": "resume",
+        "interrupt_id": first_outcome.interrupt_id,
+        "turn_number": 1,
+    }
