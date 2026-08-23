@@ -16,6 +16,7 @@ from repocompass.agent.nodes import (
     mark_investigation_exhausted,
     mark_step_explorer_budget_exhausted,
     reject_pending_tool_calls,
+    review_final_candidate,
     reserve_tool_budget,
 )
 from repocompass.agent.routing import (
@@ -63,6 +64,7 @@ def create_agent_graph(
     builder.add_node("revise_plan", create_revise_plan_node(models.planner))
     builder.add_node("mark_investigation_accepted", mark_investigation_accepted)
     builder.add_node("mark_investigation_exhausted", mark_investigation_exhausted)
+    builder.add_node("review_final_candidate", review_final_candidate)
     builder.add_node("finalize", finalize_candidate)
 
     explorer_invocation_routes = {
@@ -104,7 +106,7 @@ def create_agent_graph(
         "decide_next_action",
         route_controller,
         {
-            "accepted": "mark_investigation_accepted",
+            "accepted": "review_final_candidate",
             "continue_step": "agent",
             "advance_step": "advance_plan_step",
             "revise_plan": "revise_plan",
@@ -113,6 +115,7 @@ def create_agent_graph(
     )
     builder.add_edge("advance_plan_step", "agent")
     builder.add_edge("revise_plan", "agent")
+    builder.add_edge("review_final_candidate", "mark_investigation_accepted")
     builder.add_edge("mark_investigation_accepted", "finalize")
     builder.add_edge("mark_investigation_exhausted", "finalize")
     builder.add_edge("finalize", END)

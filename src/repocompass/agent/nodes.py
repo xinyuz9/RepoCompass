@@ -13,6 +13,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langgraph.graph import MessagesState
+from langgraph.types import interrupt
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.evaluation import (
@@ -21,6 +22,11 @@ from repocompass.agent.evaluation import (
     SemanticAssessment,
     ValidationIssue,
     validate_candidate,
+)
+from repocompass.agent.lifecycle import (
+    HumanReviewPolicy,
+    HumanReviewRequest,
+    encode_human_review_interrupt,
 )
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.prompts import (
@@ -695,6 +701,46 @@ def mark_investigation_exhausted(_state: TerminationInput) -> TerminationUpdate:
     """Record that no bounded retry or plan revision remains."""
 
     return {"termination_status": "exhausted"}
+
+
+class HumanReviewNodeInput(TypedDict):
+    """State required by the optional final-candidate review gate."""
+
+    human_review_policy: HumanReviewPolicy
+    turn_number: int
+    candidate_result: CandidateResult | None
+    evaluation_report: EvaluationReport | None
+
+
+class HumanReviewNodeUpdate(TypedDict):
+    human_review_policy: HumanReviewPolicy
+
+
+def review_final_candidate(
+    state: HumanReviewNodeInput,
+) -> HumanReviewNodeUpdate:
+    """Pause before accepted finalization when the run requires Human review."""
+
+    policy = state["human_review_policy"]
+    if policy is HumanReviewPolicy.NEVER:
+        return {"human_review_policy": policy}
+    if policy is not HumanReviewPolicy.BEFORE_FINALIZE:
+        raise ValueError(f"Unknown human review policy: {policy!r}")
+
+    candidate = state["candidate_result"]
+    if candidate is None:
+        raise ValueError("Cannot request Human review without a CandidateResult")
+    evaluation_report = state["evaluation_report"]
+    if evaluation_report is None:
+        raise ValueError("Cannot request Human review without an EvaluationReport")
+
+    request = HumanReviewRequest(
+        turn_number=state["turn_number"],
+        candidate_result=candidate,
+        evaluation_report=evaluation_report,
+    )
+    interrupt(encode_human_review_interrupt(request))
+    return {"human_review_policy": policy}
 
 
 class FinalizerInput(TypedDict):

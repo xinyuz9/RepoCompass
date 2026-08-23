@@ -77,6 +77,7 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         TraceEventKind.NODE_COMPLETED,
         TraceEventKind.NODE_COMPLETED,
         TraceEventKind.NODE_COMPLETED,
+        TraceEventKind.NODE_COMPLETED,
         TraceEventKind.RUN_FINISHED,
     ]
     assert [event.node for event in events] == [
@@ -86,6 +87,7 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         "build_candidate",
         "evaluate_candidate",
         "decide_next_action",
+        "review_final_candidate",
         "mark_investigation_accepted",
         "finalize",
         None,
@@ -110,8 +112,9 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
     assert events[4].payload["evaluation_report"]["passed"] is True
     assert events[4].payload["evaluation_report"]["deterministic_issues"] == []
     assert events[5].payload == {"next_action": "accepted"}
-    assert events[6].payload == {"termination_status": "accepted"}
-    assert events[7].payload["final_result"] == final_result.model_dump(mode="json")
+    assert events[6].payload == {"human_review_policy": "never"}
+    assert events[7].payload == {"termination_status": "accepted"}
+    assert events[8].payload["final_result"] == final_result.model_dump(mode="json")
     assert events[-1].payload == {
         "termination_status": "accepted",
         "step_stop_reason": None,
@@ -170,6 +173,7 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
         "build_candidate",
         "evaluate_candidate",
         "decide_next_action",
+        "review_final_candidate",
         "mark_investigation_accepted",
         "finalize",
     ]

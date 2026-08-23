@@ -14,6 +14,7 @@ from uuid import uuid4
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import StateSnapshot
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from repocompass.agent.graph import create_agent_graph
@@ -22,6 +23,7 @@ from repocompass.agent.lifecycle import (
     ExecutionStatus,
     HumanReviewPolicy,
     HumanReviewRequest,
+    decode_human_review_interrupt,
 )
 from repocompass.agent.result import FinalResult
 from repocompass.agent.routing import TerminationStatus
@@ -215,6 +217,48 @@ class RunOutcome:
         raise ValueError(f"Unknown execution status: {self.execution_status!r}")
 
 
+def _read_step_stop_reason(state: Mapping[str, object]) -> str | None:
+    """Read and validate the optional active-step stop reason."""
+
+    step_stop_reason = state.get("step_stop_reason")
+    if step_stop_reason is not None and not isinstance(step_stop_reason, str):
+        raise TypeError("Graph step_stop_reason is not a string or None")
+
+    return step_stop_reason
+
+
+def _build_interrupted_outcome(
+    snapshot: StateSnapshot,
+    *,
+    thread_id: str,
+    trace: RunTrace,
+) -> RunOutcome:
+    """Map one pending checkpoint interrupt to the public Runner contract."""
+
+    if len(snapshot.interrupts) != 1:
+        raise ValueError(
+            "Graph paused with an unsupported number of interrupts: "
+            f"{len(snapshot.interrupts)}"
+        )
+    if (
+        snapshot.values.get("final_result") is not None
+        or snapshot.values.get("termination_status") is not None
+    ):
+        raise ValueError("Interrupted graph contains terminal result fields")
+
+    return RunOutcome(
+        thread_id=thread_id,
+        final_result=None,
+        termination_status=None,
+        step_stop_reason=_read_step_stop_reason(snapshot.values),
+        trace=trace,
+        execution_status=ExecutionStatus.INTERRUPTED,
+        human_review_request=decode_human_review_interrupt(
+            snapshot.interrupts[0].value
+        ),
+    )
+
+
 class AgentRunner:
     """Execute the compiled graph and translate its updates into domain events."""
 
@@ -368,10 +412,12 @@ class AgentRunner:
 
         config = _thread_config(thread_id)
         metadata_state: Mapping[str, object]
+        existing_snapshot: StateSnapshot | None = None
         if graph_input is not None:
             metadata_state = graph_input
         else:
-            metadata_state = graph.get_state(config).values
+            existing_snapshot = graph.get_state(config)
+            metadata_state = existing_snapshot.values
 
         trace = RunTrace(
             _normalize_identifier(
@@ -398,6 +444,13 @@ class AgentRunner:
             },
         )
 
+        if existing_snapshot is not None and existing_snapshot.interrupts:
+            return _build_interrupted_outcome(
+                existing_snapshot,
+                thread_id=thread_id,
+                trace=trace,
+            )
+
         for part in graph.stream(
             graph_input,
             config=config,
@@ -420,7 +473,17 @@ class AgentRunner:
                     payload=_normalize_update(update),
                 )
 
-        final_state = graph.get_state(config).values
+        snapshot = graph.get_state(config)
+        final_state = snapshot.values
+        step_stop_reason = _read_step_stop_reason(final_state)
+
+        if snapshot.interrupts:
+            return _build_interrupted_outcome(
+                snapshot,
+                thread_id=thread_id,
+                trace=trace,
+            )
+
         final_result = final_state.get("final_result")
         if not isinstance(final_result, FinalResult):
             raise ValueError("Graph finished without a FinalResult")
@@ -428,10 +491,6 @@ class AgentRunner:
         termination_status = final_state.get("termination_status")
         if termination_status not in ("accepted", "exhausted"):
             raise ValueError("Graph finished without a termination status")
-
-        step_stop_reason = final_state.get("step_stop_reason")
-        if step_stop_reason is not None and not isinstance(step_stop_reason, str):
-            raise TypeError("Graph step_stop_reason is not a string or None")
 
         trace.record(
             TraceEventKind.RUN_FINISHED,
