@@ -4,10 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from repocompass.agent.checkpoint import RepoCompassCheckpointSerializer
-from repocompass.agent.tool_adapters import (
-    REPOSITORY_TOOL_DESCRIPTORS,
-    REPOSITORY_TOOLS,
-)
+from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
 from repocompass.tools.contracts import (
     NoProgressAction,
     NoProgressDecision,
@@ -26,6 +23,7 @@ from repocompass.tools.contracts import (
     fingerprint_progress_snapshot,
     fingerprint_tool_call,
 )
+from repocompass.tools.repository_tools import REPOSITORY_TOOL_DESCRIPTORS
 
 REPOSITORY_ID = "a" * 64
 OTHER_REPOSITORY_ID = "c" * 64
