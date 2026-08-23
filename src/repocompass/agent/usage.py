@@ -2,9 +2,11 @@
 
 import hashlib
 import json
+from collections.abc import Mapping
 from enum import StrEnum
 from typing import Literal
 
+from langchain_core.messages import AIMessage
 from pydantic import ConfigDict, Field, model_validator
 
 from repocompass.agent.domain_model import CheckpointSafeModel
@@ -225,3 +227,156 @@ def _model_invocation_id(*, run_id: str, node_name: str, sequence: int) -> str:
         separators=(",", ":"),
     ).encode("ascii")
     return hashlib.sha256(b"repocompass:model-invocation:v1\0" + payload).hexdigest()
+
+
+def extract_usage_record(response: object) -> UsageRecord:
+    """Extract strict provider-reported usage without inventing missing values."""
+
+    message = _raw_ai_message(response)
+    if message is None:
+        return _unavailable_usage()
+
+    normalized = message.usage_metadata
+    if isinstance(normalized, Mapping):
+        usage = _try_usage_payload(normalized, normalized=True)
+        if usage is not None:
+            return usage
+
+    response_metadata = message.response_metadata
+    if isinstance(response_metadata, Mapping):
+        for key in ("token_usage", "usage"):
+            payload = response_metadata.get(key)
+            if not isinstance(payload, Mapping):
+                continue
+            usage = _try_usage_payload(payload, normalized=False)
+            if usage is not None:
+                return usage
+
+    return _unavailable_usage()
+
+
+def _raw_ai_message(response: object) -> AIMessage | None:
+    if isinstance(response, AIMessage):
+        return response
+    if isinstance(response, Mapping):
+        raw = response.get("raw")
+        if isinstance(raw, AIMessage):
+            return raw
+    return None
+
+
+def _try_usage_payload(
+    payload: Mapping[object, object],
+    *,
+    normalized: bool,
+) -> UsageRecord | None:
+    try:
+        if normalized:
+            input_tokens = _optional_token(payload, "input_tokens")
+            output_tokens = _optional_token(payload, "output_tokens")
+            cached_input_tokens = _optional_token(payload, "cached_input_tokens")
+            if cached_input_tokens is None:
+                cached_input_tokens = _optional_nested_token(
+                    payload,
+                    ("input_token_details",),
+                    ("cache_read", "cached_tokens"),
+                )
+            reasoning_output_tokens = _optional_token(
+                payload,
+                "reasoning_output_tokens",
+            )
+            if reasoning_output_tokens is None:
+                reasoning_output_tokens = _optional_nested_token(
+                    payload,
+                    ("output_token_details",),
+                    ("reasoning", "reasoning_tokens"),
+                )
+        else:
+            input_tokens = _optional_token(
+                payload,
+                "input_tokens",
+                "prompt_tokens",
+            )
+            output_tokens = _optional_token(
+                payload,
+                "output_tokens",
+                "completion_tokens",
+            )
+            cached_input_tokens = _optional_token(
+                payload,
+                "cached_input_tokens",
+                "prompt_cache_hit_tokens",
+            )
+            if cached_input_tokens is None:
+                cached_input_tokens = _optional_nested_token(
+                    payload,
+                    ("input_tokens_details", "prompt_tokens_details"),
+                    ("cached_tokens", "cache_read"),
+                )
+            reasoning_output_tokens = _optional_token(
+                payload,
+                "reasoning_output_tokens",
+            )
+            if reasoning_output_tokens is None:
+                reasoning_output_tokens = _optional_nested_token(
+                    payload,
+                    ("output_tokens_details", "completion_tokens_details"),
+                    ("reasoning_tokens", "reasoning"),
+                )
+        total_tokens = _optional_token(payload, "total_tokens")
+        values = (
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            cached_input_tokens,
+            reasoning_output_tokens,
+        )
+        if all(value is None for value in values):
+            return None
+        return UsageRecord(
+            availability=UsageAvailability.REPORTED,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+            cached_input_tokens=cached_input_tokens,
+            reasoning_output_tokens=reasoning_output_tokens,
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_token(payload: Mapping[object, object], *keys: str) -> int | None:
+    for key in keys:
+        if key not in payload:
+            continue
+        value = payload[key]
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or value < 0
+            or value > MAX_SAFE_JSON_INTEGER
+        ):
+            raise ValueError("provider usage token count is invalid")
+        return value
+    return None
+
+
+def _optional_nested_token(
+    payload: Mapping[object, object],
+    detail_keys: tuple[str, ...],
+    token_keys: tuple[str, ...],
+) -> int | None:
+    for detail_key in detail_keys:
+        if detail_key not in payload:
+            continue
+        details = payload[detail_key]
+        if not isinstance(details, Mapping):
+            raise TypeError("provider usage token details are invalid")
+        value = _optional_token(details, *token_keys)
+        if value is not None:
+            return value
+    return None
+
+
+def _unavailable_usage() -> UsageRecord:
+    return UsageRecord(availability=UsageAvailability.UNAVAILABLE)

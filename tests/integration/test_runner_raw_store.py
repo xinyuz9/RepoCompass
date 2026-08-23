@@ -19,7 +19,27 @@ from repocompass.storage.raw_store import (
     RawRunStore,
     open_raw_run_store,
 )
-from tests.model_doubles import candidate_from_final_result, with_scripted_planner
+from tests.model_doubles import (
+    candidate_from_final_result,
+    default_investigation_plan,
+    default_semantic_assessment,
+    with_scripted_planner,
+)
+
+
+def _envelope(parsed: object, *, input_tokens: int, output_tokens: int) -> dict:
+    return {
+        "raw": AIMessage(
+            content="structured provider response",
+            usage_metadata={
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": input_tokens + output_tokens,
+            },
+        ),
+        "parsed": parsed,
+        "parsing_error": None,
+    }
 
 
 def _result() -> FinalResult:
@@ -45,13 +65,32 @@ def _models(
     def explore(_: object) -> AIMessage:
         if explorer_error is not None:
             raise explorer_error
-        return AIMessage(content="Enough evidence is available.")
+        return AIMessage(
+            content="Enough evidence is available.",
+            usage_metadata={
+                "input_tokens": 20,
+                "output_tokens": 4,
+                "total_tokens": 24,
+            },
+        )
 
     explorer.bind_tools.return_value = RunnableLambda(explore)
     explorer.with_structured_output.return_value = RunnableLambda(
-        lambda _: candidate_from_final_result(result)
+        lambda _: _envelope(
+            candidate_from_final_result(result), input_tokens=30, output_tokens=6
+        )
     )
     models = with_scripted_planner(explorer)
+    models.planner.with_structured_output.return_value = RunnableLambda(
+        lambda _: _envelope(
+            default_investigation_plan(), input_tokens=10, output_tokens=2
+        )
+    )
+    models.evaluator.with_structured_output.return_value = RunnableLambda(
+        lambda _: _envelope(
+            default_semantic_assessment(), input_tokens=40, output_tokens=8
+        )
+    )
     for model in (models.planner, models.evaluator):
         model.metadata = {
             "repocompass_provider": "openai",
@@ -109,6 +148,16 @@ def test_runner_persists_complete_model_provenance(tmp_path: Path) -> None:
         )
         assert all(invocation.provider == "openai" for invocation in invocations)
         assert all(invocation.model == "gpt-integration" for invocation in invocations)
+        assert all(
+            invocation.usage.availability.value == "reported"
+            for invocation in invocations
+        )
+        assert [invocation.usage.total_tokens for invocation in invocations] == [
+            12,
+            24,
+            36,
+            48,
+        ]
         assert len(store.list_context_packs("raw-run")) == len(invocations)
         for invocation in invocations:
             assert (

@@ -25,6 +25,7 @@ from repocompass.agent.usage import (
     UsageAvailability,
     UsageRecord,
     create_model_invocation_record,
+    extract_usage_record,
 )
 from repocompass.storage.raw_store import (
     AttemptExecutionMode,
@@ -235,7 +236,7 @@ class RawRunRecorder:
             raw_response = invoke(invocation_messages)
             provider_completed = True
             parsed = parse(raw_response)
-        except Exception as error:
+        except Exception:
             latency_ms = self._latency_ms(started_ns)
             output_artifact_id = None
             if provider_completed:
@@ -259,8 +260,13 @@ class RawRunRecorder:
                     if provider_completed
                     else "model_call_failed"
                 ),
+                usage=(
+                    extract_usage_record(raw_response)
+                    if provider_completed
+                    else UsageRecord(availability=UsageAvailability.UNAVAILABLE)
+                ),
             )
-            raise error
+            raise
 
         latency_ms = self._latency_ms(started_ns)
         output_artifact_id = self._put_model_output(run_id, raw_response)
@@ -279,6 +285,7 @@ class RawRunRecorder:
             input_artifact_id=input_metadata.artifact_id,
             output_artifact_id=output_artifact_id,
             error_code=None,
+            usage=extract_usage_record(raw_response),
         )
         return parsed
 
@@ -316,6 +323,7 @@ class RawRunRecorder:
         input_artifact_id: str,
         output_artifact_id: str | None,
         error_code: str | None,
+        usage: UsageRecord,
     ) -> None:
         record = create_model_invocation_record(
             run_id=run_id,
@@ -328,7 +336,7 @@ class RawRunRecorder:
             model=identity.model,
             status=status,
             latency_ms=latency_ms,
-            usage=UsageRecord(availability=UsageAvailability.UNAVAILABLE),
+            usage=usage,
             plan_step_id=plan_step_id,
             context_pack_id=context_pack_id,
             input_artifact_id=input_artifact_id,

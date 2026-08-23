@@ -80,6 +80,12 @@ def test_successful_invocation_persists_context_and_exact_io(
     response = AIMessage(
         content="Model output retained verbatim.",
         response_metadata={"model_name": "gpt-test"},
+        usage_metadata={
+            "input_tokens": 100,
+            "output_tokens": 25,
+            "total_tokens": 125,
+            "input_token_details": {"cache_read": 20},
+        },
     )
 
     with open_raw_run_store(database) as store:
@@ -127,7 +133,11 @@ def test_successful_invocation_persists_context_and_exact_io(
         assert invocation.model == "gpt-test"
         assert invocation.status is ModelInvocationStatus.SUCCEEDED
         assert invocation.latency_ms == 25
-        assert invocation.usage.availability is UsageAvailability.UNAVAILABLE
+        assert invocation.usage.availability is UsageAvailability.REPORTED
+        assert invocation.usage.input_tokens == 100
+        assert invocation.usage.output_tokens == 25
+        assert invocation.usage.total_tokens == 125
+        assert invocation.usage.cached_input_tokens == 20
         assert invocation.context_pack_id == gathered.pack.pack_id
 
         artifacts = {
@@ -200,7 +210,14 @@ def test_parse_failure_retains_raw_response_and_uses_stable_error_code(
 ) -> None:
     database = tmp_path / "raw.sqlite"
     raw_response = {
-        "raw": AIMessage(content="provider response before parse failure"),
+        "raw": AIMessage(
+            content="provider response before parse failure",
+            usage_metadata={
+                "input_tokens": 40,
+                "output_tokens": 5,
+                "total_tokens": 45,
+            },
+        ),
         "parsed": None,
         "parsing_error": ValueError("secret parser detail"),
     }
@@ -239,6 +256,8 @@ def test_parse_failure_retains_raw_response_and_uses_stable_error_code(
         invocation = store.list_model_invocations("run-parse")[0]
         assert invocation.status is ModelInvocationStatus.FAILED
         assert invocation.error_code == "invalid_model_response"
+        assert invocation.usage.availability is UsageAvailability.REPORTED
+        assert invocation.usage.total_tokens == 45
         assert invocation.output_artifact_id is not None
         output = store.get_artifact(invocation.output_artifact_id)
         assert output is not None
