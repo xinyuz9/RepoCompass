@@ -15,6 +15,23 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from pydantic import BaseModel
 
 from repocompass.agent.candidate import CandidateResult, EvidenceItem
+from repocompass.agent.context import (
+    ContextBuildReport,
+    ContextItem,
+    ContextPack,
+    ContextSection,
+    ContextSelectionDecision,
+    ContextSelectionOutcome,
+    ContextSelectionReason,
+    ContextSource,
+    ContextSourceKind,
+    ProvenanceKind,
+    ProvenanceLink,
+    RawArtifactKind,
+    RawArtifactMetadata,
+    RepositoryLocation,
+    VerificationStatus,
+)
 from repocompass.agent.evaluation import (
     EvaluationReport,
     SemanticAssessment,
@@ -23,6 +40,13 @@ from repocompass.agent.evaluation import (
 from repocompass.agent.lifecycle import HumanReviewPolicy, TurnRecord
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.result import FinalResult
+from repocompass.agent.usage import (
+    ModelInvocationRecord,
+    ModelInvocationStatus,
+    ModelRole,
+    UsageAvailability,
+    UsageRecord,
+)
 from repocompass.tools.contracts import (
     NoProgressAction,
     NoProgressDecision,
@@ -58,6 +82,16 @@ _CHECKPOINT_MODEL_TYPES: tuple[type[BaseModel], ...] = (
     ToolAuditRecord,
     ProgressSnapshot,
     NoProgressDecision,
+    RawArtifactMetadata,
+    RepositoryLocation,
+    ProvenanceLink,
+    ContextSource,
+    ContextItem,
+    ContextSelectionDecision,
+    ContextBuildReport,
+    ContextPack,
+    UsageRecord,
+    ModelInvocationRecord,
 )
 _CHECKPOINT_ALLOWED_TYPES: tuple[type[object], ...] = (
     *_CHECKPOINT_MODEL_TYPES,
@@ -69,6 +103,16 @@ _CHECKPOINT_ALLOWED_TYPES: tuple[type[object], ...] = (
     ToolDecisionReason,
     NoProgressAction,
     NoProgressReason,
+    RawArtifactKind,
+    ContextSourceKind,
+    ProvenanceKind,
+    VerificationStatus,
+    ContextSection,
+    ContextSelectionOutcome,
+    ContextSelectionReason,
+    ModelRole,
+    ModelInvocationStatus,
+    UsageAvailability,
 )
 
 
