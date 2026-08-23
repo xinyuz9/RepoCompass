@@ -17,6 +17,8 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command, StateSnapshot
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from repocompass.agent.context import ContextPack
+from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.lifecycle import (
     ContinueRequest,
@@ -165,6 +167,45 @@ def _to_json_value(value: object) -> JsonValue:
     )
 
 
+def _context_pack_trace_metadata(pack: ContextPack) -> dict[str, JsonValue]:
+    return {
+        "pack_id": pack.pack_id,
+        "build_id": pack.build_report.build_id,
+        "budget_tokens": pack.build_report.budget_tokens,
+        "estimated_tokens": pack.estimated_tokens,
+        "selected_count": pack.build_report.selected_count,
+        "excluded_count": pack.build_report.excluded_count,
+        "items": [
+            {
+                "item_id": item.item_id,
+                "source_id": item.source.source_id,
+                "source_kind": item.source.kind.value,
+                "raw_artifact_id": item.source.raw_artifact_id,
+                "section": item.section.value,
+                "verification_status": item.verification_status.value,
+                "estimated_tokens": item.estimated_tokens,
+                "pinned": item.pinned,
+                "location": (
+                    None
+                    if item.source.location is None
+                    else item.source.location.model_dump(mode="json")
+                ),
+            }
+            for item in pack.items
+        ],
+        "decisions": [
+            {
+                "item_id": decision.item_id,
+                "outcome": decision.outcome.value,
+                "reason": decision.reason.value,
+                "estimated_tokens": decision.estimated_tokens,
+                "selected_position": decision.selected_position,
+            }
+            for decision in pack.build_report.decisions
+        ],
+    }
+
+
 def _normalize_update(update: Mapping[str, object]) -> dict[str, JsonValue]:
     """Return a JSON-compatible copy of one node's partial state update."""
 
@@ -172,6 +213,16 @@ def _normalize_update(update: Mapping[str, object]) -> dict[str, JsonValue]:
     for key, value in update.items():
         if key == "human_feedback":
             normalized["human_feedback_provided"] = value is not None
+            continue
+        if key == "active_context_pack":
+            if value is None:
+                normalized[key] = None
+            elif isinstance(value, ContextPack):
+                normalized[key] = _context_pack_trace_metadata(value)
+            else:
+                raise TypeError(
+                    "Graph active_context_pack is not a ContextPack or None"
+                )
             continue
         if _is_sensitive_trace_key(key):
             continue
@@ -194,6 +245,8 @@ class RunRequest(BaseModel):
             active plan step.
         max_plan_revisions: Positive global budget for model-based plan
             revisions.
+        context_budget_tokens: Positive hard budget for dynamic active-context
+            JSONL records in each model invocation.
         human_review_policy: Optional final-candidate review gate.
     """
 
@@ -209,6 +262,7 @@ class RunRequest(BaseModel):
     max_explorer_calls_per_step: int = Field(gt=0)
     max_no_progress_rounds: int = Field(default=DEFAULT_MAX_NO_PROGRESS_ROUNDS, gt=0)
     max_plan_revisions: int = Field(default=DEFAULT_MAX_PLAN_REVISIONS, gt=0)
+    context_budget_tokens: int = Field(default=DEFAULT_CONTEXT_BUDGET_TOKENS, gt=0)
     human_review_policy: HumanReviewPolicy = HumanReviewPolicy.NEVER
 
 
@@ -455,6 +509,7 @@ class AgentRunner:
             request.max_plan_revisions,
             request.human_review_policy,
             max_no_progress_rounds=request.max_no_progress_rounds,
+            context_budget_tokens=request.context_budget_tokens,
         )
         graph = create_agent_graph(
             self._models,
@@ -624,6 +679,11 @@ class AgentRunner:
                 )
             ),
             "max_plan_revisions": _to_json_value(metadata_state["max_plan_revisions"]),
+            "context_budget_tokens": _to_json_value(
+                metadata_state.get(
+                    "context_budget_tokens", DEFAULT_CONTEXT_BUDGET_TOKENS
+                )
+            ),
         }
         if human_decision is not None:
             started_payload["human_decision"] = {

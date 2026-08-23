@@ -156,11 +156,18 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
         sum(isinstance(message, SystemMessage) for message in messages) == 1
         for messages in agent_inputs
     )
-    assert len(agent_inputs[0][1:]) == 1
-    assert agent_inputs[0][1].content == user_message.content
-    assert agent_inputs[1][-1] == tree_result
-    assert agent_inputs[2][-1] == search_result
-    assert agent_inputs[3][-1] == read_result
+    assert all(len(messages) == 2 for messages in agent_inputs)
+    assert all(isinstance(messages[1], HumanMessage) for messages in agent_inputs)
+    assert all(
+        not any(isinstance(message, ToolMessage) for message in messages)
+        for messages in agent_inputs
+    )
+    assert user_message.content in str(agent_inputs[0][1].content)
+    assert "role=explorer" in str(agent_inputs[0][1].content)
+    assert "app.py" in str(agent_inputs[1][1].content)
+    assert "auth.py" in str(agent_inputs[1][1].content)
+    assert "def authenticate" in str(agent_inputs[2][1].content)
+    assert "4 | def authenticate" in str(agent_inputs[3][1].content)
     assert all(
         not isinstance(message, SystemMessage) for message in final_state["messages"]
     )

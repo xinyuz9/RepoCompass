@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.candidate import CandidateResult, EvidenceItem
+from repocompass.agent.context import ContextPack
 from repocompass.agent.evaluation import (
     EvaluationReport,
     SemanticAssessment,
@@ -57,10 +58,11 @@ def test_agent_node_declares_narrow_input_schema() -> None:
     assert get_type_hints(node)["state"] is AgentNodeInput
 
 
-def test_agent_invocation_prepends_ephemeral_investigation_prompt() -> None:
+def test_agent_invocation_uses_ephemeral_active_context(tmp_path: Path) -> None:
     user_message = HumanMessage(content="Inspect the repository.")
     state: AgentNodeInput = {
         "messages": [user_message],
+        "repo_path": tmp_path,
         "objective": "Inspect the repository.",
         "investigation_plan": _active_plan(),
         "step_tool_call_count": 0,
@@ -68,6 +70,8 @@ def test_agent_invocation_prepends_ephemeral_investigation_prompt() -> None:
         "step_explorer_call_count": 0,
         "max_explorer_calls_per_step": 2,
         "evaluation_report": None,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
     received_inputs: list[list[object]] = []
     response = AIMessage(content="Enough evidence is available.")
@@ -83,10 +87,15 @@ def test_agent_invocation_prepends_ephemeral_investigation_prompt() -> None:
 
     assert isinstance(received_inputs[0][0], SystemMessage)
     assert str(received_inputs[0][0].content).startswith(INVESTIGATION_SYSTEM_PROMPT)
-    assert received_inputs[0][1:] == [user_message]
+    assert len(received_inputs[0]) == 2
+    assert isinstance(received_inputs[0][1], HumanMessage)
+    assert received_inputs[0][1] is not user_message
+    assert "role=explorer" in str(received_inputs[0][1].content)
     assert state["messages"] == [user_message]
     assert update["messages"] == [response]
     assert update["step_explorer_call_count"] == 1
+    assert isinstance(update["active_context_pack"], ContextPack)
+    assert update["context_build_count"] == 1
 
 
 def test_investigation_prompt_marks_repository_content_as_non_instruction() -> None:
@@ -107,7 +116,9 @@ def test_candidate_builder_declares_narrow_input_schema() -> None:
     assert get_type_hints(node)["state"] is CandidateBuilderInput
 
 
-def test_candidate_builder_returns_internal_structured_result() -> None:
+def test_candidate_builder_returns_internal_structured_result(
+    tmp_path: Path,
+) -> None:
     candidate = CandidateResult(
         evidence=[
             EvidenceItem(
@@ -153,20 +164,25 @@ def test_candidate_builder_returns_internal_structured_result() -> None:
     model.with_structured_output.return_value = RunnableLambda(return_candidate)
     state: CandidateBuilderInput = {
         "messages": original_messages.copy(),
+        "repo_path": tmp_path,
         "objective": "Find authentication.",
         "investigation_plan": _active_plan("Locate the authentication entry point."),
         "step_stop_reason": None,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     update = create_build_candidate_node(model)(state)
 
-    assert update == {"candidate_result": candidate}
+    assert update["candidate_result"] == candidate
+    assert isinstance(update["active_context_pack"], ContextPack)
+    assert update["context_build_count"] == 1
     assert isinstance(received_messages[0][0], SystemMessage)
     assert received_messages[0][0].content == CANDIDATE_BUILDING_SYSTEM_PROMPT
     assert len(received_messages[0]) == 2
     request = str(received_messages[0][-1].content)
     assert state["objective"] in request
-    assert '"tool": "read_code"' in request
+    assert "read_code" in request
     assert "4 | def authenticate():" in request
     assert all(not isinstance(message, ToolMessage) for message in received_messages[0])
     assert all(
@@ -179,14 +195,19 @@ def test_candidate_builder_returns_internal_structured_result() -> None:
     )
 
 
-def test_candidate_builder_rejects_non_candidate_model_response() -> None:
+def test_candidate_builder_rejects_non_candidate_model_response(
+    tmp_path: Path,
+) -> None:
     model = MagicMock(spec=BaseChatModel)
     model.with_structured_output.return_value = RunnableLambda(lambda _: {})
     state: CandidateBuilderInput = {
         "messages": [HumanMessage(content="Inspect the repository.")],
+        "repo_path": tmp_path,
         "objective": "Inspect the repository.",
         "investigation_plan": _active_plan(),
         "step_stop_reason": None,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     with pytest.raises(
@@ -287,16 +308,18 @@ def test_evaluator_merges_deterministic_and_semantic_results(
             ],
         ),
         "candidate_result": candidate,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     update = create_evaluate_candidate_node(model)(state)
 
-    assert update == {
-        "evaluation_report": EvaluationReport(
-            deterministic_issues=[],
-            semantic_assessment=assessment,
-        )
-    }
+    assert update["evaluation_report"] == EvaluationReport(
+        deterministic_issues=[],
+        semantic_assessment=assessment,
+    )
+    assert isinstance(update["active_context_pack"], ContextPack)
+    assert update["context_build_count"] == 1
     assert len(received_messages[0]) == 2
     assert "def authenticate" in str(received_messages[0][1].content)
     model.with_structured_output.assert_called_once_with(
@@ -345,6 +368,8 @@ def test_evaluator_cannot_pass_candidate_with_deterministic_issues(
             ],
         ),
         "candidate_result": candidate,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     report = create_evaluate_candidate_node(model)(state)["evaluation_report"]
@@ -376,7 +401,7 @@ def test_planner_node_declares_narrow_input_schema() -> None:
     assert get_type_hints(node)["state"] is PlannerInput
 
 
-def test_planner_node_returns_only_the_investigation_plan() -> None:
+def test_planner_node_returns_plan_and_active_context() -> None:
     plan = InvestigationPlan(
         steps=[
             PlanStep(
@@ -405,11 +430,15 @@ def test_planner_node_returns_only_the_investigation_plan() -> None:
         "objective": "Find and explain authentication.",
         "max_tool_calls_per_step": 6,
         "max_explorer_calls_per_step": 3,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     update = create_plan_investigation_node(model)(state)
 
-    assert update == {"investigation_plan": plan}
+    assert update["investigation_plan"] == plan
+    assert isinstance(update["active_context_pack"], ContextPack)
+    assert update["context_build_count"] == 1
     assert isinstance(received_messages[0][0], SystemMessage)
     assert received_messages[0][0].content == PLANNING_SYSTEM_PROMPT
     assert state["objective"] in str(received_messages[0][1].content)
@@ -426,6 +455,8 @@ def test_planner_node_rejects_non_plan_model_response() -> None:
         "objective": "Inspect the repository.",
         "max_tool_calls_per_step": 3,
         "max_explorer_calls_per_step": 2,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     with pytest.raises(

@@ -105,6 +105,7 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         "max_explorer_calls_per_step": 2,
         "max_no_progress_rounds": 3,
         "max_plan_revisions": 2,
+        "context_budget_tokens": 32_768,
     }
     assert (
         events[1].payload["investigation_plan"]["steps"][0]["objective"]

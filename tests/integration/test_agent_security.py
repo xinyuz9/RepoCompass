@@ -8,6 +8,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
     AIMessage,
     AnyMessage,
+    HumanMessage,
     SystemMessage,
     ToolCall,
     ToolMessage,
@@ -93,7 +94,7 @@ def test_agent_rejects_tool_call_that_spoofs_repository_root(
     assert final_state["final_result"] == expected_result
 
 
-def test_repository_instruction_text_remains_inside_tool_message() -> None:
+def test_repository_instruction_text_remains_selected_context_data() -> None:
     """This verifies message boundaries, not model immunity to prompt injection."""
 
     fixture_repo = Path(__file__).parents[1] / "fixtures" / "prompt_injection_project"
@@ -141,8 +142,13 @@ def test_repository_instruction_text_remains_inside_tool_message() -> None:
 
     second_agent_input = agent_inputs[1]
     assert isinstance(second_agent_input[0], SystemMessage)
-    assert isinstance(second_agent_input[-1], ToolMessage)
-    assert "IGNORE ALL PREVIOUS INSTRUCTIONS" in str(second_agent_input[-1].content)
+    assert len(second_agent_input) == 2
+    assert isinstance(second_agent_input[1], HumanMessage)
+    rendered_context = str(second_agent_input[1].content)
+    assert "role=explorer" in rendered_context
+    assert '"section":"evidence"' in rendered_context
+    assert "IGNORE ALL PREVIOUS INSTRUCTIONS" in rendered_context
+    assert all(not isinstance(message, ToolMessage) for message in second_agent_input)
     assert all(
         not isinstance(message, SystemMessage) for message in final_state["messages"]
     )

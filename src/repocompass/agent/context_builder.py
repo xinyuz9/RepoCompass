@@ -26,6 +26,7 @@ from repocompass.agent.domain_model import CheckpointSafeModel
 from repocompass.tools.contracts import MAX_SAFE_JSON_INTEGER
 
 CONTEXT_BUILDER_SCHEMA_VERSION = 1
+DEFAULT_CONTEXT_BUDGET_TOKENS = 32_768
 _TRUNCATION_MARKER = "\n[TRUNCATED: full content retained in raw artifact]"
 
 
@@ -342,7 +343,10 @@ def _deduplicate_candidates(
 
 
 def _is_mandatory(item: ContextItem) -> bool:
-    return item.pinned or item.source.kind is ContextSourceKind.OBJECTIVE
+    return item.pinned or item.source.kind in {
+        ContextSourceKind.OBJECTIVE,
+        ContextSourceKind.EVALUATOR_REQUEST,
+    }
 
 
 def _selection_reason(item: ContextItem) -> ContextSelectionReason:

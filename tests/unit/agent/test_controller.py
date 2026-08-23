@@ -8,6 +8,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.context import ContextPack
 from repocompass.agent.evaluation import (
     EvaluationReport,
     SemanticAssessment,
@@ -278,10 +279,14 @@ def test_replanner_preserves_completed_steps_and_resets_execution_state() -> Non
         "max_explorer_calls_per_step": 3,
         "plan_revision_count": 0,
         "max_plan_revisions": 2,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     update = create_revise_plan_node(model)(state)
 
+    assert isinstance(update["active_context_pack"], ContextPack)
+    assert update["context_build_count"] == 1
     assert update == {
         "investigation_plan": revised_plan,
         "step_tool_call_count": 0,
@@ -298,10 +303,13 @@ def test_replanner_preserves_completed_steps_and_resets_execution_state() -> Non
         "human_review_payload": None,
         "human_decision_action": None,
         "human_feedback": None,
+        "active_context_pack": update["active_context_pack"],
+        "context_build_count": 1,
     }
     assert len(received_messages[0]) == 2
     prompt = str(received_messages[0][1].content)
-    assert "None provided." in prompt
+    assert "None provided." not in prompt
+    assert "role=replanner" in prompt
     assert current_plan.active_step.objective in prompt
     assert candidate.summary in prompt
     assert report.semantic_assessment.summary in prompt

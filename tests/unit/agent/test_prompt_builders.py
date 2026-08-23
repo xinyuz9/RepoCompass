@@ -1,5 +1,8 @@
 """Contract tests for the dynamic Agent prompt harness."""
 
+import json
+from pathlib import Path
+
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
@@ -29,6 +32,17 @@ from repocompass.agent.prompts import (
 )
 
 
+def _selected_content(message: HumanMessage) -> str:
+    """Decode the canonical JSONL records from a rendered Active Context."""
+
+    rendered = str(message.content)
+    _, separator, jsonl = rendered.partition("\n\n")
+    assert separator
+    records = [json.loads(line) for line in jsonl.splitlines() if line]
+    assert all(isinstance(record.get("content"), str) for record in records)
+    return "\n".join(record["content"] for record in records)
+
+
 def test_planner_messages_are_isolated_from_repository_content() -> None:
     state: PlannerInput = {
         "objective": "Find and explain the authentication entry point.",
@@ -42,14 +56,16 @@ def test_planner_messages_are_isolated_from_repository_content() -> None:
     assert isinstance(messages[0], SystemMessage)
     assert messages[0].content == PLANNING_SYSTEM_PROMPT
     assert isinstance(messages[1], HumanMessage)
-    request = str(messages[1].content)
+    request = _selected_content(messages[1])
     assert state["objective"] in request
     assert "Available tool calls per plan step: 7" in request
     assert "Available Explorer invocations per plan step: 3" in request
     assert "repo_path" not in request
 
 
-def test_agent_messages_expose_only_the_active_plan_step() -> None:
+def test_agent_messages_expose_only_the_active_plan_step(
+    tmp_path: Path,
+) -> None:
     original_message = HumanMessage(
         content="Find and explain the authentication entry point."
     )
@@ -71,6 +87,7 @@ def test_agent_messages_expose_only_the_active_plan_step() -> None:
     )
     state: AgentNodeInput = {
         "messages": [original_message],
+        "repo_path": tmp_path,
         "objective": "Find and explain the authentication entry point.",
         "investigation_plan": plan,
         "step_tool_call_count": 2,
@@ -78,26 +95,29 @@ def test_agent_messages_expose_only_the_active_plan_step() -> None:
         "step_explorer_call_count": 1,
         "max_explorer_calls_per_step": 3,
         "evaluation_report": None,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     messages = build_agent_messages(state)
 
     assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
-    system_content = str(messages[0].content)
-    assert system_content.startswith(INVESTIGATION_SYSTEM_PROMPT)
-    assert state["objective"] in system_content
-    assert plan.active_step.objective in system_content
-    assert plan.active_step.id in system_content
-    assert plan.active_step.expected_evidence[0] in system_content
-    assert plan.steps[1].objective not in system_content
-    assert plan.steps[1].expected_evidence[0] not in system_content
-    assert "Do not\ninvestigate, anticipate, or complete pending plan steps." in (
-        system_content
+    assert messages[0].content == INVESTIGATION_SYSTEM_PROMPT
+    assert isinstance(messages[1], HumanMessage)
+    selected_content = _selected_content(messages[1])
+    assert state["objective"] in selected_content
+    assert plan.active_step.objective in selected_content
+    assert plan.active_step.id in selected_content
+    assert plan.active_step.expected_evidence[0] in selected_content
+    assert plan.steps[1].objective not in selected_content
+    assert plan.steps[1].expected_evidence[0] not in selected_content
+    assert "Do not\ninvestigate, anticipate, or complete pending plan steps." in str(
+        messages[0].content
     )
-    assert "Remaining tool calls for the active step:\n5" in system_content
-    assert "Remaining Explorer invocations for the active step:\n2" in system_content
-    assert messages[1] is original_message
+    assert "Remaining tool calls for the active step:\n5" in selected_content
+    assert "Remaining Explorer invocations for the active step:\n2" in selected_content
+    assert messages[1] is not original_message
     assert state["messages"] == [original_message]
 
 
@@ -105,6 +125,7 @@ def test_agent_messages_require_an_investigation_plan() -> None:
     original_message = HumanMessage(content="Inspect the repository.")
     state: AgentNodeInput = {
         "messages": [original_message],
+        "repo_path": Path("."),
         "objective": "Inspect the repository.",
         "investigation_plan": None,
         "step_tool_call_count": 0,
@@ -112,13 +133,17 @@ def test_agent_messages_require_an_investigation_plan() -> None:
         "step_explorer_call_count": 0,
         "max_explorer_calls_per_step": 2,
         "evaluation_report": None,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     with pytest.raises(ValueError, match="InvestigationPlan"):
         build_agent_messages(state)
 
 
-def test_agent_messages_append_ephemeral_evaluator_feedback() -> None:
+def test_agent_messages_select_ephemeral_evaluator_feedback(
+    tmp_path: Path,
+) -> None:
     original_message = HumanMessage(content="Inspect the repository.")
     assessment = SemanticAssessment(
         active_step_completed=False,
@@ -151,6 +176,7 @@ def test_agent_messages_append_ephemeral_evaluator_feedback() -> None:
     )
     state: AgentNodeInput = {
         "messages": [original_message],
+        "repo_path": tmp_path,
         "objective": "Explain authentication.",
         "investigation_plan": plan,
         "step_tool_call_count": 1,
@@ -158,19 +184,24 @@ def test_agent_messages_append_ephemeral_evaluator_feedback() -> None:
         "step_explorer_call_count": 1,
         "max_explorer_calls_per_step": 2,
         "evaluation_report": report,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     messages = build_agent_messages(state)
 
-    assert messages[1] is original_message
-    assert isinstance(messages[-1], HumanMessage)
-    feedback = str(messages[-1].content)
+    assert len(messages) == 2
+    assert messages[1] is not original_message
+    assert isinstance(messages[1], HumanMessage)
+    feedback = _selected_content(messages[1])
     assert assessment.missing_evidence[0] in feedback
     assert assessment.recommended_focus[0] in feedback
     assert state["messages"] == [original_message]
 
 
-def test_candidate_messages_render_tool_results_without_tool_protocol_history() -> None:
+def test_candidate_messages_render_tool_results_without_tool_protocol_history(
+    tmp_path: Path,
+) -> None:
     original_message = HumanMessage(content="Inspect authentication.")
     tool_request = AIMessage(
         content="",
@@ -210,9 +241,12 @@ def test_candidate_messages_render_tool_results_without_tool_protocol_history() 
     )
     state: CandidateBuilderInput = {
         "messages": [original_message, tool_request, tool_result],
+        "repo_path": tmp_path,
         "objective": "Explain authentication.",
         "investigation_plan": plan,
         "step_stop_reason": "step_explorer_budget_exhausted",
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     messages = build_candidate_messages(state)
@@ -221,7 +255,7 @@ def test_candidate_messages_render_tool_results_without_tool_protocol_history() 
     assert messages[0].content == CANDIDATE_BUILDING_SYSTEM_PROMPT
     assert len(messages) == 2
     assert isinstance(messages[1], HumanMessage)
-    request = str(messages[1].content)
+    request = _selected_content(messages[1])
     assert state["objective"] in request
     assert plan.active_step.objective in request
     assert plan.active_step.expected_evidence[0] in request
@@ -235,7 +269,9 @@ def test_candidate_messages_render_tool_results_without_tool_protocol_history() 
     assert state["messages"] == [original_message, tool_request, tool_result]
 
 
-def test_evaluator_messages_contain_only_isolated_evaluation_data() -> None:
+def test_evaluator_messages_contain_only_isolated_evaluation_data(
+    tmp_path: Path,
+) -> None:
     candidate = CandidateResult(
         evidence=[
             EvidenceItem(
@@ -248,6 +284,7 @@ def test_evaluator_messages_contain_only_isolated_evaluation_data() -> None:
         unresolved_questions=[],
     )
     state: EvaluationPromptInput = {
+        "repo_path": tmp_path,
         "objective": "Find authentication.",
         "active_step": PlanStep(
             id="locate-authentication",
@@ -275,6 +312,8 @@ def test_evaluator_messages_contain_only_isolated_evaluation_data() -> None:
                 content="1 | def authenticate():",
             ),
         ),
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
     }
 
     messages = build_evaluator_messages(state)
@@ -283,7 +322,7 @@ def test_evaluator_messages_contain_only_isolated_evaluation_data() -> None:
     assert isinstance(messages[0], SystemMessage)
     assert messages[0].content == EVALUATION_SYSTEM_PROMPT
     assert isinstance(messages[1], HumanMessage)
-    request = str(messages[1].content)
+    request = _selected_content(messages[1])
     assert state["objective"] in request
     assert state["active_step"].objective in request
     assert state["active_step"].expected_evidence[0] in request
