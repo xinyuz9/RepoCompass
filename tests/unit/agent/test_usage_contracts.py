@@ -40,7 +40,7 @@ def _invocation(**overrides: object) -> ModelInvocationRecord:
         "latency_ms": 42,
         "usage": _reported_usage(),
         "plan_step_id": None,
-        "context_pack_id": None,
+        "context_pack_id": "d" * 64,
         "input_artifact_id": "a" * 64,
         "output_artifact_id": "b" * 64,
         "error_code": None,
@@ -174,6 +174,11 @@ def test_model_invocation_has_deterministic_identity_and_bounded_metadata() -> N
         ModelInvocationRecord.model_validate_json(
             json.dumps({**payload, "invocation_id": "f" * 64})
         )
+
+
+def test_model_invocation_requires_context_pack_provenance() -> None:
+    with pytest.raises(ValidationError, match="context_pack_id"):
+        _invocation(context_pack_id=None)
 
 
 def test_model_invocation_status_requires_canonical_error_metadata() -> None:

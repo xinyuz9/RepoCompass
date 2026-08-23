@@ -142,7 +142,7 @@ class ModelInvocationRecord(_UsageContractModel):
     latency_ms: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
     usage: UsageRecord
     plan_step_id: str | None = Field(default=None, min_length=1, max_length=128)
-    context_pack_id: Sha256Digest | None = None
+    context_pack_id: Sha256Digest
     input_artifact_id: Sha256Digest
     output_artifact_id: Sha256Digest | None = None
     error_code: str | None = Field(default=None, pattern=ERROR_CODE_PATTERN)
@@ -182,7 +182,7 @@ def create_model_invocation_record(
     input_artifact_id: str,
     output_artifact_id: str | None,
     plan_step_id: str | None = None,
-    context_pack_id: str | None = None,
+    context_pack_id: str,
     error_code: str | None = None,
 ) -> ModelInvocationRecord:
     """Create one deterministic invocation identity from trusted run metadata."""
