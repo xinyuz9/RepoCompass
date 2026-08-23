@@ -30,9 +30,11 @@ from repocompass.agent.runner import (
 )
 from repocompass.agent.trace_sink import JsonlTraceSink
 from repocompass.models import create_workflow_models
+from repocompass.storage.raw_store import RawStoreError, open_raw_run_store
 
 DEFAULT_TRACE_DIRECTORY = Path(".repocompass/traces")
 DEFAULT_CHECKPOINT_DATABASE = Path(".repocompass/checkpoints.sqlite")
+DEFAULT_RAW_STORE_DATABASE = Path(".repocompass/raw_runs.sqlite")
 LifecycleMode = Literal["start", "resume", "continue", "respond"]
 
 
@@ -57,7 +59,7 @@ def create_parser() -> argparse.ArgumentParser:
         prog="repocompass",
         description=(
             "Investigate a repository with bounded read-only tools and save "
-            "a local JSONL domain trace."
+            "local trace and raw provenance records."
         ),
     )
     parser.add_argument(
@@ -162,6 +164,15 @@ def create_parser() -> argparse.ArgumentParser:
         default=DEFAULT_CHECKPOINT_DATABASE,
         help=(
             f"local SQLite checkpoint database (default: {DEFAULT_CHECKPOINT_DATABASE})"
+        ),
+    )
+    parser.add_argument(
+        "--raw-store-db",
+        type=Path,
+        default=DEFAULT_RAW_STORE_DATABASE,
+        help=(
+            "local SQLite raw provenance database "
+            f"(default: {DEFAULT_RAW_STORE_DATABASE})"
         ),
     )
     return parser
@@ -284,10 +295,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     lifecycle_mode = _validate_lifecycle_arguments(parser, arguments)
 
     try:
-        with open_sqlite_checkpointer(arguments.checkpoint_db) as checkpointer:
+        with (
+            open_sqlite_checkpointer(arguments.checkpoint_db) as checkpointer,
+            open_raw_run_store(arguments.raw_store_db) as raw_run_store,
+        ):
             runner = AgentRunner(
                 create_workflow_models(),
                 checkpointer=checkpointer,
+                raw_run_store=raw_run_store,
             )
             if lifecycle_mode == "start":
                 outcome = runner.run(
@@ -347,7 +362,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.trace_dir / f"{outcome.trace.run_id}.jsonl",
         )
         rendered_outcome = _render_outcome(outcome)
-    except (NotImplementedError, OSError, ValueError, sqlite3.Error) as error:
+    except (
+        NotImplementedError,
+        OSError,
+        ValueError,
+        sqlite3.Error,
+        RawStoreError,
+    ) as error:
         print(f"repocompass: error: {error}", file=sys.stderr)
         return 1
 
@@ -363,6 +384,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         file=sys.stderr,
     )
     print(f"Trace: {trace_path}", file=sys.stderr)
+    print(f"Raw store: {arguments.raw_store_db.resolve()}", file=sys.stderr)
     return 0
 
 

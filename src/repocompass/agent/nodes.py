@@ -39,6 +39,7 @@ from repocompass.agent.evaluation import (
     ValidationIssue,
     validate_candidate,
 )
+from repocompass.agent.invocation import RawRunRecorder, describe_model
 from repocompass.agent.lifecycle import (
     HumanReviewInterruptPayload,
     HumanReviewPolicy,
@@ -99,6 +100,66 @@ def _next_context_build_count(state: Mapping[str, object]) -> int:
     return value + 1
 
 
+def _invoke_model(
+    *,
+    recorder: RawRunRecorder | None,
+    state: Mapping[str, object],
+    config: RunnableConfig | None,
+    node_name: str,
+    role: ModelRole,
+    model: BaseChatModel,
+    gathered_context: GatheredContext,
+    messages: list[AnyMessage],
+    plan_step_id: str | None,
+    invoke: Callable[[list[AnyMessage]], object],
+    parse: Callable[[object], object],
+) -> object:
+    """Invoke directly or through the fail-closed Raw Run recording boundary."""
+
+    if recorder is None:
+        return parse(invoke(messages))
+    if config is None:
+        raise ValueError(
+            "Runnable config is required when Raw Run recording is enabled"
+        )
+    return recorder.invoke_model(
+        state=state,
+        config=config,
+        node_name=node_name,
+        role=role,
+        identity=describe_model(model),
+        gathered_context=gathered_context,
+        messages=messages,
+        plan_step_id=plan_step_id,
+        invoke=invoke,
+        parse=parse,
+    )
+
+
+def _parse_structured_response(
+    response: object,
+    *,
+    expected_type: type,
+    error_message: str,
+) -> object:
+    """Extract a validated parsed value while retaining include_raw envelopes."""
+
+    parsed = response
+    if isinstance(response, Mapping):
+        if response.get("parsing_error") is not None:
+            raise TypeError(error_message)
+        parsed = response.get("parsed")
+    if not isinstance(parsed, expected_type):
+        raise TypeError(error_message)
+    return parsed
+
+
+def _parse_explorer_response(response: object) -> AIMessage:
+    if not isinstance(response, AIMessage):
+        raise TypeError("Explorer model did not return AIMessage")
+    return response
+
+
 class PlannerInput(TypedDict):
     """Minimal initial-planning view without repository content or messages."""
 
@@ -137,15 +198,22 @@ def build_planner_messages(
     ]
 
 
-def create_plan_investigation_node(model: BaseChatModel) -> PlannerNode:
+def create_plan_investigation_node(
+    model: BaseChatModel,
+    recorder: RawRunRecorder | None = None,
+) -> PlannerNode:
     """Create the node that generates the initial investigation plan."""
 
     structured_model = model.with_structured_output(
         InvestigationPlan,
         method="function_calling",
+        include_raw=True,
     )
 
-    def planner_node(state: PlannerInput) -> PlannerNodeUpdate:
+    def planner_node(
+        state: PlannerInput,
+        config: RunnableConfig | None = None,
+    ) -> PlannerNodeUpdate:
         """Generate the initial plan and activate its designated step."""
 
         gathered = gather_planner_context(
@@ -154,11 +222,25 @@ def create_plan_investigation_node(model: BaseChatModel) -> PlannerNode:
             max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
             budget_tokens=_context_budget(state),
         )
-        response = structured_model.invoke(
-            build_planner_messages(state, gathered_context=gathered)
+        messages = build_planner_messages(state, gathered_context=gathered)
+        response = _invoke_model(
+            recorder=recorder,
+            state=state,
+            config=config,
+            node_name="plan_investigation",
+            role=ModelRole.PLANNER,
+            model=model,
+            gathered_context=gathered,
+            messages=messages,
+            plan_step_id=None,
+            invoke=structured_model.invoke,
+            parse=lambda value: _parse_structured_response(
+                value,
+                expected_type=InvestigationPlan,
+                error_message="Planner model did not return InvestigationPlan",
+            ),
         )
-        if not isinstance(response, InvestigationPlan):
-            raise TypeError("Planner model did not return InvestigationPlan")
+        assert isinstance(response, InvestigationPlan)
 
         return {
             "investigation_plan": response,
@@ -227,12 +309,18 @@ def build_agent_messages(
     ]
 
 
-def create_agent_node(model: BaseChatModel) -> AgentNode:
+def create_agent_node(
+    model: BaseChatModel,
+    recorder: RawRunRecorder | None = None,
+) -> AgentNode:
     """Bind repository tools once and create the graph's Explorer node."""
 
     bound_model = model.bind_tools(REPOSITORY_TOOLS)
 
-    def agent_node(state: AgentNodeInput) -> AgentNodeUpdate:
+    def agent_node(
+        state: AgentNodeInput,
+        config: RunnableConfig | None = None,
+    ) -> AgentNodeUpdate:
         """Call the tool-bound model once and return its state update."""
 
         investigation_plan = state["investigation_plan"]
@@ -255,9 +343,21 @@ def create_agent_node(model: BaseChatModel) -> AgentNode:
             evaluation_report=state["evaluation_report"],
             budget_tokens=_context_budget(state),
         )
-        response = bound_model.invoke(
-            build_agent_messages(state, gathered_context=gathered)
+        messages = build_agent_messages(state, gathered_context=gathered)
+        response = _invoke_model(
+            recorder=recorder,
+            state=state,
+            config=config,
+            node_name="agent",
+            role=ModelRole.EXPLORER,
+            model=model,
+            gathered_context=gathered,
+            messages=messages,
+            plan_step_id=investigation_plan.active_step.id,
+            invoke=bound_model.invoke,
+            parse=_parse_explorer_response,
         )
+        assert isinstance(response, AIMessage)
         return {
             "messages": [response],
             "step_explorer_call_count": state["step_explorer_call_count"] + 1,
@@ -563,16 +663,21 @@ def build_candidate_messages(
     ]
 
 
-def create_build_candidate_node(model: BaseChatModel) -> CandidateBuilderNode:
+def create_build_candidate_node(
+    model: BaseChatModel,
+    recorder: RawRunRecorder | None = None,
+) -> CandidateBuilderNode:
     """Create a node that turns Explorer evidence into an internal candidate."""
 
     structured_model = model.with_structured_output(
         CandidateResult,
         method="function_calling",
+        include_raw=True,
     )
 
     def build_candidate_node(
         state: CandidateBuilderInput,
+        config: RunnableConfig | None = None,
     ) -> CandidateBuilderUpdate:
         """Generate one structured candidate from the collected evidence."""
 
@@ -587,11 +692,25 @@ def create_build_candidate_node(model: BaseChatModel) -> CandidateBuilderNode:
             messages=tuple(state["messages"]),
             budget_tokens=_context_budget(state),
         )
-        response = structured_model.invoke(
-            build_candidate_messages(state, gathered_context=gathered)
+        messages = build_candidate_messages(state, gathered_context=gathered)
+        response = _invoke_model(
+            recorder=recorder,
+            state=state,
+            config=config,
+            node_name="build_candidate",
+            role=ModelRole.CANDIDATE_BUILDER,
+            model=model,
+            gathered_context=gathered,
+            messages=messages,
+            plan_step_id=investigation_plan.active_step.id,
+            invoke=structured_model.invoke,
+            parse=lambda value: _parse_structured_response(
+                value,
+                expected_type=CandidateResult,
+                error_message="Candidate builder model did not return CandidateResult",
+            ),
         )
-        if not isinstance(response, CandidateResult):
-            raise TypeError("Candidate builder model did not return CandidateResult")
+        assert isinstance(response, CandidateResult)
 
         return {
             "candidate_result": response,
@@ -657,15 +776,22 @@ def build_evaluator_messages(
     ]
 
 
-def create_evaluate_candidate_node(model: BaseChatModel) -> EvaluatorNode:
+def create_evaluate_candidate_node(
+    model: BaseChatModel,
+    recorder: RawRunRecorder | None = None,
+) -> EvaluatorNode:
     """Create the isolated semantic evaluator with deterministic validation."""
 
     structured_model = model.with_structured_output(
         SemanticAssessment,
         method="function_calling",
+        include_raw=True,
     )
 
-    def evaluate_candidate_node(state: EvaluatorInput) -> EvaluatorNodeUpdate:
+    def evaluate_candidate_node(
+        state: EvaluatorInput,
+        config: RunnableConfig | None = None,
+    ) -> EvaluatorNodeUpdate:
         """Validate one candidate and return a merged evaluation report."""
 
         candidate = state["candidate_result"]
@@ -695,11 +821,25 @@ def create_evaluate_candidate_node(model: BaseChatModel) -> EvaluatorNode:
             evidence_pack=prompt_input["evidence_pack"],
             budget_tokens=_context_budget(prompt_input),
         )
-        response = structured_model.invoke(
-            build_evaluator_messages(prompt_input, gathered_context=gathered)
+        messages = build_evaluator_messages(prompt_input, gathered_context=gathered)
+        response = _invoke_model(
+            recorder=recorder,
+            state=state,
+            config=config,
+            node_name="evaluate_candidate",
+            role=ModelRole.EVALUATOR,
+            model=model,
+            gathered_context=gathered,
+            messages=messages,
+            plan_step_id=investigation_plan.active_step.id,
+            invoke=structured_model.invoke,
+            parse=lambda value: _parse_structured_response(
+                value,
+                expected_type=SemanticAssessment,
+                error_message="Evaluator model did not return SemanticAssessment",
+            ),
         )
-        if not isinstance(response, SemanticAssessment):
-            raise TypeError("Evaluator model did not return SemanticAssessment")
+        assert isinstance(response, SemanticAssessment)
 
         return {
             "evaluation_report": EvaluationReport(
@@ -894,15 +1034,22 @@ def build_replanner_messages(
     ]
 
 
-def create_revise_plan_node(model: BaseChatModel) -> ReplannerNode:
+def create_revise_plan_node(
+    model: BaseChatModel,
+    recorder: RawRunRecorder | None = None,
+) -> ReplannerNode:
     """Create the model node that revises only unfinished plan work."""
 
     structured_model = model.with_structured_output(
         InvestigationPlan,
         method="function_calling",
+        include_raw=True,
     )
 
-    def revise_plan_node(state: ReplannerInput) -> ReplannerNodeUpdate:
+    def revise_plan_node(
+        state: ReplannerInput,
+        config: RunnableConfig | None = None,
+    ) -> ReplannerNodeUpdate:
         """Generate a bounded revision and reset step-local execution state."""
 
         current_plan = state["investigation_plan"]
@@ -930,11 +1077,25 @@ def create_revise_plan_node(model: BaseChatModel) -> ReplannerNode:
             max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
             budget_tokens=_context_budget(state),
         )
-        response = structured_model.invoke(
-            build_replanner_messages(state, gathered_context=gathered)
+        messages = build_replanner_messages(state, gathered_context=gathered)
+        response = _invoke_model(
+            recorder=recorder,
+            state=state,
+            config=config,
+            node_name="revise_plan",
+            role=ModelRole.REPLANNER,
+            model=model,
+            gathered_context=gathered,
+            messages=messages,
+            plan_step_id=current_plan.active_step.id,
+            invoke=structured_model.invoke,
+            parse=lambda value: _parse_structured_response(
+                value,
+                expected_type=InvestigationPlan,
+                error_message="Replanner model did not return InvestigationPlan",
+            ),
         )
-        if not isinstance(response, InvestigationPlan):
-            raise TypeError("Replanner model did not return InvestigationPlan")
+        assert isinstance(response, InvestigationPlan)
 
         revised_by_id = {step.id: step for step in response.steps}
         for completed_step in (

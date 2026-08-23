@@ -112,6 +112,7 @@ def test_graph_finalizes_when_agent_returns_no_tool_calls(tmp_path: Path) -> Non
     model.with_structured_output.assert_called_once_with(
         CandidateResult,
         method="function_calling",
+        include_raw=True,
     )
 
 
@@ -186,6 +187,7 @@ def test_graph_finalizes_when_agent_returns_tool_calls(tmp_path: Path) -> None:
     model.with_structured_output.assert_called_once_with(
         CandidateResult,
         method="function_calling",
+        include_raw=True,
     )
 
 

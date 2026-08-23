@@ -13,4 +13,8 @@ def create_openai_model(settings: OpenAIModelSettings) -> BaseChatModel:
         model=settings.model,
         api_key=settings.api_key,
         use_responses_api=False,
+        metadata={
+            "repocompass_provider": "openai",
+            "repocompass_model": settings.model,
+        },
     )

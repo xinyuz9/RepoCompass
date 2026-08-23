@@ -52,6 +52,7 @@ def test_main_runs_investigation_and_writes_trace(
     monkeypatch.setattr(cli, "AgentRunner", runner_factory)
     monkeypatch.setattr(cli, "create_workflow_models", create_models)
     trace_directory = tmp_path / "traces"
+    raw_store_database = tmp_path / "raw-runs.sqlite"
 
     exit_code = cli.main(
         [
@@ -72,6 +73,8 @@ def test_main_runs_investigation_and_writes_trace(
             str(trace_directory),
             "--checkpoint-db",
             str(tmp_path / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(raw_store_database),
         ]
     )
 
@@ -80,7 +83,12 @@ def test_main_runs_investigation_and_writes_trace(
     trace_path = trace_directory / "cli-run.jsonl"
     assert exit_code == 0
     assert create_models.call_count == 1
-    runner_factory.assert_called_once_with(model, checkpointer=ANY)
+    runner_factory.assert_called_once_with(
+        model,
+        checkpointer=ANY,
+        raw_run_store=ANY,
+    )
+    assert raw_store_database.is_file()
     assert request.repo_path == tmp_path
     assert request.objective == "Inspect authentication."
     assert request.max_tool_calls_per_step == 3
@@ -113,6 +121,8 @@ def test_main_reports_configuration_error(
             "Inspect the repository.",
             "--checkpoint-db",
             str(tmp_path / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(tmp_path / "raw-runs.sqlite"),
         ]
     )
 
@@ -157,6 +167,8 @@ def test_main_routes_resume_without_rebuilding_start_request(
             "persisted-thread",
             "--checkpoint-db",
             str(tmp_path / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(tmp_path / "raw-runs.sqlite"),
             "--trace-dir",
             str(tmp_path / "traces"),
         ]
@@ -312,6 +324,8 @@ def test_main_routes_thread_continuation(
             "Inspect the follow-up.",
             "--checkpoint-db",
             str(tmp_path / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(tmp_path / "raw-runs.sqlite"),
             "--trace-dir",
             str(tmp_path / "traces"),
         ]
@@ -355,6 +369,8 @@ def test_main_routes_human_response(
             "Inspect middleware registration.",
             "--checkpoint-db",
             str(tmp_path / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(tmp_path / "raw-runs.sqlite"),
             "--trace-dir",
             str(tmp_path / "traces"),
         ]
@@ -405,6 +421,8 @@ def test_main_renders_interrupted_outcome_without_terminal_result(
             "before_finalize",
             "--checkpoint-db",
             str(tmp_path / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(tmp_path / "raw-runs.sqlite"),
             "--trace-dir",
             str(tmp_path / "traces"),
         ]
@@ -474,6 +492,8 @@ def test_main_rejects_revise_without_feedback_before_runner_call(
             "revise",
             "--checkpoint-db",
             str(tmp_path / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(tmp_path / "raw-runs.sqlite"),
         ]
     )
 

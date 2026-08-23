@@ -110,6 +110,10 @@ def test_create_deepseek_model_keeps_provider_parameters_local(
         temperature=0.0,
         use_responses_api=False,
         extra_body={"thinking": {"type": "disabled"}},
+        metadata={
+            "repocompass_provider": "deepseek",
+            "repocompass_model": "deepseek-v4-flash",
+        },
     )
 
 
@@ -130,6 +134,10 @@ def test_create_openai_model_excludes_deepseek_parameters(
         model="test-openai-model",
         api_key="openai-test-key",
         use_responses_api=False,
+        metadata={
+            "repocompass_provider": "openai",
+            "repocompass_model": "test-openai-model",
+        },
     )
 
 

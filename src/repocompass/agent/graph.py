@@ -1,6 +1,7 @@
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
+from repocompass.agent.invocation import RawRunRecorder
 from repocompass.agent.nodes import (
     advance_plan_step,
     create_agent_node,
@@ -34,16 +35,17 @@ def create_agent_graph(
     models: WorkflowModels,
     *,
     checkpointer: BaseCheckpointSaver | None = None,
+    raw_run_recorder: RawRunRecorder | None = None,
 ):
-    """Compile the current graph with an optional persistence dependency."""
+    """Compile the graph with optional checkpoint and Raw Run persistence."""
 
     builder = StateGraph(RepoCompassState)
 
     builder.add_node(
         "plan_investigation",
-        create_plan_investigation_node(models.planner),
+        create_plan_investigation_node(models.planner, raw_run_recorder),
     )
-    builder.add_node("agent", create_agent_node(models.explorer))
+    builder.add_node("agent", create_agent_node(models.explorer, raw_run_recorder))
     builder.add_node("tools", create_execute_tools_node())
     builder.add_node("assess_progress", assess_tool_progress)
     builder.add_node(
@@ -52,15 +54,18 @@ def create_agent_graph(
     )
     builder.add_node(
         "build_candidate",
-        create_build_candidate_node(models.explorer),
+        create_build_candidate_node(models.explorer, raw_run_recorder),
     )
     builder.add_node(
         "evaluate_candidate",
-        create_evaluate_candidate_node(models.evaluator),
+        create_evaluate_candidate_node(models.evaluator, raw_run_recorder),
     )
     builder.add_node("decide_next_action", decide_next_action)
     builder.add_node("advance_plan_step", advance_plan_step)
-    builder.add_node("revise_plan", create_revise_plan_node(models.planner))
+    builder.add_node(
+        "revise_plan",
+        create_revise_plan_node(models.planner, raw_run_recorder),
+    )
     builder.add_node("mark_investigation_accepted", mark_investigation_accepted)
     builder.add_node("mark_investigation_cancelled", mark_investigation_cancelled)
     builder.add_node("mark_investigation_exhausted", mark_investigation_exhausted)

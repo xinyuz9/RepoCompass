@@ -100,6 +100,26 @@ def test_planner_node_publishes_active_context_pack() -> None:
     assert update["active_context_pack"].estimated_tokens <= CONTEXT_BUDGET
 
 
+def test_planner_accepts_provider_include_raw_envelope() -> None:
+    state: PlannerInput = {
+        "objective": "Find authentication.",
+        "max_tool_calls_per_step": 6,
+        "max_explorer_calls_per_step": 3,
+        "context_budget_tokens": CONTEXT_BUDGET,
+        "context_build_count": 0,
+    }
+    response = {
+        "raw": AIMessage(content="provider structured response"),
+        "parsed": _plan(),
+        "parsing_error": None,
+    }
+
+    update = create_plan_investigation_node(_structured_model(response))(state)
+
+    assert update["investigation_plan"] == _plan()
+    assert update["context_build_count"] == 1
+
+
 def test_explorer_node_uses_selected_context_and_does_not_replay_history(
     tmp_path: Path,
 ) -> None:

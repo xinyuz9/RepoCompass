@@ -178,4 +178,5 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
     model.with_structured_output.assert_called_once_with(
         CandidateResult,
         method="function_calling",
+        include_raw=True,
     )

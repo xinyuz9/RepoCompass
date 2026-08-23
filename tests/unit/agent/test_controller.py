@@ -392,5 +392,6 @@ def test_replanner_rejects_exhausted_revision_budget_before_model_call() -> None
     model.with_structured_output.assert_called_once_with(
         InvestigationPlan,
         method="function_calling",
+        include_raw=True,
     )
     model.with_structured_output.return_value.invoke.assert_not_called()

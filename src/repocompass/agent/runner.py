@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from repocompass.agent.context import ContextPack
 from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
 from repocompass.agent.graph import create_agent_graph
+from repocompass.agent.invocation import RawRunRecorder
 from repocompass.agent.lifecycle import (
     ContinueRequest,
     ExecutionStatus,
@@ -39,6 +40,11 @@ from repocompass.agent.state import (
 )
 from repocompass.agent.trace import RunTrace, TraceEventKind
 from repocompass.models import WorkflowModels
+from repocompass.storage.raw_store import (
+    AttemptExecutionMode,
+    AttemptStatus,
+    RawRunStore,
+)
 from repocompass.tools.contracts import (
     NoProgressDecision,
     ToolAuditRecord,
@@ -104,12 +110,19 @@ def _normalize_identifier(value: object, *, name: str) -> str:
     return normalized
 
 
-def _thread_config(thread_id: str, *, run_id: str | None = None) -> RunnableConfig:
+def _thread_config(
+    thread_id: str,
+    *,
+    run_id: str | None = None,
+    turn_number: int | None = None,
+) -> RunnableConfig:
     """Build the LangGraph configuration for one checkpoint thread."""
 
-    configurable = {"thread_id": thread_id}
+    configurable: dict[str, str | int] = {"thread_id": thread_id}
     if run_id is not None:
         configurable["repocompass_run_id"] = run_id
+    if turn_number is not None:
+        configurable["repocompass_turn_number"] = turn_number
     return {"configurable": configurable}
 
 
@@ -448,6 +461,7 @@ class AgentRunner:
         models: WorkflowModels,
         *,
         checkpointer: BaseCheckpointSaver,
+        raw_run_store: RawRunStore | None = None,
         run_id_factory: RunIdFactory = generate_run_id,
         thread_id_factory: ThreadIdFactory = generate_thread_id,
     ) -> None:
@@ -456,6 +470,8 @@ class AgentRunner:
         Args:
             models: Explicit model roles used to compile the workflow.
             checkpointer: Persistence backend shared by start and resume calls.
+            raw_run_store: Optional durable store for attempts, active context,
+                and exact model I/O provenance.
             run_id_factory: Zero-argument factory for run IDs. Tests can inject
                 a deterministic factory; production uses UUID strings.
             thread_id_factory: Zero-argument factory for logical investigation
@@ -471,6 +487,9 @@ class AgentRunner:
 
         self._models = models
         self._checkpointer = checkpointer
+        self._raw_run_recorder = (
+            None if raw_run_store is None else RawRunRecorder(raw_run_store)
+        )
         self._run_id_factory = run_id_factory
         self._thread_id_factory = thread_id_factory
 
@@ -514,6 +533,7 @@ class AgentRunner:
         graph = create_agent_graph(
             self._models,
             checkpointer=self._checkpointer,
+            raw_run_recorder=self._raw_run_recorder,
         )
         config = _thread_config(thread_id)
         if graph.get_state(config).values:
@@ -537,6 +557,7 @@ class AgentRunner:
         graph = create_agent_graph(
             self._models,
             checkpointer=self._checkpointer,
+            raw_run_recorder=self._raw_run_recorder,
         )
 
         config = _thread_config(thread_id)
@@ -559,6 +580,7 @@ class AgentRunner:
         graph = create_agent_graph(
             self._models,
             checkpointer=self._checkpointer,
+            raw_run_recorder=self._raw_run_recorder,
         )
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)
@@ -610,6 +632,7 @@ class AgentRunner:
         graph = create_agent_graph(
             self._models,
             checkpointer=self._checkpointer,
+            raw_run_recorder=self._raw_run_recorder,
         )
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)
@@ -660,11 +683,20 @@ class AgentRunner:
                 name="run_id",
             )
         )
-        config = _thread_config(thread_id, run_id=trace.run_id)
+        turn_number = metadata_state["turn_number"]
+        if not isinstance(turn_number, int) or isinstance(turn_number, bool):
+            raise TypeError("Graph turn_number is not an integer")
+        if turn_number < 1:
+            raise ValueError("Graph turn_number must be positive")
+        config = _thread_config(
+            thread_id,
+            run_id=trace.run_id,
+            turn_number=turn_number,
+        )
         started_payload: dict[str, JsonValue] = {
             "thread_id": thread_id,
             "execution_mode": execution_mode,
-            "turn_number": _to_json_value(metadata_state["turn_number"]),
+            "turn_number": turn_number,
             "repo_path": _to_json_value(metadata_state["repo_path"]),
             "objective": _to_json_value(metadata_state["objective"]),
             "max_tool_calls_per_step": _to_json_value(
@@ -691,6 +723,51 @@ class AgentRunner:
                 "feedback_provided": human_decision.feedback is not None,
             }
         trace.record(TraceEventKind.RUN_STARTED, payload=started_payload)
+
+        recorder = self._raw_run_recorder
+        if recorder is not None:
+            recorder.start_attempt(
+                run_id=trace.run_id,
+                thread_id=thread_id,
+                execution_mode=AttemptExecutionMode(execution_mode),
+                state=metadata_state,
+            )
+        try:
+            outcome = self._stream_graph_attempt(
+                graph,
+                graph_input,
+                thread_id=thread_id,
+                execution_mode=execution_mode,
+                existing_snapshot=existing_snapshot,
+                trace=trace,
+                config=config,
+            )
+        except BaseException:
+            if recorder is not None:
+                recorder.finish_attempt(trace.run_id, status=AttemptStatus.FAILED)
+            raise
+
+        if recorder is not None:
+            status = (
+                AttemptStatus.INTERRUPTED
+                if outcome.execution_status is ExecutionStatus.INTERRUPTED
+                else AttemptStatus.COMPLETED
+            )
+            recorder.finish_attempt(trace.run_id, status=status)
+        return outcome
+
+    @staticmethod
+    def _stream_graph_attempt(
+        graph: CompiledStateGraph,
+        graph_input: RepoCompassState | Command | None,
+        *,
+        thread_id: str,
+        execution_mode: ExecutionMode,
+        existing_snapshot: StateSnapshot | None,
+        trace: RunTrace,
+        config: RunnableConfig,
+    ) -> RunOutcome:
+        """Execute a started attempt without owning its persistence lifecycle."""
 
         if (
             graph_input is None

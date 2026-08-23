@@ -192,6 +192,7 @@ def test_candidate_builder_returns_internal_structured_result(
     model.with_structured_output.assert_called_once_with(
         CandidateResult,
         method="function_calling",
+        include_raw=True,
     )
 
 
@@ -325,6 +326,7 @@ def test_evaluator_merges_deterministic_and_semantic_results(
     model.with_structured_output.assert_called_once_with(
         SemanticAssessment,
         method="function_calling",
+        include_raw=True,
     )
     model.bind_tools.assert_not_called()
 
@@ -445,6 +447,7 @@ def test_planner_node_returns_plan_and_active_context() -> None:
     model.with_structured_output.assert_called_once_with(
         InvestigationPlan,
         method="function_calling",
+        include_raw=True,
     )
 
 

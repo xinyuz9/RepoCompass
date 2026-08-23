@@ -16,4 +16,8 @@ def create_deepseek_model(settings: DeepSeekModelSettings) -> BaseChatModel:
         temperature=0.0,
         use_responses_api=False,
         extra_body={"thinking": {"type": "disabled"}},
+        metadata={
+            "repocompass_provider": "deepseek",
+            "repocompass_model": settings.model,
+        },
     )
