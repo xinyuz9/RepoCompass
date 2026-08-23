@@ -9,6 +9,7 @@ import stat
 import subprocess
 import threading
 import time
+from collections import OrderedDict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from multiprocessing.connection import Connection
@@ -42,6 +43,15 @@ from repocompass.tools.repository_tools import (
 )
 
 ToolExecutor = Callable[[Path, BaseModel], str]
+DEFAULT_TOOL_CACHE_MAX_ENTRIES = 128
+DEFAULT_TOOL_CACHE_MAX_BYTES = 8 * 1_024 * 1_024
+_EXECUTION_FAILURE_REASONS = frozenset(
+    {
+        ToolDecisionReason.TIMEOUT,
+        ToolDecisionReason.OVERSIZED_OUTPUT,
+        ToolDecisionReason.EXECUTION_ERROR,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +183,15 @@ class ToolExecutionContext:
             and _discover_commit_sha(self.repository_root) == self.commit_sha
         )
 
+    def allows_result_reuse(self, request: ToolCallRequest) -> bool:
+        """Return whether this request targets an immutable clean Git snapshot."""
+
+        if not isinstance(request, ToolCallRequest):
+            raise TypeError("request must be a ToolCallRequest")
+        if self.commit_sha is None:
+            return False
+        return self.matches(request) and _is_clean_git_worktree(self.repository_root)
+
 
 class ToolAuditLog:
     """In-memory append-only audit sequence for one execution attempt."""
@@ -182,6 +201,7 @@ class ToolAuditLog:
         run_id: str,
         *,
         records: tuple[ToolAuditRecord, ...] = (),
+        deduplication_floor: int = 0,
     ) -> None:
         if (
             not isinstance(run_id, str)
@@ -202,13 +222,26 @@ class ToolAuditLog:
             if record.sequence != sequence:
                 raise ValueError("audit record sequence must be contiguous")
 
+        if not isinstance(deduplication_floor, int) or isinstance(
+            deduplication_floor,
+            bool,
+        ):
+            raise TypeError("deduplication_floor must be an integer")
+        if not 0 <= deduplication_floor <= len(records):
+            raise ValueError("deduplication_floor is outside the audit history")
+
         self._run_id = run_id
         self._records = list(records)
+        self._deduplication_floor = deduplication_floor
         self._lock = threading.Lock()
 
     @property
     def run_id(self) -> str:
         return self._run_id
+
+    @property
+    def deduplication_floor(self) -> int:
+        return self._deduplication_floor
 
     @property
     def records(self) -> tuple[ToolAuditRecord, ...]:
@@ -244,6 +277,40 @@ class ToolAuditLog:
             self._records.append(record)
             return record
 
+    def has_matching_denial(
+        self,
+        fingerprint: ToolCallFingerprint,
+        reason: ToolDecisionReason,
+    ) -> bool:
+        """Return whether this active-step window already denied the same call."""
+
+        if not isinstance(fingerprint, ToolCallFingerprint):
+            raise TypeError("fingerprint must be a ToolCallFingerprint")
+        if not isinstance(reason, ToolDecisionReason):
+            raise TypeError("reason must be a ToolDecisionReason")
+        if reason is ToolDecisionReason.BUDGET_EXHAUSTED:
+            return False
+        with self._lock:
+            return any(
+                record.fingerprint == fingerprint
+                and record.decision.outcome is ToolDecisionOutcome.DENIED
+                and record.decision.reason is reason
+                for record in self._records[self._deduplication_floor :]
+            )
+
+    def has_execution_failure(self, fingerprint: ToolCallFingerprint) -> bool:
+        """Return whether execution already failed for this active-step call."""
+
+        if not isinstance(fingerprint, ToolCallFingerprint):
+            raise TypeError("fingerprint must be a ToolCallFingerprint")
+        with self._lock:
+            return any(
+                record.fingerprint == fingerprint
+                and record.decision.outcome is ToolDecisionOutcome.DENIED
+                and record.decision.reason in _EXECUTION_FAILURE_REASONS
+                for record in self._records[self._deduplication_floor :]
+            )
+
 
 @dataclass(frozen=True, slots=True)
 class ToolGatewayResult:
@@ -260,8 +327,106 @@ class ToolGatewayResult:
         return self.decision.outcome in {
             ToolDecisionOutcome.ALLOWED,
             ToolDecisionOutcome.CACHED,
-            ToolDecisionOutcome.DEDUPLICATED,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class ToolCacheEntry:
+    """One immutable bounded result retained only inside the trusted gateway."""
+
+    fingerprint: ToolCallFingerprint
+    content: str
+    output_bytes: int
+    result_digest: str
+
+
+class ToolResultCache:
+    """Thread-safe byte- and entry-bounded deterministic LRU result cache."""
+
+    def __init__(
+        self,
+        *,
+        max_entries: int = DEFAULT_TOOL_CACHE_MAX_ENTRIES,
+        max_bytes: int = DEFAULT_TOOL_CACHE_MAX_BYTES,
+    ) -> None:
+        self._require_positive_integer(max_entries, name="max_entries")
+        self._require_positive_integer(max_bytes, name="max_bytes")
+        self._max_entries = max_entries
+        self._max_bytes = max_bytes
+        self._entries: OrderedDict[str, ToolCacheEntry] = OrderedDict()
+        self._total_bytes = 0
+        self._lock = threading.RLock()
+
+    @staticmethod
+    def _require_positive_integer(value: object, *, name: str) -> None:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TypeError(f"{name} must be an integer")
+        if value <= 0:
+            raise ValueError(f"{name} must be positive")
+
+    @property
+    def max_entries(self) -> int:
+        return self._max_entries
+
+    @property
+    def max_bytes(self) -> int:
+        return self._max_bytes
+
+    @property
+    def entry_count(self) -> int:
+        with self._lock:
+            return len(self._entries)
+
+    @property
+    def total_bytes(self) -> int:
+        with self._lock:
+            return self._total_bytes
+
+    def get(self, fingerprint: ToolCallFingerprint) -> ToolCacheEntry | None:
+        """Return and mark one entry as most recently used."""
+
+        if not isinstance(fingerprint, ToolCallFingerprint):
+            raise TypeError("fingerprint must be a ToolCallFingerprint")
+        with self._lock:
+            entry = self._entries.get(fingerprint.digest)
+            if entry is not None:
+                self._entries.move_to_end(fingerprint.digest)
+            return entry
+
+    def put(self, fingerprint: ToolCallFingerprint, content: str) -> bool:
+        """Store one UTF-8 result, evicting least-recently-used entries."""
+
+        if not isinstance(fingerprint, ToolCallFingerprint):
+            raise TypeError("fingerprint must be a ToolCallFingerprint")
+        if not isinstance(content, str):
+            raise TypeError("content must be a string")
+        try:
+            encoded_content = content.encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise ValueError("content is not valid UTF-8") from error
+        output_bytes = len(encoded_content)
+        if output_bytes > self._max_bytes:
+            return False
+        entry = ToolCacheEntry(
+            fingerprint=fingerprint,
+            content=content,
+            output_bytes=output_bytes,
+            result_digest=hashlib.sha256(encoded_content).hexdigest(),
+        )
+
+        with self._lock:
+            replaced = self._entries.pop(fingerprint.digest, None)
+            if replaced is not None:
+                self._total_bytes -= replaced.output_bytes
+            self._entries[fingerprint.digest] = entry
+            self._total_bytes += entry.output_bytes
+            while (
+                len(self._entries) > self._max_entries
+                or self._total_bytes > self._max_bytes
+            ):
+                _, evicted = self._entries.popitem(last=False)
+                self._total_bytes -= evicted.output_bytes
+        return True
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,6 +449,7 @@ class ToolGateway:
             {ToolSideEffect.READ_ONLY}
         ),
         process_context: BaseContext | None = None,
+        result_cache: ToolResultCache | None = None,
     ) -> None:
         if not isinstance(registry, ToolRegistry):
             raise TypeError("registry must be a ToolRegistry")
@@ -297,15 +463,23 @@ class ToolGateway:
             for side_effect in allowed_side_effects
         ):
             raise TypeError("allowed_side_effects must be ToolSideEffect values")
+        if result_cache is not None and not isinstance(result_cache, ToolResultCache):
+            raise TypeError("result_cache must be a ToolResultCache")
 
         self._registry = registry
         self._allowed_capabilities = allowed_capabilities
         self._allowed_side_effects = allowed_side_effects
         self._process_context = process_context or _default_process_context()
+        self._result_cache = result_cache or ToolResultCache()
+        self._execution_lock = threading.RLock()
 
     @property
     def registry(self) -> ToolRegistry:
         return self._registry
+
+    @property
+    def result_cache(self) -> ToolResultCache:
+        return self._result_cache
 
     def execute(
         self,
@@ -330,6 +504,24 @@ class ToolGateway:
         ):
             raise ValueError("available_budget must be a non-negative integer")
 
+        with self._execution_lock:
+            return self._execute_request(
+                request,
+                context=context,
+                available_budget=available_budget,
+                audit_log=audit_log,
+            )
+
+    def _execute_request(
+        self,
+        request: ToolCallRequest,
+        *,
+        context: ToolExecutionContext,
+        available_budget: int,
+        audit_log: ToolAuditLog,
+    ) -> ToolGatewayResult:
+        """Execute one prevalidated request while holding the gateway lock."""
+
         started_ns = time.perf_counter_ns()
         fingerprint = fingerprint_tool_call(request)
 
@@ -341,6 +533,7 @@ class ToolGateway:
                 started_ns=started_ns,
                 audit_log=audit_log,
             )
+        reuse_allowed = context.allows_result_reuse(request)
 
         registration = self._registry.get(request.tool_name)
         if registration is None:
@@ -350,6 +543,7 @@ class ToolGateway:
                 reason=ToolDecisionReason.UNKNOWN_TOOL,
                 started_ns=started_ns,
                 audit_log=audit_log,
+                allow_deduplication=reuse_allowed,
             )
 
         try:
@@ -361,6 +555,7 @@ class ToolGateway:
                 reason=ToolDecisionReason.INVALID_ARGUMENTS,
                 started_ns=started_ns,
                 audit_log=audit_log,
+                allow_deduplication=reuse_allowed,
             )
 
         path_reason = _repository_path_policy(
@@ -375,6 +570,7 @@ class ToolGateway:
                 reason=path_reason,
                 started_ns=started_ns,
                 audit_log=audit_log,
+                allow_deduplication=reuse_allowed,
             )
 
         descriptor = registration.descriptor
@@ -386,6 +582,33 @@ class ToolGateway:
                 request,
                 fingerprint=fingerprint,
                 reason=ToolDecisionReason.CAPABILITY_DENIED,
+                started_ns=started_ns,
+                audit_log=audit_log,
+                allow_deduplication=reuse_allowed,
+            )
+
+        if reuse_allowed and descriptor.cacheable:
+            cached_entry = self._result_cache.get(fingerprint)
+            if cached_entry is not None:
+                return self._finish(
+                    request,
+                    fingerprint=fingerprint,
+                    decision=ToolPolicyDecision(
+                        outcome=ToolDecisionOutcome.CACHED,
+                        reason=ToolDecisionReason.CACHE_HIT,
+                    ),
+                    content=cached_entry.content,
+                    budget_consumed=0,
+                    started_ns=started_ns,
+                    audit_log=audit_log,
+                    output_bytes=cached_entry.output_bytes,
+                    result_digest=cached_entry.result_digest,
+                )
+
+        if reuse_allowed and audit_log.has_execution_failure(fingerprint):
+            return self._deduplicate(
+                request,
+                fingerprint=fingerprint,
                 started_ns=started_ns,
                 audit_log=audit_log,
             )
@@ -428,6 +651,9 @@ class ToolGateway:
 
         encoded_output = output.encode("utf-8")
         result_digest = hashlib.sha256(encoded_output).hexdigest()
+        if descriptor.cacheable and context.allows_result_reuse(request):
+            self._result_cache.put(fingerprint, output)
+
         decision = ToolPolicyDecision(
             outcome=ToolDecisionOutcome.ALLOWED,
             reason=ToolDecisionReason.ALLOWED,
@@ -477,6 +703,10 @@ class ToolGateway:
             reason=effective_reason,
             started_ns=started_ns,
             audit_log=audit_log,
+            allow_deduplication=(
+                effective_reason is not ToolDecisionReason.BUDGET_EXHAUSTED
+                and context.allows_result_reuse(request)
+            ),
         )
 
     def _deny(
@@ -488,7 +718,18 @@ class ToolGateway:
         started_ns: int,
         audit_log: ToolAuditLog,
         budget_consumed: int = 0,
+        allow_deduplication: bool = False,
     ) -> ToolGatewayResult:
+        if allow_deduplication and audit_log.has_matching_denial(
+            fingerprint,
+            reason,
+        ):
+            return self._deduplicate(
+                request,
+                fingerprint=fingerprint,
+                started_ns=started_ns,
+                audit_log=audit_log,
+            )
         decision = ToolPolicyDecision(
             outcome=ToolDecisionOutcome.DENIED,
             reason=reason,
@@ -499,6 +740,32 @@ class ToolGateway:
             decision=decision,
             content=_safe_failure_content(reason),
             budget_consumed=budget_consumed,
+            started_ns=started_ns,
+            audit_log=audit_log,
+            output_bytes=None,
+            result_digest=None,
+        )
+
+    def _deduplicate(
+        self,
+        request: ToolCallRequest,
+        *,
+        fingerprint: ToolCallFingerprint,
+        started_ns: int,
+        audit_log: ToolAuditLog,
+    ) -> ToolGatewayResult:
+        """Return a bounded failure for one repeated active-step call."""
+
+        decision = ToolPolicyDecision(
+            outcome=ToolDecisionOutcome.DEDUPLICATED,
+            reason=ToolDecisionReason.DUPLICATE_CALL,
+        )
+        return self._finish(
+            request,
+            fingerprint=fingerprint,
+            decision=decision,
+            content=_safe_failure_content(ToolDecisionReason.DUPLICATE_CALL),
+            budget_consumed=0,
             started_ns=started_ns,
             audit_log=audit_log,
             output_bytes=None,
@@ -778,6 +1045,28 @@ def _discover_commit_sha(repository_root: Path) -> str | None:
     if re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", commit_sha) is None:
         return None
     return commit_sha
+
+
+def _is_clean_git_worktree(repository_root: Path) -> bool:
+    try:
+        completed = subprocess.run(
+            [
+                "git",
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=all",
+                "--ignored=matching",
+            ],
+            cwd=repository_root,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+            shell=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+    return completed.returncode == 0 and not completed.stdout
 
 
 def _default_process_context() -> BaseContext:

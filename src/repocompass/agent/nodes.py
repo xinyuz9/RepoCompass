@@ -274,7 +274,11 @@ def create_execute_tools_node(
         prior_run_records = tuple(
             record for record in decoded_records if record.run_id == run_id
         )
-        audit_log = ToolAuditLog(run_id, records=prior_run_records)
+        audit_log = ToolAuditLog(
+            run_id,
+            records=prior_run_records,
+            deduplication_floor=len(prior_run_records),
+        )
         prior_run_record_count = len(prior_run_records)
         context = ToolExecutionContext(state["repo_path"])
         contains_invalid_call = bool(last_message.invalid_tool_calls)

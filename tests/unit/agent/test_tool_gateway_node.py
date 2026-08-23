@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 from typing import get_type_hints
 
+import pytest
 from langchain_core.messages import AIMessage, InvalidToolCall, ToolCall, ToolMessage
 
+import repocompass.tools.gateway as gateway_module
 from repocompass.agent.nodes import (
     ToolGatewayNodeInput,
     create_execute_tools_node,
@@ -74,6 +76,65 @@ def test_gateway_node_executes_and_audits_one_valid_call(tmp_path: Path) -> None
     assert audit.decision.reason is ToolDecisionReason.ALLOWED
     assert "auth.py" not in audit.model_dump_json()
     assert isinstance(audit_payload, dict)
+
+
+def test_gateway_node_reuses_equivalent_success_without_incrementing_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        gateway_module,
+        "_discover_commit_sha",
+        lambda _root: "a" * 40,
+    )
+    monkeypatch.setattr(
+        gateway_module,
+        "_is_clean_git_worktree",
+        lambda _root: True,
+    )
+    (tmp_path / "auth.py").write_text("enabled = True\n", encoding="utf-8")
+    first_message = AIMessage(
+        content="",
+        tool_calls=[
+            ToolCall(
+                name="list_tree",
+                args={"max_depth": 1, "max_entries": 10},
+                id="call-first",
+                type="tool_call",
+            )
+        ],
+    )
+    node = create_execute_tools_node()
+    first_update = node(_state(tmp_path, first_message), _config("cache-node-run"))
+    second_message = AIMessage(
+        content="",
+        tool_calls=[
+            ToolCall(
+                name="list_tree",
+                args={"max_entries": 10, "max_depth": 1},
+                id="call-second",
+                type="tool_call",
+            )
+        ],
+    )
+    second_state = _state(
+        tmp_path,
+        second_message,
+        used_tool_calls=first_update["step_tool_call_count"],
+    )
+    second_state["tool_audit_records"] = first_update["tool_audit_records"]
+
+    second_update = node(second_state, _config("cache-node-run"))
+
+    assert first_update["step_tool_call_count"] == 1
+    assert second_update["step_tool_call_count"] == 1
+    assert second_update["messages"][0].status == "success"
+    assert second_update["messages"][0].content == first_update["messages"][0].content
+    assert len(second_update["tool_audit_records"]) == 1
+    cached_audit = decode_tool_audit_record(second_update["tool_audit_records"][0])
+    assert cached_audit.sequence == 1
+    assert cached_audit.call_id == "call-second"
+    assert cached_audit.decision.reason is ToolDecisionReason.CACHE_HIT
 
 
 def test_gateway_node_rejects_and_audits_entire_mixed_invalid_batch(
