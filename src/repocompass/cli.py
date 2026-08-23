@@ -19,6 +19,7 @@ from repocompass.agent.lifecycle import (
 )
 from repocompass.agent.runner import (
     AgentRunner,
+    DEFAULT_CONTEXT_BUDGET_TOKENS,
     DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
     DEFAULT_MAX_NO_PROGRESS_ROUNDS,
     DEFAULT_MAX_PLAN_REVISIONS,
@@ -142,6 +143,14 @@ def create_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--context-budget-tokens",
+        type=_positive_int,
+        help=(
+            "hard token budget for each model invocation's active context "
+            f"(default: {DEFAULT_CONTEXT_BUDGET_TOKENS})"
+        ),
+    )
+    parser.add_argument(
         "--trace-dir",
         type=Path,
         default=DEFAULT_TRACE_DIRECTORY,
@@ -206,6 +215,7 @@ def _validate_lifecycle_arguments(
             arguments.max_explorer_calls_per_step,
             arguments.max_no_progress_rounds,
             arguments.max_plan_revisions,
+            arguments.context_budget_tokens,
         )
     ):
         parser.error("budget options can only be supplied for a new investigation")
@@ -298,6 +308,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         ),
                         max_plan_revisions=(
                             arguments.max_plan_revisions or DEFAULT_MAX_PLAN_REVISIONS
+                        ),
+                        context_budget_tokens=(
+                            arguments.context_budget_tokens
+                            or DEFAULT_CONTEXT_BUDGET_TOKENS
                         ),
                         human_review_policy=(
                             arguments.human_review_policy or HumanReviewPolicy.NEVER

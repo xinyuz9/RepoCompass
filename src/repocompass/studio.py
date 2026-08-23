@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.lifecycle import HumanReviewPolicy
 from repocompass.agent.runner import (
+    DEFAULT_CONTEXT_BUDGET_TOKENS,
     DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
     DEFAULT_MAX_NO_PROGRESS_ROUNDS,
     DEFAULT_MAX_PLAN_REVISIONS,
@@ -68,6 +69,12 @@ class StudioRunInput(BaseModel):
         strict=True,
         description="Maximum model-based plan revisions for one run.",
     )
+    context_budget_tokens: int = Field(
+        default=DEFAULT_CONTEXT_BUDGET_TOKENS,
+        gt=0,
+        strict=True,
+        description="Hard token budget for each model invocation's active context.",
+    )
 
 
 def initialize_studio_run(state: Mapping[str, object]) -> RepoCompassState:
@@ -86,6 +93,7 @@ def initialize_studio_run(state: Mapping[str, object]) -> RepoCompassState:
         max_explorer_calls_per_step=studio_input.max_explorer_calls_per_step,
         max_no_progress_rounds=studio_input.max_no_progress_rounds,
         max_plan_revisions=studio_input.max_plan_revisions,
+        context_budget_tokens=studio_input.context_budget_tokens,
         human_review_policy=studio_input.human_review_policy,
     )
     repo_path = resolve_repository_path(request.repo_path)
@@ -97,6 +105,7 @@ def initialize_studio_run(state: Mapping[str, object]) -> RepoCompassState:
         request.max_plan_revisions,
         request.human_review_policy,
         max_no_progress_rounds=request.max_no_progress_rounds,
+        context_budget_tokens=request.context_budget_tokens,
     )
     return initial_state
 

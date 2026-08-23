@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
 from repocompass.agent.state import RepoCompassState, create_initial_state
 
 
@@ -35,6 +36,9 @@ def test_create_initial_state_sets_required_fields(tmp_path: Path) -> None:
     assert state["max_no_progress_rounds"] == 3
     assert state["plan_revision_count"] == 0
     assert state["max_plan_revisions"] == 2
+    assert state["context_budget_tokens"] == DEFAULT_CONTEXT_BUDGET_TOKENS
+    assert state["context_build_count"] == 0
+    assert state["active_context_pack"] is None
     assert state["step_stop_reason"] is None
     assert state["termination_status"] is None
     assert state["candidate_result"] is None
@@ -103,6 +107,21 @@ def test_create_initial_state_rejects_non_positive_revision_budget(
             max_tool_calls_per_step=3,
             max_explorer_calls_per_step=3,
             max_plan_revisions=max_plan_revisions,
+        )
+
+
+@pytest.mark.parametrize("context_budget_tokens", [0, -1, True])
+def test_create_initial_state_rejects_invalid_context_budget(
+    tmp_path: Path,
+    context_budget_tokens: object,
+) -> None:
+    with pytest.raises((TypeError, ValueError), match="[Cc]ontext budget"):
+        create_initial_state(
+            tmp_path,
+            "Find the authentication code",
+            max_tool_calls_per_step=3,
+            max_explorer_calls_per_step=3,
+            context_budget_tokens=context_budget_tokens,  # type: ignore[arg-type]
         )
 
 

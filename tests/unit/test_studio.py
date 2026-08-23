@@ -19,6 +19,7 @@ from repocompass.agent.lifecycle import (
     encode_human_decision,
 )
 from repocompass.agent.runner import (
+    DEFAULT_CONTEXT_BUDGET_TOKENS,
     DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
     DEFAULT_MAX_NO_PROGRESS_ROUNDS,
     DEFAULT_MAX_PLAN_REVISIONS,
@@ -69,6 +70,7 @@ def test_studio_graph_accepts_public_input_and_applies_defaults(
     )
     assert final_state["max_no_progress_rounds"] == DEFAULT_MAX_NO_PROGRESS_ROUNDS
     assert final_state["max_plan_revisions"] == DEFAULT_MAX_PLAN_REVISIONS
+    assert final_state["context_budget_tokens"] == DEFAULT_CONTEXT_BUDGET_TOKENS
     assert final_state["human_review_policy"] is HumanReviewPolicy.NEVER
     assert final_state["plan_revision_count"] == 0
     assert final_state["step_tool_call_count"] == 0
@@ -100,6 +102,7 @@ def test_studio_graph_exposes_only_public_input_fields() -> None:
         "max_explorer_calls_per_step",
         "max_no_progress_rounds",
         "max_plan_revisions",
+        "context_budget_tokens",
         "human_review_policy",
     }
     assert schema["properties"]["max_tool_calls_per_step"]["default"] == 16
@@ -112,7 +115,25 @@ def test_studio_graph_exposes_only_public_input_fields() -> None:
         == DEFAULT_MAX_NO_PROGRESS_ROUNDS
     )
     assert schema["properties"]["max_plan_revisions"]["default"] == 2
+    assert (
+        schema["properties"]["context_budget_tokens"]["default"]
+        == DEFAULT_CONTEXT_BUDGET_TOKENS
+    )
     assert schema["properties"]["human_review_policy"]["default"] == "never"
+
+
+def test_studio_initializer_accepts_custom_context_budget(tmp_path: Path) -> None:
+    state = studio.initialize_studio_run(
+        {
+            "repo_path": tmp_path,
+            "objective": "Inspect the repository.",
+            "context_budget_tokens": 4096,
+        }
+    )
+
+    assert state["context_budget_tokens"] == 4096
+    assert state["context_build_count"] == 0
+    assert state["active_context_pack"] is None
 
 
 def test_studio_graph_surfaces_and_resumes_native_human_review(

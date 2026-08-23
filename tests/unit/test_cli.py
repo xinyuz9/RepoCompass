@@ -66,6 +66,8 @@ def test_main_runs_investigation_and_writes_trace(
             "2",
             "--max-no-progress-rounds",
             "4",
+            "--context-budget-tokens",
+            "4096",
             "--trace-dir",
             str(trace_directory),
             "--checkpoint-db",
@@ -85,6 +87,7 @@ def test_main_runs_investigation_and_writes_trace(
     assert request.max_explorer_calls_per_step == 2
     assert request.max_no_progress_rounds == 4
     assert request.max_plan_revisions == 2
+    assert request.context_budget_tokens == 4096
     assert request.human_review_policy is HumanReviewPolicy.BEFORE_FINALIZE
     assert json.loads(captured.out) == final_result.model_dump(mode="json")
     assert "Thread ID: thread-123" in captured.err
@@ -185,6 +188,44 @@ def test_main_rejects_non_positive_budget(
     captured = capsys.readouterr()
     assert error.value.code == 2
     assert "must be greater than zero" in captured.err
+
+
+def test_main_rejects_non_positive_context_budget(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.main(
+            [
+                str(tmp_path),
+                "--objective",
+                "Inspect the repository.",
+                "--context-budget-tokens",
+                "0",
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert "must be greater than zero" in captured.err
+
+
+def test_main_rejects_context_budget_outside_start_mode(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.main(
+            [
+                "--resume",
+                "persisted-thread",
+                "--context-budget-tokens",
+                "4096",
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert "budget options can only be supplied" in captured.err
 
 
 def _completed_cli_outcome(
