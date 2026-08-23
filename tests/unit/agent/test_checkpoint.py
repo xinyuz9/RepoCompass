@@ -2,12 +2,18 @@
 
 from pathlib import Path
 
+import pytest
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
 from repocompass.agent.candidate import CandidateResult, EvidenceItem
 from repocompass.agent.checkpoint import (
     RepoCompassCheckpointSerializer,
     open_sqlite_checkpointer,
 )
-from repocompass.agent.evaluation import EvaluationReport, SemanticAssessment
+from repocompass.agent.evaluation import (
+    EvaluationReport,
+    SemanticAssessment,
+)
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 
 
@@ -23,8 +29,26 @@ def test_open_sqlite_checkpointer_creates_parent_and_database(
     assert database_path.is_file()
 
 
-def test_checkpoint_serializer_rehydrates_strict_models_for_repeated_writes() -> None:
-    serializer = RepoCompassCheckpointSerializer()
+@pytest.mark.parametrize(
+    "serializer",
+    [
+        JsonPlusSerializer(
+            allowed_msgpack_modules=(
+                CandidateResult,
+                EvidenceItem,
+                EvaluationReport,
+                SemanticAssessment,
+                InvestigationPlan,
+                PlanStep,
+            )
+        ),
+        RepoCompassCheckpointSerializer(),
+    ],
+    ids=["langgraph-narrow-allowlist", "repocompass-sqlite"],
+)
+def test_checkpoint_serializer_rehydrates_strict_models_for_repeated_writes(
+    serializer: JsonPlusSerializer,
+) -> None:
     candidate = CandidateResult(
         evidence=[
             EvidenceItem(

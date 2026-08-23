@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from repocompass.agent.domain_model import CheckpointSafeModel
+
 
 class EvidenceItem(BaseModel):
     """One candidate claim with a structured repository source location."""
@@ -53,7 +55,7 @@ class EvidenceItem(BaseModel):
         return self
 
 
-class CandidateResult(BaseModel):
+class CandidateResult(CheckpointSafeModel):
     """Internal investigation result submitted to evaluation before publication."""
 
     model_config = ConfigDict(

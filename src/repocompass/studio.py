@@ -4,10 +4,12 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
 from repocompass.agent.graph import create_agent_graph
+from repocompass.agent.lifecycle import HumanReviewPolicy
 from repocompass.agent.runner import (
     DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
     DEFAULT_MAX_PLAN_REVISIONS,
@@ -36,6 +38,10 @@ class StudioRunInput(BaseModel):
     objective: str = Field(
         min_length=1,
         description="Repository investigation question.",
+    )
+    human_review_policy: HumanReviewPolicy = Field(
+        default=HumanReviewPolicy.NEVER,
+        description="Optional final-candidate Human review policy.",
     )
     max_tool_calls_per_step: int = Field(
         default=DEFAULT_MAX_TOOL_CALLS_PER_STEP,
@@ -72,6 +78,7 @@ def initialize_studio_run(state: Mapping[str, object]) -> RepoCompassState:
         max_tool_calls_per_step=studio_input.max_tool_calls_per_step,
         max_explorer_calls_per_step=studio_input.max_explorer_calls_per_step,
         max_plan_revisions=studio_input.max_plan_revisions,
+        human_review_policy=studio_input.human_review_policy,
     )
     repo_path = resolve_repository_path(request.repo_path)
     initial_state = create_initial_state(
@@ -80,11 +87,16 @@ def initialize_studio_run(state: Mapping[str, object]) -> RepoCompassState:
         request.max_tool_calls_per_step,
         request.max_explorer_calls_per_step,
         request.max_plan_revisions,
+        request.human_review_policy,
     )
     return initial_state
 
 
-def build_studio_graph(models: WorkflowModels):
+def build_studio_graph(
+    models: WorkflowModels,
+    *,
+    checkpointer: BaseCheckpointSaver | None = None,
+):
     """Build the Studio adapter around the existing investigation graph."""
 
     builder = StateGraph(RepoCompassState, input_schema=StudioRunInput)
@@ -93,7 +105,7 @@ def build_studio_graph(models: WorkflowModels):
     builder.add_edge(START, "initialize_run")
     builder.add_edge("initialize_run", "investigate_repository")
     builder.add_edge("investigate_repository", END)
-    return builder.compile(name="repocompass_studio")
+    return builder.compile(checkpointer=checkpointer, name="repocompass_studio")
 
 
 def create_studio_graph(_config: RunnableConfig):

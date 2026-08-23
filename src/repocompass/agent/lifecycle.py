@@ -5,7 +5,6 @@ from enum import StrEnum
 from typing import Literal, TypedDict, cast
 
 from pydantic import (
-    BaseModel,
     ConfigDict,
     Field,
     JsonValue,
@@ -14,6 +13,7 @@ from pydantic import (
 )
 
 from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.domain_model import CheckpointSafeModel
 from repocompass.agent.evaluation import EvaluationReport
 from repocompass.agent.result import FinalResult
 from repocompass.agent.routing import TerminationStatus
@@ -59,7 +59,7 @@ class HumanDecisionPayload(TypedDict):
     decision: dict[str, JsonValue]
 
 
-class _LifecycleModel(BaseModel):
+class _LifecycleModel(CheckpointSafeModel):
     """Strict immutable base for public lifecycle contracts."""
 
     model_config = ConfigDict(

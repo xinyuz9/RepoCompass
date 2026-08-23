@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.domain_model import CheckpointSafeModel
 from repocompass.tools.repository import read_code
 
 
@@ -95,7 +96,7 @@ class SemanticAssessment(BaseModel):
     )
 
 
-class EvaluationReport(BaseModel):
+class EvaluationReport(CheckpointSafeModel):
     """Code-merged deterministic validation and model-produced assessment."""
 
     model_config = ConfigDict(

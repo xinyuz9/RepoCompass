@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from repocompass.agent.domain_model import CheckpointSafeModel
+
 PlanStepStatus = Literal["pending", "active", "completed"]
 MAX_PLAN_STEPS = 5
 
@@ -24,7 +26,7 @@ class PlanStep(BaseModel):
     status: PlanStepStatus
 
 
-class InvestigationPlan(BaseModel):
+class InvestigationPlan(CheckpointSafeModel):
     """Structured execution plan visible to Explorer and reflection nodes."""
 
     model_config = ConfigDict(

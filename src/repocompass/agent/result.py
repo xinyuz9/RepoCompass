@@ -1,9 +1,11 @@
 """Public investigation-result contract."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from repocompass.agent.domain_model import CheckpointSafeModel
 
 
-class FinalResult(BaseModel):
+class FinalResult(CheckpointSafeModel):
     """Structured report produced when the repository investigation finishes."""
 
     model_config = ConfigDict(
