@@ -20,6 +20,7 @@ from repocompass.agent.lifecycle import (
 from repocompass.agent.runner import (
     AgentRunner,
     DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
+    DEFAULT_MAX_NO_PROGRESS_ROUNDS,
     DEFAULT_MAX_PLAN_REVISIONS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     ResumeRequest,
@@ -126,6 +127,14 @@ def create_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-no-progress-rounds",
+        type=_positive_int,
+        help=(
+            "consecutive stalled tool rounds per active plan step "
+            f"(default: {DEFAULT_MAX_NO_PROGRESS_ROUNDS})"
+        ),
+    )
+    parser.add_argument(
         "--max-plan-revisions",
         type=_positive_int,
         help=(
@@ -195,6 +204,7 @@ def _validate_lifecycle_arguments(
         for value in (
             arguments.max_tool_calls_per_step,
             arguments.max_explorer_calls_per_step,
+            arguments.max_no_progress_rounds,
             arguments.max_plan_revisions,
         )
     ):
@@ -281,6 +291,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         max_explorer_calls_per_step=(
                             arguments.max_explorer_calls_per_step
                             or DEFAULT_MAX_EXPLORER_CALLS_PER_STEP
+                        ),
+                        max_no_progress_rounds=(
+                            arguments.max_no_progress_rounds
+                            or DEFAULT_MAX_NO_PROGRESS_ROUNDS
                         ),
                         max_plan_revisions=(
                             arguments.max_plan_revisions or DEFAULT_MAX_PLAN_REVISIONS

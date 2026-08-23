@@ -35,6 +35,8 @@ MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
 Sha256Digest = Annotated[str, Field(pattern=SHA256_PATTERN)]
 CommitSha = Annotated[str, Field(pattern=COMMIT_SHA_PATTERN)]
 ToolAuditPayload = dict[str, JsonValue]
+ProgressSnapshotPayload = dict[str, JsonValue]
+NoProgressDecisionPayload = dict[str, JsonValue]
 
 
 class ToolCapability(StrEnum):
@@ -365,6 +367,74 @@ class NoProgressDecision(_ToolContractModel):
             raise ValueError("no_progress_limit requires the threshold to be met")
 
         return self
+
+
+def encode_progress_snapshot(
+    snapshot: ProgressSnapshot,
+) -> ProgressSnapshotPayload:
+    """Encode one progress snapshot for checkpoint-safe persistence."""
+
+    if not isinstance(snapshot, ProgressSnapshot):
+        raise TypeError("snapshot must be a ProgressSnapshot")
+    payload = snapshot.model_dump(
+        mode="json",
+        exclude_computed_fields=True,
+    )
+    _validate_stable_json(
+        payload,
+        path="progress_snapshot",
+        require_object=True,
+    )
+    return payload
+
+
+def decode_progress_snapshot(payload: object) -> ProgressSnapshot:
+    """Strictly restore one untrusted checkpoint progress snapshot."""
+
+    try:
+        _validate_stable_json(
+            payload,
+            path="progress_snapshot",
+            require_object=True,
+        )
+        encoded = _canonical_json_bytes(payload)
+        return ProgressSnapshot.model_validate_json(encoded)
+    except (ValidationError, ValueError) as error:
+        raise ValueError("Invalid progress snapshot payload") from error
+
+
+def encode_no_progress_decision(
+    decision: NoProgressDecision,
+) -> NoProgressDecisionPayload:
+    """Encode one no-progress decision for checkpoint-safe persistence."""
+
+    if not isinstance(decision, NoProgressDecision):
+        raise TypeError("decision must be a NoProgressDecision")
+    payload = decision.model_dump(
+        mode="json",
+        exclude_computed_fields=True,
+    )
+    _validate_stable_json(
+        payload,
+        path="no_progress_decision",
+        require_object=True,
+    )
+    return payload
+
+
+def decode_no_progress_decision(payload: object) -> NoProgressDecision:
+    """Strictly restore one untrusted checkpoint no-progress decision."""
+
+    try:
+        _validate_stable_json(
+            payload,
+            path="no_progress_decision",
+            require_object=True,
+        )
+        encoded = _canonical_json_bytes(payload)
+        return NoProgressDecision.model_validate_json(encoded)
+    except (ValidationError, ValueError) as error:
+        raise ValueError("Invalid no-progress decision payload") from error
 
 
 def fingerprint_tool_call(request: ToolCallRequest) -> ToolCallFingerprint:

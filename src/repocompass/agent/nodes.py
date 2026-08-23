@@ -233,6 +233,7 @@ class ToolGatewayNodeInput(MessagesState):
     step_tool_call_count: int
     max_tool_calls_per_step: int
     tool_audit_records: list[ToolAuditPayload]
+    step_tool_audit_sequence_floor: int | None
 
 
 class ToolGatewayNodeUpdate(TypedDict):
@@ -240,6 +241,8 @@ class ToolGatewayNodeUpdate(TypedDict):
     step_tool_call_count: int
     step_stop_reason: str | None
     tool_audit_records: list[ToolAuditPayload]
+    last_tool_batch_audits: list[ToolAuditPayload]
+    step_tool_audit_sequence_floor: int
 
 
 ToolGatewayNode = Callable[
@@ -274,10 +277,22 @@ def create_execute_tools_node(
         prior_run_records = tuple(
             record for record in decoded_records if record.run_id == run_id
         )
+        configured_floor = state["step_tool_audit_sequence_floor"]
+        if configured_floor is None:
+            effective_floor = len(prior_run_records)
+        elif not isinstance(configured_floor, int) or isinstance(
+            configured_floor,
+            bool,
+        ):
+            raise TypeError("step_tool_audit_sequence_floor must be an integer or None")
+        elif configured_floor < 0:
+            raise ValueError("step_tool_audit_sequence_floor must not be negative")
+        else:
+            effective_floor = min(configured_floor, len(prior_run_records))
         audit_log = ToolAuditLog(
             run_id,
             records=prior_run_records,
-            deduplication_floor=len(prior_run_records),
+            deduplication_floor=effective_floor,
         )
         prior_run_record_count = len(prior_run_records)
         context = ToolExecutionContext(state["repo_path"])
@@ -356,6 +371,8 @@ def create_execute_tools_node(
                 "step_tool_call_budget_exhausted" if budget_denied else None
             ),
             "tool_audit_records": new_audit_records,
+            "last_tool_batch_audits": new_audit_records,
+            "step_tool_audit_sequence_floor": effective_floor,
         }
 
     return execute_tools_node
@@ -679,6 +696,10 @@ class PlanAdvanceUpdate(TypedDict):
     investigation_plan: InvestigationPlan
     step_tool_call_count: int
     step_explorer_call_count: int
+    last_tool_batch_audits: list[ToolAuditPayload]
+    step_tool_audit_sequence_floor: None
+    progress_snapshot: None
+    consecutive_no_progress_rounds: int
     step_stop_reason: None
     candidate_result: None
     evaluation_report: None
@@ -711,6 +732,10 @@ def advance_plan_step(state: PlanAdvanceInput) -> PlanAdvanceUpdate:
         "investigation_plan": revised_plan,
         "step_tool_call_count": 0,
         "step_explorer_call_count": 0,
+        "last_tool_batch_audits": [],
+        "step_tool_audit_sequence_floor": None,
+        "progress_snapshot": None,
+        "consecutive_no_progress_rounds": 0,
         "step_stop_reason": None,
         "candidate_result": None,
         "evaluation_report": None,
@@ -736,6 +761,10 @@ class ReplannerNodeUpdate(TypedDict):
     investigation_plan: InvestigationPlan
     step_tool_call_count: int
     step_explorer_call_count: int
+    last_tool_batch_audits: list[ToolAuditPayload]
+    step_tool_audit_sequence_floor: None
+    progress_snapshot: None
+    consecutive_no_progress_rounds: int
     plan_revision_count: int
     step_stop_reason: None
     candidate_result: None
@@ -813,6 +842,10 @@ def create_revise_plan_node(model: BaseChatModel) -> ReplannerNode:
             "investigation_plan": response,
             "step_tool_call_count": 0,
             "step_explorer_call_count": 0,
+            "last_tool_batch_audits": [],
+            "step_tool_audit_sequence_floor": None,
+            "progress_snapshot": None,
+            "consecutive_no_progress_rounds": 0,
             "plan_revision_count": state["plan_revision_count"] + 1,
             "step_stop_reason": None,
             "candidate_result": None,

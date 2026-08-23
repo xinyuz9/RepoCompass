@@ -20,6 +20,7 @@ from repocompass.agent.lifecycle import (
 )
 from repocompass.agent.runner import (
     DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
+    DEFAULT_MAX_NO_PROGRESS_ROUNDS,
     DEFAULT_MAX_PLAN_REVISIONS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
 )
@@ -66,6 +67,7 @@ def test_studio_graph_accepts_public_input_and_applies_defaults(
         final_state["max_explorer_calls_per_step"]
         == DEFAULT_MAX_EXPLORER_CALLS_PER_STEP
     )
+    assert final_state["max_no_progress_rounds"] == DEFAULT_MAX_NO_PROGRESS_ROUNDS
     assert final_state["max_plan_revisions"] == DEFAULT_MAX_PLAN_REVISIONS
     assert final_state["human_review_policy"] is HumanReviewPolicy.NEVER
     assert final_state["plan_revision_count"] == 0
@@ -96,6 +98,7 @@ def test_studio_graph_exposes_only_public_input_fields() -> None:
         "objective",
         "max_tool_calls_per_step",
         "max_explorer_calls_per_step",
+        "max_no_progress_rounds",
         "max_plan_revisions",
         "human_review_policy",
     }
@@ -103,6 +106,10 @@ def test_studio_graph_exposes_only_public_input_fields() -> None:
     assert (
         schema["properties"]["max_explorer_calls_per_step"]["default"]
         == DEFAULT_MAX_EXPLORER_CALLS_PER_STEP
+    )
+    assert (
+        schema["properties"]["max_no_progress_rounds"]["default"]
+        == DEFAULT_MAX_NO_PROGRESS_ROUNDS
     )
     assert schema["properties"]["max_plan_revisions"]["default"] == 2
     assert schema["properties"]["human_review_policy"]["default"] == "never"

@@ -31,6 +31,7 @@ def _state(
         "step_tool_call_count": used_tool_calls,
         "max_tool_calls_per_step": max_tool_calls,
         "tool_audit_records": [],
+        "step_tool_audit_sequence_floor": 0,
     }
 
 
@@ -69,6 +70,8 @@ def test_gateway_node_executes_and_audits_one_valid_call(tmp_path: Path) -> None
     assert tool_message.tool_call_id == "call-tree"
     assert '"entries":["auth.py"]' in str(tool_message.content)
     assert len(update["tool_audit_records"]) == 1
+    assert update["last_tool_batch_audits"] == update["tool_audit_records"]
+    assert update["step_tool_audit_sequence_floor"] == 0
     audit_payload = update["tool_audit_records"][0]
     audit = decode_tool_audit_record(audit_payload)
     assert audit.run_id == "gateway-node-run"

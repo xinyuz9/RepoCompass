@@ -245,6 +245,14 @@ def test_route_explorer_invocation_enforces_step_budget(
         ),
         (
             {
+                "step_stop_reason": "step_no_progress",
+                "step_explorer_call_count": 1,
+                "max_explorer_calls_per_step": 3,
+            },
+            "build_candidate",
+        ),
+        (
+            {
                 "step_stop_reason": None,
                 "step_explorer_call_count": 1,
                 "max_explorer_calls_per_step": 3,

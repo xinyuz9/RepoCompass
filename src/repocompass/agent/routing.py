@@ -115,9 +115,12 @@ PostToolExecutionRoute = Literal[
 def route_after_tool_execution(
     state: PostToolExecutionInput,
 ) -> PostToolExecutionRoute:
-    """Stop immediately on tool budget denial, otherwise enforce Explorer budget."""
+    """Stop on a deterministic step reason, otherwise enforce Explorer budget."""
 
-    if state["step_stop_reason"] == "step_tool_call_budget_exhausted":
+    if state["step_stop_reason"] in {
+        "step_tool_call_budget_exhausted",
+        "step_no_progress",
+    }:
         return "build_candidate"
     if state["step_explorer_call_count"] < state["max_explorer_calls_per_step"]:
         return "agent"

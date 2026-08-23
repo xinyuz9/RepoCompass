@@ -23,10 +23,16 @@ def test_create_initial_state_sets_required_fields(tmp_path: Path) -> None:
     assert state["human_feedback"] is None
     assert state["investigation_plan"] is None
     assert state["tool_audit_records"] == []
+    assert state["last_tool_batch_audits"] == []
+    assert state["step_tool_audit_sequence_floor"] == 0
     assert state["step_tool_call_count"] == 0
     assert state["max_tool_calls_per_step"] == 3
     assert state["step_explorer_call_count"] == 0
     assert state["max_explorer_calls_per_step"] == 4
+    assert state["progress_snapshot"] is None
+    assert state["no_progress_decision"] is None
+    assert state["consecutive_no_progress_rounds"] == 0
+    assert state["max_no_progress_rounds"] == 3
     assert state["plan_revision_count"] == 0
     assert state["max_plan_revisions"] == 2
     assert state["step_stop_reason"] is None
@@ -67,6 +73,21 @@ def test_create_initial_state_rejects_non_positive_explorer_budget(
             "Find the authentication code",
             max_tool_calls_per_step=3,
             max_explorer_calls_per_step=max_explorer_calls_per_step,
+        )
+
+
+@pytest.mark.parametrize("max_no_progress_rounds", [0, -1, True])
+def test_create_initial_state_rejects_invalid_no_progress_budget(
+    tmp_path: Path,
+    max_no_progress_rounds: object,
+) -> None:
+    with pytest.raises((TypeError, ValueError), match="no-progress"):
+        create_initial_state(
+            tmp_path,
+            "Find the authentication code",
+            max_tool_calls_per_step=3,
+            max_explorer_calls_per_step=3,
+            max_no_progress_rounds=max_no_progress_rounds,  # type: ignore[arg-type]
         )
 
 

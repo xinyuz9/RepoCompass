@@ -64,6 +64,8 @@ def test_main_runs_investigation_and_writes_trace(
             "3",
             "--max-explorer-calls-per-step",
             "2",
+            "--max-no-progress-rounds",
+            "4",
             "--trace-dir",
             str(trace_directory),
             "--checkpoint-db",
@@ -81,6 +83,7 @@ def test_main_runs_investigation_and_writes_trace(
     assert request.objective == "Inspect authentication."
     assert request.max_tool_calls_per_step == 3
     assert request.max_explorer_calls_per_step == 2
+    assert request.max_no_progress_rounds == 4
     assert request.max_plan_revisions == 2
     assert request.human_review_policy is HumanReviewPolicy.BEFORE_FINALIZE
     assert json.loads(captured.out) == final_result.model_dump(mode="json")

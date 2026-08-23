@@ -103,6 +103,7 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         "objective": "Inspect the repository.",
         "max_tool_calls_per_step": 3,
         "max_explorer_calls_per_step": 2,
+        "max_no_progress_rounds": 3,
         "max_plan_revisions": 2,
     }
     assert (
@@ -228,6 +229,7 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
         "plan_investigation",
         "agent",
         "tools",
+        "assess_progress",
         "agent",
         "build_candidate",
         "evaluate_candidate",
@@ -240,6 +242,7 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
     first_agent_message = node_events[1].payload["messages"][0]
     assert first_agent_message["tool_calls"][0]["name"] == "list_tree"
     tool_event = node_events[2]
+    progress_event = node_events[3]
     assert tool_event.payload["step_tool_call_count"] == 1
     assert tool_event.payload["step_stop_reason"] is None
     assert len(tool_event.payload["tool_audit_records"]) == 1
@@ -247,6 +250,11 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
     tool_message = tool_event.payload["messages"][0]
     assert tool_message["tool_call_id"] == "call-tree"
     assert "auth.py" in tool_message["content"]
+    assert progress_event.payload["consecutive_no_progress_rounds"] == 0
+    assert progress_event.payload["step_stop_reason"] is None
+    assert (
+        progress_event.payload["no_progress_decision"]["reason"] == "progress_observed"
+    )
     assert outcome.termination_status == "accepted"
     assert outcome.step_stop_reason is None
     assert len(outcome.tool_audit_records) == 1
@@ -255,6 +263,9 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
     assert audit.call_id == "call-tree"
     assert audit.decision.reason is ToolDecisionReason.ALLOWED
     assert "auth.py" not in audit.model_dump_json()
+    assert outcome.no_progress_decision is not None
+    assert outcome.no_progress_decision.reason.value == "progress_observed"
+    assert outcome.consecutive_no_progress_rounds == 0
     assert "unregistered type" not in caplog.text.casefold()
 
 

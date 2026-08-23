@@ -62,6 +62,7 @@ def test_create_continuation_update_archives_and_resets_turn_state(
         max_tool_calls_per_step=7,
         max_explorer_calls_per_step=5,
         max_plan_revisions=3,
+        max_no_progress_rounds=4,
     )
     state.update(
         {
@@ -72,6 +73,8 @@ def test_create_continuation_update_archives_and_resets_turn_state(
             "investigation_plan": default_investigation_plan(),
             "step_tool_call_count": 4,
             "step_explorer_call_count": 3,
+            "step_tool_audit_sequence_floor": 2,
+            "consecutive_no_progress_rounds": 2,
             "plan_revision_count": 2,
             "step_stop_reason": "step_explorer_budget_exhausted",
             "termination_status": "accepted",
@@ -87,6 +90,7 @@ def test_create_continuation_update_archives_and_resets_turn_state(
     assert update["repo_path"] == tmp_path.resolve()
     assert update["max_tool_calls_per_step"] == 7
     assert update["max_explorer_calls_per_step"] == 5
+    assert update["max_no_progress_rounds"] == 4
     assert update["max_plan_revisions"] == 3
     assert update["human_review_policy"] == state["human_review_policy"]
     assert update["objective"] == "Second objective"
@@ -108,8 +112,13 @@ def test_create_continuation_update_archives_and_resets_turn_state(
     assert update["human_feedback"] is None
     assert update["investigation_plan"] is None
     assert update["tool_audit_records"] == []
+    assert update["last_tool_batch_audits"] == []
+    assert update["step_tool_audit_sequence_floor"] == 0
     assert update["step_tool_call_count"] == 0
     assert update["step_explorer_call_count"] == 0
+    assert update["progress_snapshot"] is None
+    assert update["no_progress_decision"] is None
+    assert update["consecutive_no_progress_rounds"] == 0
     assert update["plan_revision_count"] == 0
     assert update["step_stop_reason"] is None
     assert update["termination_status"] is None

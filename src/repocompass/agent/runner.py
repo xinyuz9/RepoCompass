@@ -38,7 +38,9 @@ from repocompass.agent.state import (
 from repocompass.agent.trace import RunTrace, TraceEventKind
 from repocompass.models import WorkflowModels
 from repocompass.tools.contracts import (
+    NoProgressDecision,
     ToolAuditRecord,
+    decode_no_progress_decision,
     decode_tool_audit_record,
 )
 
@@ -48,6 +50,7 @@ ExecutionMode = Literal["start", "resume", "continue", "respond"]
 DEFAULT_MAX_TOOL_CALLS_PER_STEP = 16
 DEFAULT_MAX_EXPLORER_CALLS_PER_STEP = 12
 DEFAULT_MAX_PLAN_REVISIONS = 2
+DEFAULT_MAX_NO_PROGRESS_ROUNDS = 3
 
 _SENSITIVE_TRACE_KEYS = frozenset(
     {
@@ -187,6 +190,8 @@ class RunRequest(BaseModel):
             step.
         max_explorer_calls_per_step: Positive Explorer invocation budget for one
             active plan step.
+        max_no_progress_rounds: Positive consecutive stalled-round limit for one
+            active plan step.
         max_plan_revisions: Positive global budget for model-based plan
             revisions.
         human_review_policy: Optional final-candidate review gate.
@@ -202,6 +207,7 @@ class RunRequest(BaseModel):
     objective: str = Field(min_length=1)
     max_tool_calls_per_step: int = Field(gt=0)
     max_explorer_calls_per_step: int = Field(gt=0)
+    max_no_progress_rounds: int = Field(default=DEFAULT_MAX_NO_PROGRESS_ROUNDS, gt=0)
     max_plan_revisions: int = Field(default=DEFAULT_MAX_PLAN_REVISIONS, gt=0)
     human_review_policy: HumanReviewPolicy = HumanReviewPolicy.NEVER
 
@@ -245,6 +251,8 @@ class RunOutcome:
     human_review_request: HumanReviewRequest | None = None
     interrupt_id: str | None = None
     tool_audit_records: tuple[ToolAuditRecord, ...] = ()
+    no_progress_decision: NoProgressDecision | None = None
+    consecutive_no_progress_rounds: int = 0
 
     def __post_init__(self) -> None:
         """Reject ambiguous combinations of terminal and interrupt fields."""
@@ -303,6 +311,26 @@ def _read_attempt_tool_audits(
     return tuple(record for record in decoded_records if record.run_id == run_id)
 
 
+def _read_progress_metadata(
+    state: Mapping[str, object],
+) -> tuple[NoProgressDecision | None, int]:
+    stalled_rounds = state.get("consecutive_no_progress_rounds", 0)
+    if (
+        not isinstance(stalled_rounds, int)
+        or isinstance(stalled_rounds, bool)
+        or stalled_rounds < 0
+    ):
+        raise TypeError("Graph consecutive_no_progress_rounds are invalid")
+    payload = state.get("no_progress_decision")
+    if payload is None:
+        return None, stalled_rounds
+    try:
+        decision = decode_no_progress_decision(payload)
+    except ValueError as error:
+        raise TypeError("Graph no_progress_decision is invalid") from error
+    return decision, stalled_rounds
+
+
 def _build_interrupted_outcome(
     snapshot: StateSnapshot,
     *,
@@ -338,6 +366,7 @@ def _build_interrupted_outcome(
             "turn_number": review_request.turn_number,
         },
     )
+    progress_decision, stalled_rounds = _read_progress_metadata(snapshot.values)
 
     return RunOutcome(
         thread_id=thread_id,
@@ -352,6 +381,8 @@ def _build_interrupted_outcome(
             snapshot.values,
             run_id=trace.run_id,
         ),
+        no_progress_decision=progress_decision,
+        consecutive_no_progress_rounds=stalled_rounds,
     )
 
 
@@ -423,6 +454,7 @@ class AgentRunner:
             request.max_explorer_calls_per_step,
             request.max_plan_revisions,
             request.human_review_policy,
+            max_no_progress_rounds=request.max_no_progress_rounds,
         )
         graph = create_agent_graph(
             self._models,
@@ -586,6 +618,11 @@ class AgentRunner:
             "max_explorer_calls_per_step": _to_json_value(
                 metadata_state["max_explorer_calls_per_step"]
             ),
+            "max_no_progress_rounds": _to_json_value(
+                metadata_state.get(
+                    "max_no_progress_rounds", DEFAULT_MAX_NO_PROGRESS_ROUNDS
+                )
+            ),
             "max_plan_revisions": _to_json_value(metadata_state["max_plan_revisions"]),
         }
         if human_decision is not None:
@@ -648,6 +685,7 @@ class AgentRunner:
         termination_status = final_state.get("termination_status")
         if termination_status not in ("accepted", "exhausted", "cancelled"):
             raise ValueError("Graph finished without a termination status")
+        progress_decision, stalled_rounds = _read_progress_metadata(final_state)
 
         trace.record(
             TraceEventKind.RUN_FINISHED,
@@ -669,4 +707,6 @@ class AgentRunner:
                 final_state,
                 run_id=trace.run_id,
             ),
+            no_progress_decision=progress_decision,
+            consecutive_no_progress_rounds=stalled_rounds,
         )

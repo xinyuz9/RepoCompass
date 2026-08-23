@@ -21,7 +21,11 @@ from repocompass.tools.contracts import (
     ToolPolicyDecision,
     ToolRiskLevel,
     ToolSideEffect,
+    decode_no_progress_decision,
+    decode_progress_snapshot,
     decode_tool_audit_record,
+    encode_no_progress_decision,
+    encode_progress_snapshot,
     encode_tool_audit_record,
     fingerprint_progress_snapshot,
     fingerprint_tool_call,
@@ -474,6 +478,35 @@ def test_progress_snapshot_fingerprint_covers_progress_signals() -> None:
     assert fingerprint_progress_snapshot(baseline) != fingerprint_progress_snapshot(
         with_evidence
     )
+
+
+def test_progress_contracts_round_trip_as_strict_checkpoint_json() -> None:
+    snapshot = ProgressSnapshot(
+        active_step_id="locate-auth",
+        evidence_fingerprints=("1" * 64,),
+        successful_tool_fingerprints=("2" * 64,),
+        evaluator_request_digest="3" * 64,
+        plan_revision_count=1,
+    )
+    decision = NoProgressDecision(
+        action=NoProgressAction.CONTINUE,
+        reason=NoProgressReason.PROGRESS_OBSERVED,
+        consecutive_stalled_rounds=0,
+        threshold=3,
+        snapshot_digest=fingerprint_progress_snapshot(snapshot),
+    )
+
+    snapshot_payload = encode_progress_snapshot(snapshot)
+    decision_payload = encode_no_progress_decision(decision)
+
+    assert decode_progress_snapshot(snapshot_payload) == snapshot
+    assert decode_no_progress_decision(decision_payload) == decision
+    assert json.loads(json.dumps(snapshot_payload)) == snapshot_payload
+    assert json.loads(json.dumps(decision_payload)) == decision_payload
+    with pytest.raises(ValueError, match="Invalid progress snapshot payload"):
+        decode_progress_snapshot({**snapshot_payload, "reasoning": "private"})
+    with pytest.raises(ValueError, match="Invalid no-progress decision payload"):
+        decode_no_progress_decision({**decision_payload, "token": "secret"})
 
 
 @pytest.mark.parametrize(

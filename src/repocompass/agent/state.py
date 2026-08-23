@@ -20,7 +20,11 @@ from repocompass.agent.routing import (
     HumanDecisionActionValue,
     TerminationStatus,
 )
-from repocompass.tools.contracts import ToolAuditPayload
+from repocompass.tools.contracts import (
+    NoProgressDecisionPayload,
+    ProgressSnapshotPayload,
+    ToolAuditPayload,
+)
 
 
 class RepoCompassState(MessagesState):
@@ -36,11 +40,17 @@ class RepoCompassState(MessagesState):
     human_feedback: str | None
     investigation_plan: InvestigationPlan | None
     tool_audit_records: Annotated[list[ToolAuditPayload], add]
+    last_tool_batch_audits: list[ToolAuditPayload]
+    step_tool_audit_sequence_floor: int | None
 
     step_tool_call_count: int
     max_tool_calls_per_step: int
     step_explorer_call_count: int
     max_explorer_calls_per_step: int
+    progress_snapshot: ProgressSnapshotPayload | None
+    no_progress_decision: NoProgressDecisionPayload | None
+    consecutive_no_progress_rounds: int
+    max_no_progress_rounds: int
     plan_revision_count: int
     max_plan_revisions: int
 
@@ -66,10 +76,16 @@ class ContinuationStateUpdate(TypedDict):
     human_feedback: None
     investigation_plan: None
     tool_audit_records: list[ToolAuditPayload]
+    last_tool_batch_audits: list[ToolAuditPayload]
+    step_tool_audit_sequence_floor: int
     step_tool_call_count: int
     max_tool_calls_per_step: int
     step_explorer_call_count: int
     max_explorer_calls_per_step: int
+    progress_snapshot: None
+    no_progress_decision: None
+    consecutive_no_progress_rounds: int
+    max_no_progress_rounds: int
     plan_revision_count: int
     max_plan_revisions: int
     step_stop_reason: None
@@ -87,6 +103,7 @@ def create_initial_state(
     max_explorer_calls_per_step: int,
     max_plan_revisions: int = 2,
     human_review_policy: HumanReviewPolicy = HumanReviewPolicy.NEVER,
+    max_no_progress_rounds: int = 3,
 ) -> RepoCompassState:
     objective = objective.strip()
     if not objective:
@@ -100,6 +117,13 @@ def create_initial_state(
             "Max Explorer calls per step must be positive, "
             f"not {max_explorer_calls_per_step}"
         )
+    if not isinstance(max_no_progress_rounds, int) or isinstance(
+        max_no_progress_rounds,
+        bool,
+    ):
+        raise TypeError("Max no-progress rounds must be an integer")
+    if max_no_progress_rounds < 1:
+        raise ValueError("Max no-progress rounds must be positive")
     if max_plan_revisions < 1:
         raise ValueError(
             f"Max plan revisions must be positive, not {max_plan_revisions}"
@@ -117,10 +141,16 @@ def create_initial_state(
         "human_feedback": None,
         "investigation_plan": None,
         "tool_audit_records": [],
+        "last_tool_batch_audits": [],
+        "step_tool_audit_sequence_floor": 0,
         "step_tool_call_count": 0,
         "max_tool_calls_per_step": max_tool_calls_per_step,
         "step_explorer_call_count": 0,
         "max_explorer_calls_per_step": max_explorer_calls_per_step,
+        "progress_snapshot": None,
+        "no_progress_decision": None,
+        "consecutive_no_progress_rounds": 0,
+        "max_no_progress_rounds": max_no_progress_rounds,
         "plan_revision_count": 0,
         "max_plan_revisions": max_plan_revisions,
         "step_stop_reason": None,
@@ -158,6 +188,7 @@ def create_continuation_update(
     human_review_policy = state.get("human_review_policy")
     max_tool_calls = state.get("max_tool_calls_per_step")
     max_explorer_calls = state.get("max_explorer_calls_per_step")
+    max_no_progress_rounds = state.get("max_no_progress_rounds")
     max_plan_revisions = state.get("max_plan_revisions")
     if not isinstance(turn_number, int) or isinstance(turn_number, bool):
         raise TypeError("Graph turn_number is not an integer")
@@ -176,6 +207,7 @@ def create_continuation_update(
     for name, value in (
         ("max_tool_calls_per_step", max_tool_calls),
         ("max_explorer_calls_per_step", max_explorer_calls),
+        ("max_no_progress_rounds", max_no_progress_rounds),
         ("max_plan_revisions", max_plan_revisions),
     ):
         if not isinstance(value, int) or isinstance(value, bool) or value < 1:
@@ -199,10 +231,16 @@ def create_continuation_update(
         "human_feedback": None,
         "investigation_plan": None,
         "tool_audit_records": [],
+        "last_tool_batch_audits": [],
+        "step_tool_audit_sequence_floor": 0,
         "step_tool_call_count": 0,
         "max_tool_calls_per_step": max_tool_calls,
         "step_explorer_call_count": 0,
         "max_explorer_calls_per_step": max_explorer_calls,
+        "progress_snapshot": None,
+        "no_progress_decision": None,
+        "consecutive_no_progress_rounds": 0,
+        "max_no_progress_rounds": max_no_progress_rounds,
         "plan_revision_count": 0,
         "max_plan_revisions": max_plan_revisions,
         "step_stop_reason": None,

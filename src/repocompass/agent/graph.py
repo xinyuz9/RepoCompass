@@ -18,6 +18,7 @@ from repocompass.agent.nodes import (
     prepare_human_review,
     review_final_candidate,
 )
+from repocompass.agent.progress import assess_tool_progress
 from repocompass.agent.routing import (
     route_after_tool_execution,
     route_controller,
@@ -44,6 +45,7 @@ def create_agent_graph(
     )
     builder.add_node("agent", create_agent_node(models.explorer))
     builder.add_node("tools", create_execute_tools_node())
+    builder.add_node("assess_progress", assess_tool_progress)
     builder.add_node(
         "step_explorer_budget_exhausted",
         mark_step_explorer_budget_exhausted,
@@ -84,8 +86,9 @@ def create_agent_graph(
             "build_candidate": "build_candidate",
         },
     )
+    builder.add_edge("tools", "assess_progress")
     builder.add_conditional_edges(
-        "tools",
+        "assess_progress",
         route_after_tool_execution,
         {
             **explorer_invocation_routes,

@@ -12,6 +12,7 @@ from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.lifecycle import HumanReviewPolicy
 from repocompass.agent.runner import (
     DEFAULT_MAX_EXPLORER_CALLS_PER_STEP,
+    DEFAULT_MAX_NO_PROGRESS_ROUNDS,
     DEFAULT_MAX_PLAN_REVISIONS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     RunRequest,
@@ -55,6 +56,12 @@ class StudioRunInput(BaseModel):
         strict=True,
         description="Maximum Explorer invocations per active plan step.",
     )
+    max_no_progress_rounds: int = Field(
+        default=DEFAULT_MAX_NO_PROGRESS_ROUNDS,
+        gt=0,
+        strict=True,
+        description="Maximum consecutive stalled tool rounds per active plan step.",
+    )
     max_plan_revisions: int = Field(
         default=DEFAULT_MAX_PLAN_REVISIONS,
         gt=0,
@@ -77,6 +84,7 @@ def initialize_studio_run(state: Mapping[str, object]) -> RepoCompassState:
         objective=studio_input.objective,
         max_tool_calls_per_step=studio_input.max_tool_calls_per_step,
         max_explorer_calls_per_step=studio_input.max_explorer_calls_per_step,
+        max_no_progress_rounds=studio_input.max_no_progress_rounds,
         max_plan_revisions=studio_input.max_plan_revisions,
         human_review_policy=studio_input.human_review_policy,
     )
@@ -88,6 +96,7 @@ def initialize_studio_run(state: Mapping[str, object]) -> RepoCompassState:
         request.max_explorer_calls_per_step,
         request.max_plan_revisions,
         request.human_review_policy,
+        max_no_progress_rounds=request.max_no_progress_rounds,
     )
     return initial_state
 

@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
     AIMessage,
@@ -14,6 +16,7 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import RunnableLambda
 
+import repocompass.tools.gateway as gateway_module
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.evaluation import SemanticAssessment
 from repocompass.agent.graph import create_agent_graph
@@ -21,7 +24,9 @@ from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
 from repocompass.tools.contracts import (
+    NoProgressReason,
     ToolDecisionReason,
+    decode_no_progress_decision,
     decode_tool_audit_record,
 )
 from tests.model_doubles import candidate_from_final_result, with_scripted_planner
@@ -628,3 +633,102 @@ def test_graph_revises_a_blocked_plan_before_retrying(tmp_path: Path) -> None:
     assert final_state["step_explorer_call_count"] == 1
     assert final_state["next_action"] == "accepted"
     assert final_state["termination_status"] == "accepted"
+
+
+def test_graph_replans_then_exhausts_repeated_invalid_tool_loop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        gateway_module,
+        "_discover_commit_sha",
+        lambda _: "a" * 40,
+    )
+    monkeypatch.setattr(gateway_module, "_is_clean_git_worktree", lambda _: True)
+    initial_plan = InvestigationPlan(
+        steps=[
+            PlanStep(
+                id="initial-search",
+                objective="Search for the implementation.",
+                expected_evidence=["A verified source location."],
+                status="active",
+            )
+        ]
+    )
+    revised_plan = InvestigationPlan(
+        steps=[
+            PlanStep(
+                id="focused-search",
+                objective="Retry with a focused search.",
+                expected_evidence=["A verified source location."],
+                status="active",
+            )
+        ]
+    )
+    invalid_call = ToolCall(
+        name="list_tree",
+        args={"max_depth": "not-an-int"},
+        id="call-invalid",
+        type="tool_call",
+    )
+    invalid_requests = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                ToolCall(
+                    name=invalid_call["name"],
+                    args=invalid_call["args"],
+                    id=f"call-invalid-{index}",
+                    type="tool_call",
+                )
+            ],
+        )
+        for index in range(4)
+    ]
+    expected_result = FinalResult(
+        relevant_files=[],
+        evidence=[],
+        summary="Repeated invalid calls produced no repository evidence.",
+        unresolved_questions=["Where is the implementation?"],
+    )
+    model = _create_scripted_model(invalid_requests, expected_result)
+    models = with_scripted_planner(
+        model,
+        plan=initial_plan,
+        revised_plans=[revised_plan],
+        semantic_assessments=[
+            _semantic_assessment(
+                active_step_completed=False,
+                answers_objective=False,
+            ),
+            _semantic_assessment(
+                active_step_completed=False,
+                answers_objective=False,
+            ),
+        ],
+    )
+    initial_state = create_initial_state(
+        tmp_path,
+        "Find the implementation.",
+        max_tool_calls_per_step=8,
+        max_explorer_calls_per_step=8,
+        max_plan_revisions=1,
+        max_no_progress_rounds=2,
+    )
+
+    final_state = create_agent_graph(models).invoke(initial_state)
+    decision = decode_no_progress_decision(final_state["no_progress_decision"])
+
+    assert final_state["investigation_plan"] == revised_plan
+    assert final_state["plan_revision_count"] == 1
+    assert final_state["step_tool_call_count"] == 0
+    assert final_state["step_explorer_call_count"] == 2
+    assert final_state["consecutive_no_progress_rounds"] == 2
+    assert final_state["step_stop_reason"] == "step_no_progress"
+    assert final_state["termination_status"] == "exhausted"
+    assert decision.reason is NoProgressReason.NO_PROGRESS_LIMIT
+    assert len(final_state["tool_audit_records"]) == 4
+    assert [
+        decode_tool_audit_record(payload).decision.reason
+        for payload in final_state["tool_audit_records"]
+    ] == [ToolDecisionReason.INVALID_ARGUMENTS, ToolDecisionReason.DUPLICATE_CALL] * 2
