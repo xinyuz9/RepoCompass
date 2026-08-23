@@ -16,6 +16,7 @@ from pydantic import (
     ConfigDict,
     Field,
     JsonValue,
+    ValidationError,
     field_validator,
     model_validator,
 )
@@ -33,6 +34,7 @@ MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
 
 Sha256Digest = Annotated[str, Field(pattern=SHA256_PATTERN)]
 CommitSha = Annotated[str, Field(pattern=COMMIT_SHA_PATTERN)]
+ToolAuditPayload = dict[str, JsonValue]
 
 
 class ToolCapability(StrEnum):
@@ -262,6 +264,38 @@ class ToolAuditRecord(_ToolContractModel):
     latency_ms: int | None = Field(default=None, ge=0)
     output_bytes: int | None = Field(default=None, ge=0)
     result_digest: Sha256Digest | None = None
+
+
+def encode_tool_audit_record(record: ToolAuditRecord) -> ToolAuditPayload:
+    """Encode one typed audit record for checkpoint-safe persistence."""
+
+    if not isinstance(record, ToolAuditRecord):
+        raise TypeError("record must be a ToolAuditRecord")
+    payload = record.model_dump(
+        mode="json",
+        exclude_computed_fields=True,
+    )
+    _validate_stable_json(
+        payload,
+        path="tool_audit_record",
+        require_object=True,
+    )
+    return payload
+
+
+def decode_tool_audit_record(payload: object) -> ToolAuditRecord:
+    """Strictly restore one untrusted checkpoint audit payload."""
+
+    try:
+        _validate_stable_json(
+            payload,
+            path="tool_audit_record",
+            require_object=True,
+        )
+        encoded = _canonical_json_bytes(payload)
+        return ToolAuditRecord.model_validate_json(encoded)
+    except (ValidationError, ValueError) as error:
+        raise ValueError("Invalid tool audit payload") from error
 
 
 class ProgressSnapshot(_ToolContractModel):

@@ -444,6 +444,41 @@ class ToolGateway:
             result_digest=result_digest,
         )
 
+    def reject(
+        self,
+        request: ToolCallRequest,
+        *,
+        context: ToolExecutionContext,
+        reason: ToolDecisionReason,
+        audit_log: ToolAuditLog,
+    ) -> ToolGatewayResult:
+        """Record one trusted pre-execution batch or ingress rejection."""
+
+        if not isinstance(request, ToolCallRequest):
+            raise TypeError("request must be a ToolCallRequest")
+        if not isinstance(context, ToolExecutionContext):
+            raise TypeError("context must be a ToolExecutionContext")
+        if not isinstance(audit_log, ToolAuditLog):
+            raise TypeError("audit_log must be a ToolAuditLog")
+        if reason not in {
+            ToolDecisionReason.INVALID_ARGUMENTS,
+            ToolDecisionReason.BUDGET_EXHAUSTED,
+        }:
+            raise ValueError("reason is not a gateway pre-execution rejection")
+
+        started_ns = time.perf_counter_ns()
+        fingerprint = fingerprint_tool_call(request)
+        effective_reason = reason
+        if not context.matches(request):
+            effective_reason = ToolDecisionReason.CAPABILITY_DENIED
+        return self._deny(
+            request,
+            fingerprint=fingerprint,
+            reason=effective_reason,
+            started_ns=started_ns,
+            audit_log=audit_log,
+        )
+
     def _deny(
         self,
         request: ToolCallRequest,
@@ -747,6 +782,6 @@ def _discover_commit_sha(repository_root: Path) -> str | None:
 
 def _default_process_context() -> BaseContext:
     try:
-        return multiprocessing.get_context("fork")
+        return multiprocessing.get_context("forkserver")
     except ValueError:
         return multiprocessing.get_context("spawn")

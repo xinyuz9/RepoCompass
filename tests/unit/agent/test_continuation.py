@@ -107,6 +107,7 @@ def test_create_continuation_update_archives_and_resets_turn_state(
     assert update["human_decision_action"] is None
     assert update["human_feedback"] is None
     assert update["investigation_plan"] is None
+    assert update["tool_audit_records"] == []
     assert update["step_tool_call_count"] == 0
     assert update["step_explorer_call_count"] == 0
     assert update["plan_revision_count"] == 0

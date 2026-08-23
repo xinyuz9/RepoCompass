@@ -1,5 +1,6 @@
 """Security integration tests for trusted repository-root injection."""
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -16,13 +17,17 @@ from langchain_core.runnables import RunnableLambda
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
+from repocompass.tools.contracts import (
+    ToolDecisionReason,
+    decode_tool_audit_record,
+)
 from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
 
-def test_agent_uses_state_repo_path_when_tool_call_spoofs_root(
+def test_agent_rejects_tool_call_that_spoofs_repository_root(
     tmp_path: Path,
 ) -> None:
-    """A model-supplied repo_path must not override the trusted state value."""
+    """A model-supplied repo_path is invalid and must never be executed."""
 
     trusted_repo = tmp_path / "trusted"
     untrusted_repo = tmp_path / "untrusted"
@@ -74,10 +79,17 @@ def test_agent_uses_state_repo_path_when_tool_call_spoofs_root(
     tool_result = final_state["messages"][2]
 
     assert isinstance(tool_result, ToolMessage)
-    assert "TRUSTED_REPOSITORY_MARKER" in str(tool_result.content)
+    assert tool_result.status == "error"
+    assert json.loads(str(tool_result.content)) == {
+        "error": {"reason": "invalid_arguments"}
+    }
+    assert "TRUSTED_REPOSITORY_MARKER" not in str(tool_result.content)
     assert "UNTRUSTED_REPOSITORY_MARKER" not in str(tool_result.content)
     assert final_state["repo_path"] == trusted_repo.resolve()
-    assert final_state["step_tool_call_count"] == 1
+    assert final_state["step_tool_call_count"] == 0
+    assert len(final_state["tool_audit_records"]) == 1
+    audit = decode_tool_audit_record(final_state["tool_audit_records"][0])
+    assert audit.decision.reason is ToolDecisionReason.INVALID_ARGUMENTS
     assert final_state["final_result"] == expected_result
 
 

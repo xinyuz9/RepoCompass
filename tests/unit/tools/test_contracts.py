@@ -1,5 +1,6 @@
 """Contract tests for M3 tool safety and no-progress boundaries."""
 
+import json
 import pytest
 from pydantic import ValidationError
 
@@ -20,6 +21,8 @@ from repocompass.tools.contracts import (
     ToolPolicyDecision,
     ToolRiskLevel,
     ToolSideEffect,
+    decode_tool_audit_record,
+    encode_tool_audit_record,
     fingerprint_progress_snapshot,
     fingerprint_tool_call,
 )
@@ -70,6 +73,22 @@ def _decision(
     reason: ToolDecisionReason = ToolDecisionReason.ALLOWED,
 ) -> ToolPolicyDecision:
     return ToolPolicyDecision(outcome=outcome, reason=reason)
+
+
+def _audit_record() -> ToolAuditRecord:
+    return ToolAuditRecord(
+        sequence=3,
+        run_id="run-1",
+        call_id="call-1",
+        tool_name="search_text",
+        repository_id=REPOSITORY_ID,
+        commit_sha=COMMIT_SHA,
+        fingerprint=_fingerprint(),
+        decision=_decision(),
+        latency_ms=12,
+        output_bytes=128,
+        result_digest=RESULT_DIGEST,
+    )
 
 
 def test_tool_safety_vocabularies_are_closed() -> None:
@@ -378,6 +397,19 @@ def test_tool_audit_record_contains_only_bounded_metadata() -> None:
     assert ToolAuditRecord.model_validate_json(audit.model_dump_json()) == audit
     assert "arguments" not in audit.model_dump(mode="json")
     assert "output" not in audit.model_dump(mode="json")
+
+    payload = encode_tool_audit_record(audit)
+    assert isinstance(payload, dict)
+    assert decode_tool_audit_record(payload) == audit
+    assert json.loads(json.dumps(payload)) == payload
+
+
+def test_tool_audit_payload_decoder_rejects_untrusted_extra_fields() -> None:
+    audit = _audit_record()
+    payload = encode_tool_audit_record(audit)
+
+    with pytest.raises(ValueError, match="Invalid tool audit payload"):
+        decode_tool_audit_record({**payload, "authorization": "secret"})
 
 
 @pytest.mark.parametrize(

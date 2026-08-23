@@ -12,6 +12,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, ResumeRequest, RunRequest
 from repocompass.agent.trace import TraceEventKind
+from repocompass.tools.contracts import ToolDecisionReason
 from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
 
@@ -182,6 +183,7 @@ def test_runner_omits_hidden_reasoning_and_secret_metadata_from_trace(
 
 def test_runner_records_tool_loop_updates_without_extra_event_kinds(
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     (tmp_path / "auth.py").write_text(
         "def authenticate():\n    return True\n",
@@ -225,7 +227,6 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
     assert [event.node for event in node_events] == [
         "plan_investigation",
         "agent",
-        "authorize_tools",
         "tools",
         "agent",
         "build_candidate",
@@ -238,12 +239,23 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
     ]
     first_agent_message = node_events[1].payload["messages"][0]
     assert first_agent_message["tool_calls"][0]["name"] == "list_tree"
-    assert node_events[2].payload == {"step_tool_call_count": 1}
-    tool_message = node_events[3].payload["messages"][0]
+    tool_event = node_events[2]
+    assert tool_event.payload["step_tool_call_count"] == 1
+    assert tool_event.payload["step_stop_reason"] is None
+    assert len(tool_event.payload["tool_audit_records"]) == 1
+    assert tool_event.payload["tool_audit_records"][0]["run_id"] == "tool-run"
+    tool_message = tool_event.payload["messages"][0]
     assert tool_message["tool_call_id"] == "call-tree"
     assert "auth.py" in tool_message["content"]
     assert outcome.termination_status == "accepted"
     assert outcome.step_stop_reason is None
+    assert len(outcome.tool_audit_records) == 1
+    audit = outcome.tool_audit_records[0]
+    assert audit.run_id == "tool-run"
+    assert audit.call_id == "call-tree"
+    assert audit.decision.reason is ToolDecisionReason.ALLOWED
+    assert "auth.py" not in audit.model_dump_json()
+    assert "unregistered type" not in caplog.text.casefold()
 
 
 def test_runner_preserves_step_explorer_budget_step_stop_reason(

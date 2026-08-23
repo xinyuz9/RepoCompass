@@ -1,5 +1,6 @@
 """Deterministic integration tests for the RepoCompass M0 tool loop."""
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -18,6 +19,10 @@ from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
+from repocompass.tools.contracts import (
+    ToolDecisionReason,
+    decode_tool_audit_record,
+)
 from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
 AUTH_PROJECT = Path(__file__).parents[1] / "fixtures" / "auth_project"
@@ -120,12 +125,30 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
     assert tree_result.tool_call_id == "call-tree"
     assert search_result.tool_call_id == "call-search"
     assert read_result.tool_call_id == "call-read"
-    assert "app.py" in str(tree_result.content)
-    assert "auth.py" in str(tree_result.content)
-    assert "auth.py:4:def authenticate" in str(search_result.content)
-    assert "File: auth.py" in str(read_result.content)
-    assert "Lines: 1-7" in str(read_result.content)
-    assert "4 | def authenticate" in str(read_result.content)
+    tree_payload = json.loads(str(tree_result.content))
+    search_payload = json.loads(str(search_result.content))
+    read_payload = json.loads(str(read_result.content))
+    assert {"app.py", "auth.py"}.issubset(tree_payload["entries"])
+    assert any(
+        match["path"] == "auth.py"
+        and match["line"] == 4
+        and "def authenticate" in match["text"]
+        for match in search_payload["matches"]
+    )
+    assert read_payload["path"] == "auth.py"
+    assert read_payload["start_line"] == 1
+    assert read_payload["end_line"] == 7
+    assert "4 | def authenticate" in read_payload["content"]
+
+    audit_payloads = final_state["tool_audit_records"]
+    audits = [decode_tool_audit_record(payload) for payload in audit_payloads]
+    assert all(isinstance(payload, dict) for payload in audit_payloads)
+    assert [audit.call_id for audit in audits] == [
+        "call-tree",
+        "call-search",
+        "call-read",
+    ]
+    assert all(audit.decision.reason is ToolDecisionReason.ALLOWED for audit in audits)
 
     assert len(agent_inputs) == 4
     assert all(isinstance(messages[0], SystemMessage) for messages in agent_inputs)

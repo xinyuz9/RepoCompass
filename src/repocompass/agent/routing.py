@@ -66,15 +66,12 @@ def route_explorer_invocation(
 
 
 class ToolRoutingInput(MessagesState):
-    step_tool_call_count: int
-    max_tool_calls_per_step: int
+    pass
 
 
 ToolCallRoute = Literal[
-    "authorize_tools",
+    "execute_tools",
     "build_candidate",
-    "reject_tools",
-    "handle_invalid_tools",
 ]
 
 
@@ -99,12 +96,29 @@ def route_tool_calls(state: ToolRoutingInput) -> ToolCallRoute:
         if tool_call["id"] is None:
             raise ValueError("Tool call id is None")
 
-    if (
-        pending_tool_call_count + state["step_tool_call_count"]
-        > state["max_tool_calls_per_step"]
-    ):
-        return "reject_tools"
-    if last_message.invalid_tool_calls:
-        return "handle_invalid_tools"
+    return "execute_tools"
 
-    return "authorize_tools"
+
+class PostToolExecutionInput(TypedDict):
+    step_stop_reason: str | None
+    step_explorer_call_count: int
+    max_explorer_calls_per_step: int
+
+
+PostToolExecutionRoute = Literal[
+    "agent",
+    "build_candidate",
+    "step_explorer_budget_exhausted",
+]
+
+
+def route_after_tool_execution(
+    state: PostToolExecutionInput,
+) -> PostToolExecutionRoute:
+    """Stop immediately on tool budget denial, otherwise enforce Explorer budget."""
+
+    if state["step_stop_reason"] == "step_tool_call_budget_exhausted":
+        return "build_candidate"
+    if state["step_explorer_call_count"] < state["max_explorer_calls_per_step"]:
+        return "agent"
+    return "step_explorer_budget_exhausted"

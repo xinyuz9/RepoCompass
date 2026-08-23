@@ -14,8 +14,10 @@ from repocompass.agent.routing import (
     ControllerRoutingInput,
     ExplorerInvocationInput,
     ExplorerInvocationRoute,
+    PostToolExecutionRoute,
     ToolCallRoute,
     ToolRoutingInput,
+    route_after_tool_execution,
     route_controller,
     route_explorer_invocation,
     route_tool_calls,
@@ -45,31 +47,22 @@ def test_route_controller_requires_precomputed_action() -> None:
 
 def _state_for_message(
     message: AIMessage,
-    *,
-    used_tool_calls: int,
-    max_tool_calls_per_step: int,
 ) -> ToolRoutingInput:
     """Build only the state fields required for tool-call routing."""
 
     return {
         "messages": [message],
-        "step_tool_call_count": used_tool_calls,
-        "max_tool_calls_per_step": max_tool_calls_per_step,
     }
 
 
 @pytest.mark.parametrize(
     (
         "message",
-        "used_tool_calls",
-        "max_tool_calls_per_step",
         "expected_route",
     ),
     [
         pytest.param(
             AIMessage(content="Enough evidence is available."),
-            0,
-            3,
             "build_candidate",
             id="no-calls-build-candidate",
         ),
@@ -85,10 +78,8 @@ def _state_for_message(
                     )
                 ],
             ),
-            2,
-            3,
-            "authorize_tools",
-            id="exact-remaining-budget-authorizes",
+            "execute_tools",
+            id="valid-call-uses-gateway",
         ),
         pytest.param(
             AIMessage(
@@ -103,10 +94,8 @@ def _state_for_message(
                     )
                 ],
             ),
-            0,
-            3,
-            "handle_invalid_tools",
-            id="invalid-call-is-returned-for-repair",
+            "execute_tools",
+            id="invalid-call-uses-gateway",
         ),
         pytest.param(
             AIMessage(
@@ -126,25 +115,19 @@ def _state_for_message(
                     ),
                 ],
             ),
-            2,
-            3,
-            "reject_tools",
-            id="batch-over-budget-is-rejected",
+            "execute_tools",
+            id="budget-policy-belongs-to-gateway",
         ),
     ],
 )
 def test_route_tool_calls_decision_table(
     message: AIMessage,
-    used_tool_calls: int,
-    max_tool_calls_per_step: int,
     expected_route: ToolCallRoute,
 ) -> None:
     """Route each valid state according to calls, validity, and budget."""
 
     state = _state_for_message(
         message,
-        used_tool_calls=used_tool_calls,
-        max_tool_calls_per_step=max_tool_calls_per_step,
     )
 
     assert route_tool_calls(state) == expected_route
@@ -191,8 +174,6 @@ def test_route_tool_calls_rejects_missing_call_id(
 
     state = _state_for_message(
         message,
-        used_tool_calls=0,
-        max_tool_calls_per_step=3,
     )
 
     with pytest.raises(ValueError, match="Tool call id is None"):
@@ -204,8 +185,6 @@ def test_route_tool_calls_rejects_empty_history() -> None:
 
     state: ToolRoutingInput = {
         "messages": [],
-        "step_tool_call_count": 0,
-        "max_tool_calls_per_step": 3,
     }
 
     with pytest.raises(ValueError, match="Message list is empty"):
@@ -217,8 +196,6 @@ def test_route_tool_calls_requires_ai_message() -> None:
 
     state: ToolRoutingInput = {
         "messages": [HumanMessage(content="Inspect the repository.")],
-        "step_tool_call_count": 0,
-        "max_tool_calls_per_step": 3,
     }
 
     with pytest.raises(TypeError, match="Last message is not an AIMessage"):
@@ -253,3 +230,39 @@ def test_route_explorer_invocation_enforces_step_budget(
     }
 
     assert route_explorer_invocation(state) == expected_route
+
+
+@pytest.mark.parametrize(
+    ("state", "expected_route"),
+    [
+        (
+            {
+                "step_stop_reason": "step_tool_call_budget_exhausted",
+                "step_explorer_call_count": 1,
+                "max_explorer_calls_per_step": 3,
+            },
+            "build_candidate",
+        ),
+        (
+            {
+                "step_stop_reason": None,
+                "step_explorer_call_count": 1,
+                "max_explorer_calls_per_step": 3,
+            },
+            "agent",
+        ),
+        (
+            {
+                "step_stop_reason": None,
+                "step_explorer_call_count": 3,
+                "max_explorer_calls_per_step": 3,
+            },
+            "step_explorer_budget_exhausted",
+        ),
+    ],
+)
+def test_route_after_tool_execution(
+    state: dict[str, object],
+    expected_route: PostToolExecutionRoute,
+) -> None:
+    assert route_after_tool_execution(state) == expected_route

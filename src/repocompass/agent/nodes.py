@@ -1,19 +1,24 @@
 """State-mutating nodes and node factories for the RepoCompass graph."""
 
+import hashlib
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import TypedDict
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
+    AIMessage,
     AnyMessage,
     HumanMessage,
     SystemMessage,
     ToolMessage,
 )
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import MessagesState
 from langgraph.types import interrupt
+from pydantic import ValidationError
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.evaluation import (
@@ -53,6 +58,21 @@ from repocompass.agent.routing import (
     TerminationStatus,
 )
 from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
+from repocompass.tools.contracts import (
+    IDENTIFIER_PATTERN,
+    TOOL_NAME_PATTERN,
+    ToolAuditPayload,
+    ToolCallRequest,
+    ToolDecisionReason,
+    decode_tool_audit_record,
+    encode_tool_audit_record,
+)
+from repocompass.tools.gateway import (
+    ToolAuditLog,
+    ToolExecutionContext,
+    ToolGateway,
+    create_repository_tool_registry,
+)
 
 
 class PlannerInput(TypedDict):
@@ -206,112 +226,215 @@ def mark_step_explorer_budget_exhausted(
     return {"step_stop_reason": "step_explorer_budget_exhausted"}
 
 
-class ToolBudgetInput(MessagesState):
+class ToolGatewayNodeInput(MessagesState):
+    """Trusted state required to execute one model-requested tool batch."""
+
+    repo_path: Path
     step_tool_call_count: int
+    max_tool_calls_per_step: int
+    tool_audit_records: list[ToolAuditPayload]
 
 
-ToolCountUpdate = dict[str, int]
-
-
-def reserve_tool_budget(state: ToolBudgetInput) -> ToolCountUpdate:
-    """Reserve budget for every tool call in the latest AI message."""
-
-    batch_tool_call_count = len(state["messages"][-1].tool_calls)
-    return {
-        "step_tool_call_count": batch_tool_call_count + state["step_tool_call_count"]
-    }
-
-
-class ToolRejectionInput(MessagesState):
-    pass
-
-
-class ToolRejectionUpdate(TypedDict):
+class ToolGatewayNodeUpdate(TypedDict):
     messages: list[ToolMessage]
-    step_stop_reason: str
+    step_tool_call_count: int
+    step_stop_reason: str | None
+    tool_audit_records: list[ToolAuditPayload]
 
 
-def reject_pending_tool_calls(
-    state: ToolRejectionInput,
-) -> ToolRejectionUpdate:
-    """Return error messages for calls rejected by the execution budget."""
+ToolGatewayNode = Callable[
+    [ToolGatewayNodeInput, RunnableConfig],
+    ToolGatewayNodeUpdate,
+]
 
-    last_message = state["messages"][-1]
-    messages: list[ToolMessage] = []
-    for tool_call in last_message.tool_calls + last_message.invalid_tool_calls:
-        messages.append(
-            ToolMessage(
-                content=(
-                    "Tool call was not executed because the tool-call budget was "
-                    "exhausted. Answer using the available evidence."
-                ),
-                tool_call_id=tool_call["id"],
-                name=tool_call["name"],
-                status="error",
-            )
+
+def create_execute_tools_node(
+    gateway: ToolGateway | None = None,
+) -> ToolGatewayNode:
+    """Create the only Graph node authorized to execute repository tools."""
+
+    configured_gateway = gateway or ToolGateway(create_repository_tool_registry())
+
+    def execute_tools_node(
+        state: ToolGatewayNodeInput,
+        config: RunnableConfig,
+    ) -> ToolGatewayNodeUpdate:
+        """Validate, authorize, execute, normalize, and audit one tool batch."""
+
+        if not state["messages"]:
+            raise ValueError("Cannot execute tools without a pending message")
+        last_message = state["messages"][-1]
+        if not isinstance(last_message, AIMessage):
+            raise TypeError("Pending tool message must be an AIMessage")
+
+        run_id = _tool_run_id(config)
+        decoded_records = tuple(
+            decode_tool_audit_record(payload) for payload in state["tool_audit_records"]
         )
+        prior_run_records = tuple(
+            record for record in decoded_records if record.run_id == run_id
+        )
+        audit_log = ToolAuditLog(run_id, records=prior_run_records)
+        prior_run_record_count = len(prior_run_records)
+        context = ToolExecutionContext(state["repo_path"])
+        contains_invalid_call = bool(last_message.invalid_tool_calls)
+        pending_calls = [
+            *[(tool_call, True) for tool_call in last_message.invalid_tool_calls],
+            *[(tool_call, False) for tool_call in last_message.tool_calls],
+        ]
+        remaining_budget = max(
+            0,
+            state["max_tool_calls_per_step"] - state["step_tool_call_count"],
+        )
+        batch_exceeds_budget = (
+            not contains_invalid_call and len(pending_calls) > remaining_budget
+        )
+        messages: list[ToolMessage] = []
+        budget_consumed = 0
+        budget_denied = False
 
-    return {
-        "messages": messages,
-        "step_stop_reason": "step_tool_call_budget_exhausted",
-    }
+        for tool_call, is_invalid_call in pending_calls:
+            original_name = tool_call.get("name")
+            original_call_id = tool_call.get("id")
+            if original_call_id is None:
+                raise ValueError("Tool call id is None")
+            request, ingress_invalid = _bind_gateway_request(
+                context,
+                call_id=original_call_id,
+                tool_name=original_name,
+                arguments=tool_call.get("args"),
+                force_invalid=is_invalid_call,
+            )
+
+            if contains_invalid_call or ingress_invalid:
+                result = configured_gateway.reject(
+                    request,
+                    context=context,
+                    reason=ToolDecisionReason.INVALID_ARGUMENTS,
+                    audit_log=audit_log,
+                )
+            elif batch_exceeds_budget:
+                result = configured_gateway.reject(
+                    request,
+                    context=context,
+                    reason=ToolDecisionReason.BUDGET_EXHAUSTED,
+                    audit_log=audit_log,
+                )
+            else:
+                result = configured_gateway.execute(
+                    request,
+                    context=context,
+                    available_budget=remaining_budget,
+                    audit_log=audit_log,
+                )
+                remaining_budget -= result.budget_consumed
+
+            budget_consumed += result.budget_consumed
+            if result.decision.reason is ToolDecisionReason.BUDGET_EXHAUSTED:
+                budget_denied = True
+            messages.append(
+                ToolMessage(
+                    content=result.content,
+                    tool_call_id=original_call_id,
+                    name=original_name or request.tool_name,
+                    status="success" if result.succeeded else "error",
+                )
+            )
+
+        new_audit_records = [
+            encode_tool_audit_record(record)
+            for record in audit_log.records[prior_run_record_count:]
+        ]
+        return {
+            "messages": messages,
+            "step_tool_call_count": (state["step_tool_call_count"] + budget_consumed),
+            "step_stop_reason": (
+                "step_tool_call_budget_exhausted" if budget_denied else None
+            ),
+            "tool_audit_records": new_audit_records,
+        }
+
+    return execute_tools_node
 
 
-class InvalidToolBatchInput(MessagesState):
-    step_tool_call_count: int
+def _tool_run_id(config: RunnableConfig) -> str:
+    configurable = config.get("configurable", {})
+    configured_run_id = configurable.get("repocompass_run_id")
+    if isinstance(configured_run_id, str) and re.fullmatch(
+        IDENTIFIER_PATTERN,
+        configured_run_id,
+    ):
+        return configured_run_id
+    return "graph-invoke"
 
 
-class InvalidToolBatchUpdate(TypedDict):
-    messages: list[ToolMessage]
-    step_tool_call_count: int
+def _bind_gateway_request(
+    context: ToolExecutionContext,
+    *,
+    call_id: object,
+    tool_name: object,
+    arguments: object,
+    force_invalid: bool,
+) -> tuple[ToolCallRequest, bool]:
+    if not force_invalid and isinstance(arguments, dict):
+        try:
+            return (
+                context.bind_call(
+                    call_id=call_id,
+                    tool_name=tool_name,
+                    arguments=arguments,
+                ),
+                False,
+            )
+        except (TypeError, ValueError, ValidationError):
+            pass
 
-
-def handle_invalid_tool_batch(
-    state: InvalidToolBatchInput,
-) -> InvalidToolBatchUpdate:
-    """Return model-visible errors for a batch containing invalid tool calls."""
-
-    last_message = state["messages"][-1]
-    messages: list[ToolMessage] = []
-    batch_tool_call_count = len(last_message.invalid_tool_calls) + len(
-        last_message.tool_calls
+    digest = _invalid_ingress_digest(tool_name, arguments)
+    safe_call_id = _safe_gateway_identifier(call_id, prefix="invalid-call")
+    safe_tool_name = (
+        tool_name
+        if isinstance(tool_name, str) and re.fullmatch(TOOL_NAME_PATTERN, tool_name)
+        else "invalid_tool"
+    )
+    return (
+        context.bind_call(
+            call_id=safe_call_id,
+            tool_name=safe_tool_name,
+            arguments={"invalid_call_digest": digest},
+        ),
+        True,
     )
 
-    for invalid_tool_call in last_message.invalid_tool_calls:
-        error_message = (
-            invalid_tool_call["error"] or "Tool arguments could not be parsed."
-        )
-        messages.append(
-            ToolMessage(
-                content=(
-                    "Tool call was not executed because its arguments could not be "
-                    f"parsed. Parser error: {error_message} Submit a corrected tool "
-                    "call with valid JSON arguments."
-                ),
-                tool_call_id=invalid_tool_call["id"],
-                name=invalid_tool_call["name"],
-                status="error",
-            )
-        )
 
-    for tool_call in last_message.tool_calls:
-        messages.append(
-            ToolMessage(
-                content=(
-                    "Tool call was not executed because another call in the same "
-                    "batch had invalid arguments. Resubmit the complete batch with "
-                    "corrected arguments."
-                ),
-                tool_call_id=tool_call["id"],
-                name=tool_call["name"],
-                status="error",
-            )
-        )
+def _invalid_ingress_digest(tool_name: object, arguments: object) -> str:
+    hasher = hashlib.sha256()
+    hasher.update(b"repocompass:invalid-tool-call:v1\0")
+    for value in (tool_name, arguments):
+        if isinstance(value, str):
+            encoded = value.encode("utf-8", errors="backslashreplace")
+        else:
+            try:
+                encoded = json.dumps(
+                    value,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            except (TypeError, ValueError, UnicodeEncodeError):
+                encoded = type(value).__name__.encode("ascii", errors="replace")
+        hasher.update(len(encoded).to_bytes(8, byteorder="big"))
+        hasher.update(encoded)
+    return hasher.hexdigest()
 
-    return {
-        "messages": messages,
-        "step_tool_call_count": batch_tool_call_count + state["step_tool_call_count"],
-    }
+
+def _safe_gateway_identifier(value: object, *, prefix: str) -> str:
+    if isinstance(value, str) and re.fullmatch(IDENTIFIER_PATTERN, value):
+        return value
+    digest = hashlib.sha256(
+        str(value).encode("utf-8", errors="backslashreplace")
+    ).hexdigest()
+    return f"{prefix}-{digest[:24]}"
 
 
 class CandidateBuilderInput(MessagesState):

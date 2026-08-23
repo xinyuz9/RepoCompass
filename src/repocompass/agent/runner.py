@@ -37,6 +37,10 @@ from repocompass.agent.state import (
 )
 from repocompass.agent.trace import RunTrace, TraceEventKind
 from repocompass.models import WorkflowModels
+from repocompass.tools.contracts import (
+    ToolAuditRecord,
+    decode_tool_audit_record,
+)
 
 RunIdFactory = Callable[[], str]
 ThreadIdFactory = Callable[[], str]
@@ -95,10 +99,13 @@ def _normalize_identifier(value: object, *, name: str) -> str:
     return normalized
 
 
-def _thread_config(thread_id: str) -> RunnableConfig:
+def _thread_config(thread_id: str, *, run_id: str | None = None) -> RunnableConfig:
     """Build the LangGraph configuration for one checkpoint thread."""
 
-    return {"configurable": {"thread_id": thread_id}}
+    configurable = {"thread_id": thread_id}
+    if run_id is not None:
+        configurable["repocompass_run_id"] = run_id
+    return {"configurable": configurable}
 
 
 def resolve_repository_path(repo_path: Path) -> Path:
@@ -237,6 +244,7 @@ class RunOutcome:
     execution_status: ExecutionStatus = ExecutionStatus.COMPLETED
     human_review_request: HumanReviewRequest | None = None
     interrupt_id: str | None = None
+    tool_audit_records: tuple[ToolAuditRecord, ...] = ()
 
     def __post_init__(self) -> None:
         """Reject ambiguous combinations of terminal and interrupt fields."""
@@ -276,6 +284,23 @@ def _read_step_stop_reason(state: Mapping[str, object]) -> str | None:
         raise TypeError("Graph step_stop_reason is not a string or None")
 
     return step_stop_reason
+
+
+def _read_attempt_tool_audits(
+    state: Mapping[str, object],
+    *,
+    run_id: str,
+) -> tuple[ToolAuditRecord, ...]:
+    records = state.get("tool_audit_records", [])
+    if not isinstance(records, list):
+        raise TypeError("Graph tool_audit_records are invalid")
+    try:
+        decoded_records = tuple(
+            decode_tool_audit_record(payload) for payload in records
+        )
+    except ValueError as error:
+        raise TypeError("Graph tool_audit_records are invalid") from error
+    return tuple(record for record in decoded_records if record.run_id == run_id)
 
 
 def _build_interrupted_outcome(
@@ -323,6 +348,10 @@ def _build_interrupted_outcome(
         execution_status=ExecutionStatus.INTERRUPTED,
         human_review_request=review_request,
         interrupt_id=interrupt_id,
+        tool_audit_records=_read_attempt_tool_audits(
+            snapshot.values,
+            run_id=trace.run_id,
+        ),
     )
 
 
@@ -529,13 +558,13 @@ class AgentRunner:
     ) -> RunOutcome:
         """Stream one lifecycle attempt and publish its observable outcome."""
 
-        config = _thread_config(thread_id)
+        checkpoint_config = _thread_config(thread_id)
         metadata_state: Mapping[str, object]
         existing_snapshot: StateSnapshot | None = None
         if isinstance(graph_input, Mapping):
             metadata_state = graph_input
         else:
-            existing_snapshot = graph.get_state(config)
+            existing_snapshot = graph.get_state(checkpoint_config)
             metadata_state = existing_snapshot.values
 
         trace = RunTrace(
@@ -544,6 +573,7 @@ class AgentRunner:
                 name="run_id",
             )
         )
+        config = _thread_config(thread_id, run_id=trace.run_id)
         started_payload: dict[str, JsonValue] = {
             "thread_id": thread_id,
             "execution_mode": execution_mode,
@@ -635,4 +665,8 @@ class AgentRunner:
             termination_status=termination_status,
             step_stop_reason=step_stop_reason,
             trace=trace,
+            tool_audit_records=_read_attempt_tool_audits(
+                final_state,
+                run_id=trace.run_id,
+            ),
         )

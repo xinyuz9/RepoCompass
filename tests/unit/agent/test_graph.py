@@ -1,5 +1,6 @@
 """Unit tests for the compiled RepoCompass agent graph."""
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -19,6 +20,10 @@ from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
+from repocompass.tools.contracts import (
+    ToolDecisionReason,
+    decode_tool_audit_record,
+)
 from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
 
@@ -168,6 +173,10 @@ def test_graph_finalizes_when_agent_returns_tool_calls(tmp_path: Path) -> None:
     assert messages[2].tool_call_id == "call-tree"
     assert "auth.py" in str(messages[2].content)
     assert "repo_path" not in tree_call["args"]
+    audit_payloads = final_state["tool_audit_records"]
+    assert len(audit_payloads) == 1
+    audit = decode_tool_audit_record(audit_payloads[0])
+    assert audit.decision.reason is ToolDecisionReason.ALLOWED
     model.bind_tools.assert_called_once()
     model.with_structured_output.assert_called_once_with(
         CandidateResult,
@@ -233,8 +242,16 @@ def test_graph_rejects_batch_exceeding_budget_then_exhausts_revisions(
     assert second_rejection.tool_call_id == "call-search"
     assert first_rejection.status == "error"
     assert second_rejection.status == "error"
-    assert "budget was exhausted" in str(first_rejection.content)
-    assert "budget was exhausted" in str(second_rejection.content)
+    assert json.loads(str(first_rejection.content)) == {
+        "error": {"reason": "budget_exhausted"}
+    }
+    assert json.loads(str(second_rejection.content)) == {
+        "error": {"reason": "budget_exhausted"}
+    }
+    assert [
+        decode_tool_audit_record(payload).decision.reason
+        for payload in final_state["tool_audit_records"]
+    ] == [ToolDecisionReason.BUDGET_EXHAUSTED] * 2
     assert all(isinstance(message, AIMessage) for message in messages[4:])
 
 
@@ -292,7 +309,7 @@ def test_graph_handles_mixed_invalid_batch_without_executing_valid_calls(
     assert final_state["final_result"] == expected_result
     assert final_state["step_stop_reason"] is None
     assert final_state["termination_status"] == "accepted"
-    assert final_state["step_tool_call_count"] == 2
+    assert final_state["step_tool_call_count"] == 0
     assert final_state["step_explorer_call_count"] == 2
     assert len(messages) == 5
     assert isinstance(messages[0], HumanMessage)
@@ -304,11 +321,20 @@ def test_graph_handles_mixed_invalid_batch_without_executing_valid_calls(
     assert isinstance(withheld_valid_call, ToolMessage)
     assert invalid_error.tool_call_id == "call-invalid-search"
     assert invalid_error.status == "error"
-    assert "Invalid JSON arguments" in str(invalid_error.content)
+    assert json.loads(str(invalid_error.content)) == {
+        "error": {"reason": "invalid_arguments"}
+    }
+    assert "Invalid JSON arguments" not in str(invalid_error.content)
     assert withheld_valid_call.tool_call_id == "call-tree"
     assert withheld_valid_call.status == "error"
-    assert "another call in the same batch" in str(withheld_valid_call.content)
+    assert json.loads(str(withheld_valid_call.content)) == {
+        "error": {"reason": "invalid_arguments"}
+    }
     assert "auth.py" not in str(withheld_valid_call.content)
+    assert [
+        decode_tool_audit_record(payload).decision.reason
+        for payload in final_state["tool_audit_records"]
+    ] == [ToolDecisionReason.INVALID_ARGUMENTS] * 2
     assert messages[4] == corrected_response
 
 
@@ -356,7 +382,7 @@ def test_graph_returns_recoverable_tool_invocation_error_to_agent(
     assert final_state["final_result"] == expected_result
     assert final_state["step_stop_reason"] is None
     assert final_state["termination_status"] == "accepted"
-    assert final_state["step_tool_call_count"] == 1
+    assert final_state["step_tool_call_count"] == 0
     assert final_state["step_explorer_call_count"] == 2
     assert len(messages) == 4
     assert isinstance(messages[0], HumanMessage)
@@ -367,8 +393,13 @@ def test_graph_returns_recoverable_tool_invocation_error_to_agent(
     assert tool_error.name == "list_tree"
     assert tool_error.tool_call_id == "call-invalid-schema"
     assert tool_error.status == "error"
-    assert "Error invoking tool 'list_tree'" in str(tool_error.content)
-    assert "max_depth" in str(tool_error.content)
+    assert json.loads(str(tool_error.content)) == {
+        "error": {"reason": "invalid_arguments"}
+    }
+    assert "max_depth" not in str(tool_error.content)
+    assert len(final_state["tool_audit_records"]) == 1
+    audit = decode_tool_audit_record(final_state["tool_audit_records"][0])
+    assert audit.decision.reason is ToolDecisionReason.INVALID_ARGUMENTS
     assert messages[3] == recovered_response
 
 

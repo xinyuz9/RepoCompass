@@ -1,34 +1,31 @@
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
-from langgraph.prebuilt import ToolNode
 
 from repocompass.agent.nodes import (
     advance_plan_step,
     create_agent_node,
     create_build_candidate_node,
     create_evaluate_candidate_node,
+    create_execute_tools_node,
     create_plan_investigation_node,
     create_revise_plan_node,
     decide_next_action,
     finalize_candidate,
-    handle_invalid_tool_batch,
     mark_investigation_accepted,
     mark_investigation_cancelled,
     mark_investigation_exhausted,
     mark_step_explorer_budget_exhausted,
     prepare_human_review,
-    reject_pending_tool_calls,
     review_final_candidate,
-    reserve_tool_budget,
 )
 from repocompass.agent.routing import (
+    route_after_tool_execution,
     route_controller,
     route_explorer_invocation,
     route_human_decision,
     route_tool_calls,
 )
 from repocompass.agent.state import RepoCompassState
-from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
 from repocompass.models import WorkflowModels
 
 
@@ -46,10 +43,7 @@ def create_agent_graph(
         create_plan_investigation_node(models.planner),
     )
     builder.add_node("agent", create_agent_node(models.explorer))
-    builder.add_node("reject_tools", reject_pending_tool_calls)
-    builder.add_node("handle_invalid_tools", handle_invalid_tool_batch)
-    builder.add_node("authorize_tools", reserve_tool_budget)
-    builder.add_node("tools", ToolNode(REPOSITORY_TOOLS))
+    builder.add_node("tools", create_execute_tools_node())
     builder.add_node(
         "step_explorer_budget_exhausted",
         mark_step_explorer_budget_exhausted,
@@ -86,23 +80,17 @@ def create_agent_graph(
         "agent",
         route_tool_calls,
         {
-            "authorize_tools": "authorize_tools",
+            "execute_tools": "tools",
             "build_candidate": "build_candidate",
-            "reject_tools": "reject_tools",
-            "handle_invalid_tools": "handle_invalid_tools",
         },
     )
-    builder.add_edge("authorize_tools", "tools")
     builder.add_conditional_edges(
         "tools",
-        route_explorer_invocation,
-        explorer_invocation_routes,
-    )
-    builder.add_edge("reject_tools", "build_candidate")
-    builder.add_conditional_edges(
-        "handle_invalid_tools",
-        route_explorer_invocation,
-        explorer_invocation_routes,
+        route_after_tool_execution,
+        {
+            **explorer_invocation_routes,
+            "build_candidate": "build_candidate",
+        },
     )
     builder.add_edge("step_explorer_budget_exhausted", "build_candidate")
     builder.add_edge("build_candidate", "evaluate_candidate")

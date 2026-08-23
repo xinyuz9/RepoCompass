@@ -1,6 +1,7 @@
 from collections.abc import Mapping
+from operator import add
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import Annotated, TypedDict, cast
 
 from langchain_core.messages import AnyMessage, HumanMessage
 from langgraph.graph import MessagesState
@@ -19,6 +20,7 @@ from repocompass.agent.routing import (
     HumanDecisionActionValue,
     TerminationStatus,
 )
+from repocompass.tools.contracts import ToolAuditPayload
 
 
 class RepoCompassState(MessagesState):
@@ -33,6 +35,7 @@ class RepoCompassState(MessagesState):
     human_decision_action: HumanDecisionActionValue | None
     human_feedback: str | None
     investigation_plan: InvestigationPlan | None
+    tool_audit_records: Annotated[list[ToolAuditPayload], add]
 
     step_tool_call_count: int
     max_tool_calls_per_step: int
@@ -62,6 +65,7 @@ class ContinuationStateUpdate(TypedDict):
     human_decision_action: None
     human_feedback: None
     investigation_plan: None
+    tool_audit_records: list[ToolAuditPayload]
     step_tool_call_count: int
     max_tool_calls_per_step: int
     step_explorer_call_count: int
@@ -112,6 +116,7 @@ def create_initial_state(
         "human_decision_action": None,
         "human_feedback": None,
         "investigation_plan": None,
+        "tool_audit_records": [],
         "step_tool_call_count": 0,
         "max_tool_calls_per_step": max_tool_calls_per_step,
         "step_explorer_call_count": 0,
@@ -193,6 +198,7 @@ def create_continuation_update(
         "human_decision_action": None,
         "human_feedback": None,
         "investigation_plan": None,
+        "tool_audit_records": [],
         "step_tool_call_count": 0,
         "max_tool_calls_per_step": max_tool_calls,
         "step_explorer_call_count": 0,
