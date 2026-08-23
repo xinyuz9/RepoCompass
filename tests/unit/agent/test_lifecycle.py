@@ -71,7 +71,11 @@ def _review_request() -> HumanReviewRequest:
 def test_lifecycle_contract_fields_are_minimal() -> None:
     assert set(ContinueRequest.model_fields) == {"thread_id", "prompt"}
     assert set(HumanDecision.model_fields) == {"action", "feedback"}
-    assert set(HumanResponseRequest.model_fields) == {"thread_id", "decision"}
+    assert set(HumanResponseRequest.model_fields) == {
+        "thread_id",
+        "interrupt_id",
+        "decision",
+    }
     assert set(HumanReviewRequest.model_fields) == {
         "turn_number",
         "candidate_result",
@@ -169,13 +173,15 @@ def test_terminal_human_decisions_do_not_require_feedback(
     assert decision.feedback is None
 
 
-def test_human_response_binds_decision_to_thread() -> None:
+def test_human_response_binds_decision_to_thread_and_interrupt() -> None:
     response = HumanResponseRequest(
         thread_id="thread-123",
+        interrupt_id="interrupt-456",
         decision=HumanDecision(action=HumanDecisionAction.APPROVE),
     )
 
     assert response.thread_id == "thread-123"
+    assert response.interrupt_id == "interrupt-456"
     assert response.decision.action is HumanDecisionAction.APPROVE
 
 
@@ -252,6 +258,7 @@ def test_completed_outcome_preserves_existing_m1_contract() -> None:
 
     assert outcome.execution_status is ExecutionStatus.COMPLETED
     assert outcome.human_review_request is None
+    assert outcome.interrupt_id is None
     assert outcome.final_result == _final_result()
 
 
@@ -261,6 +268,7 @@ def test_interrupted_outcome_requires_review_and_omits_terminal_result() -> None
         thread_id="thread-123",
         execution_status=ExecutionStatus.INTERRUPTED,
         human_review_request=review,
+        interrupt_id="interrupt-456",
         final_result=None,
         termination_status=None,
         step_stop_reason=None,
@@ -268,26 +276,35 @@ def test_interrupted_outcome_requires_review_and_omits_terminal_result() -> None
     )
 
     assert outcome.human_review_request == review
+    assert outcome.interrupt_id == "interrupt-456"
     assert outcome.final_result is None
     assert outcome.termination_status is None
 
 
 @pytest.mark.parametrize(
-    ("execution_status", "final_result", "termination_status", "review_request"),
+    (
+        "execution_status",
+        "final_result",
+        "termination_status",
+        "review_request",
+        "interrupt_id",
+    ),
     [
-        (ExecutionStatus.COMPLETED, None, None, None),
+        (ExecutionStatus.COMPLETED, None, None, None, None),
         (
             ExecutionStatus.COMPLETED,
             _final_result(),
             "accepted",
             _review_request(),
+            None,
         ),
-        (ExecutionStatus.INTERRUPTED, None, None, None),
+        (ExecutionStatus.INTERRUPTED, None, None, None, "interrupt-1"),
         (
             ExecutionStatus.INTERRUPTED,
             _final_result(),
             "accepted",
             _review_request(),
+            "interrupt-1",
         ),
     ],
 )
@@ -296,14 +313,30 @@ def test_run_outcome_rejects_inconsistent_lifecycle_fields(
     final_result: FinalResult | None,
     termination_status: str | None,
     review_request: HumanReviewRequest | None,
+    interrupt_id: str | None,
 ) -> None:
     with pytest.raises(ValueError):
         RunOutcome(
             thread_id="thread-123",
             execution_status=execution_status,
             human_review_request=review_request,
+            interrupt_id=interrupt_id,
             final_result=final_result,
             termination_status=termination_status,
+            step_stop_reason=None,
+            trace=RunTrace("attempt-1"),
+        )
+
+
+def test_interrupted_outcome_rejects_missing_interrupt_id() -> None:
+    with pytest.raises(ValueError, match="interrupt ID"):
+        RunOutcome(
+            thread_id="thread-123",
+            execution_status=ExecutionStatus.INTERRUPTED,
+            human_review_request=_review_request(),
+            interrupt_id=None,
+            final_result=None,
+            termination_status=None,
             step_stop_reason=None,
             trace=RunTrace("attempt-1"),
         )

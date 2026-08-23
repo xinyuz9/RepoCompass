@@ -89,6 +89,7 @@ def test_runner_returns_structured_interrupt_before_terminal_nodes(
     assert outcome.thread_id == "review-thread"
     assert outcome.final_result is None
     assert outcome.termination_status is None
+    assert outcome.interrupt_id is not None
     assert outcome.human_review_request is not None
     assert outcome.human_review_request.turn_number == 1
     assert outcome.human_review_request.candidate_result == candidate_from_final_result(
@@ -98,6 +99,7 @@ def test_runner_returns_structured_interrupt_before_terminal_nodes(
 
     assert snapshot.next == ("review_final_candidate",)
     assert len(snapshot.interrupts) == 1
+    assert outcome.interrupt_id == snapshot.interrupts[0].id
     assert (
         decode_human_review_interrupt(snapshot.interrupts[0].value)
         == outcome.human_review_request
@@ -110,12 +112,11 @@ def test_runner_returns_structured_interrupt_before_terminal_nodes(
         for event in outcome.trace.events
         if event.kind is TraceEventKind.NODE_COMPLETED
     ]
-    assert node_names[-1] == "decide_next_action"
+    assert node_names[-1] == "prepare_human_review"
     assert "mark_investigation_accepted" not in node_names
     assert "finalize" not in node_names
     assert all(
-        event.kind is not TraceEventKind.RUN_FINISHED
-        for event in outcome.trace.events
+        event.kind is not TraceEventKind.RUN_FINISHED for event in outcome.trace.events
     )
 
 
@@ -146,6 +147,7 @@ def test_runner_reads_same_interrupt_after_reopening_sqlite_without_reexecution(
     assert first_outcome.execution_status is ExecutionStatus.INTERRUPTED
     assert second_outcome.execution_status is ExecutionStatus.INTERRUPTED
     assert second_outcome.thread_id == "durable-review-thread"
+    assert second_outcome.interrupt_id == first_outcome.interrupt_id
     assert second_outcome.human_review_request == first_outcome.human_review_request
     assert second_outcome.final_result is None
     assert second_outcome.termination_status is None

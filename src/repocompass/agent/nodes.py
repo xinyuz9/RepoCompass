@@ -24,8 +24,12 @@ from repocompass.agent.evaluation import (
     validate_candidate,
 )
 from repocompass.agent.lifecycle import (
+    HumanReviewInterruptPayload,
     HumanReviewPolicy,
     HumanReviewRequest,
+    allowed_human_decision_actions,
+    decode_human_decision,
+    decode_human_review_interrupt,
     encode_human_review_interrupt,
 )
 from repocompass.agent.planning import InvestigationPlan, PlanStep
@@ -43,7 +47,11 @@ from repocompass.agent.prompts import (
     REPLANNING_SYSTEM_PROMPT,
 )
 from repocompass.agent.result import FinalResult
-from repocompass.agent.routing import ControllerAction, TerminationStatus
+from repocompass.agent.routing import (
+    ControllerAction,
+    HumanDecisionActionValue,
+    TerminationStatus,
+)
 from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
 
 
@@ -590,6 +598,7 @@ class ReplannerInput(TypedDict):
     investigation_plan: InvestigationPlan | None
     candidate_result: CandidateResult | None
     evaluation_report: EvaluationReport | None
+    human_feedback: str | None
     max_tool_calls_per_step: int
     max_explorer_calls_per_step: int
     plan_revision_count: int
@@ -605,6 +614,9 @@ class ReplannerNodeUpdate(TypedDict):
     candidate_result: None
     evaluation_report: None
     next_action: None
+    human_review_payload: None
+    human_decision_action: None
+    human_feedback: None
 
 
 ReplannerNode = Callable[[ReplannerInput], ReplannerNodeUpdate]
@@ -628,6 +640,7 @@ def build_replanner_messages(state: ReplannerInput) -> list[AnyMessage]:
         HumanMessage(
             content=REPLANNING_REQUEST_TEMPLATE.format(
                 objective=state["objective"],
+                human_feedback=state["human_feedback"] or "None provided.",
                 investigation_plan=investigation_plan.model_dump_json(indent=2),
                 candidate_result=candidate.model_dump_json(indent=2),
                 evaluation_report=evaluation_report.model_dump_json(indent=2),
@@ -678,6 +691,9 @@ def create_revise_plan_node(model: BaseChatModel) -> ReplannerNode:
             "candidate_result": None,
             "evaluation_report": None,
             "next_action": None,
+            "human_review_payload": None,
+            "human_decision_action": None,
+            "human_feedback": None,
         }
 
     return revise_plan_node
@@ -703,27 +719,41 @@ def mark_investigation_exhausted(_state: TerminationInput) -> TerminationUpdate:
     return {"termination_status": "exhausted"}
 
 
-class HumanReviewNodeInput(TypedDict):
-    """State required by the optional final-candidate review gate."""
+def mark_investigation_cancelled(_state: TerminationInput) -> TerminationUpdate:
+    """Record that Human review cancelled the current turn."""
+
+    return {"termination_status": "cancelled"}
+
+
+class PrepareHumanReviewInput(TypedDict):
+    """State required to materialize a checkpoint-safe review request."""
 
     human_review_policy: HumanReviewPolicy
     turn_number: int
     candidate_result: CandidateResult | None
     evaluation_report: EvaluationReport | None
+    plan_revision_count: int
+    max_plan_revisions: int
 
 
-class HumanReviewNodeUpdate(TypedDict):
-    human_review_policy: HumanReviewPolicy
+class PrepareHumanReviewUpdate(TypedDict):
+    human_review_payload: HumanReviewInterruptPayload | None
+    human_decision_action: None
+    human_feedback: None
 
 
-def review_final_candidate(
-    state: HumanReviewNodeInput,
-) -> HumanReviewNodeUpdate:
-    """Pause before accepted finalization when the run requires Human review."""
+def prepare_human_review(
+    state: PrepareHumanReviewInput,
+) -> PrepareHumanReviewUpdate:
+    """Persist a JSON review envelope before entering the interrupting node."""
 
     policy = state["human_review_policy"]
     if policy is HumanReviewPolicy.NEVER:
-        return {"human_review_policy": policy}
+        return {
+            "human_review_payload": None,
+            "human_decision_action": None,
+            "human_feedback": None,
+        }
     if policy is not HumanReviewPolicy.BEFORE_FINALIZE:
         raise ValueError(f"Unknown human review policy: {policy!r}")
 
@@ -738,9 +768,61 @@ def review_final_candidate(
         turn_number=state["turn_number"],
         candidate_result=candidate,
         evaluation_report=evaluation_report,
+        allowed_actions=allowed_human_decision_actions(
+            state["plan_revision_count"],
+            state["max_plan_revisions"],
+        ),
     )
-    interrupt(encode_human_review_interrupt(request))
-    return {"human_review_policy": policy}
+    return {
+        "human_review_payload": encode_human_review_interrupt(request),
+        "human_decision_action": None,
+        "human_feedback": None,
+    }
+
+
+class HumanReviewNodeInput(TypedDict):
+    """State required by the optional final-candidate review gate."""
+
+    human_review_policy: HumanReviewPolicy
+    human_review_payload: HumanReviewInterruptPayload | None
+
+
+class HumanReviewNodeUpdate(TypedDict):
+    human_review_policy: HumanReviewPolicy
+    human_decision_action: HumanDecisionActionValue
+    human_feedback: str | None
+
+
+def review_final_candidate(
+    state: HumanReviewNodeInput,
+) -> HumanReviewNodeUpdate:
+    """Pause for a versioned decision before accepted finalization."""
+
+    policy = state["human_review_policy"]
+    if policy is HumanReviewPolicy.NEVER:
+        return {
+            "human_review_policy": policy,
+            "human_decision_action": "approve",
+            "human_feedback": None,
+        }
+    if policy is not HumanReviewPolicy.BEFORE_FINALIZE:
+        raise ValueError(f"Unknown human review policy: {policy!r}")
+
+    payload = state["human_review_payload"]
+    if payload is None:
+        raise ValueError("Cannot request Human review without a prepared payload")
+    review_request = decode_human_review_interrupt(payload)
+    decision = decode_human_decision(interrupt(payload))
+    if decision.action not in review_request.allowed_actions:
+        raise ValueError(
+            f"Human decision action is not allowed: {decision.action.value}"
+        )
+
+    return {
+        "human_review_policy": policy,
+        "human_decision_action": decision.action.value,
+        "human_feedback": decision.feedback,
+    }
 
 
 class FinalizerInput(TypedDict):

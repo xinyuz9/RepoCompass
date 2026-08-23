@@ -78,6 +78,7 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         TraceEventKind.NODE_COMPLETED,
         TraceEventKind.NODE_COMPLETED,
         TraceEventKind.NODE_COMPLETED,
+        TraceEventKind.NODE_COMPLETED,
         TraceEventKind.RUN_FINISHED,
     ]
     assert [event.node for event in events] == [
@@ -87,6 +88,7 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         "build_candidate",
         "evaluate_candidate",
         "decide_next_action",
+        "prepare_human_review",
         "review_final_candidate",
         "mark_investigation_accepted",
         "finalize",
@@ -112,9 +114,18 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
     assert events[4].payload["evaluation_report"]["passed"] is True
     assert events[4].payload["evaluation_report"]["deterministic_issues"] == []
     assert events[5].payload == {"next_action": "accepted"}
-    assert events[6].payload == {"human_review_policy": "never"}
-    assert events[7].payload == {"termination_status": "accepted"}
-    assert events[8].payload["final_result"] == final_result.model_dump(mode="json")
+    assert events[6].payload == {
+        "human_review_payload": None,
+        "human_decision_action": None,
+        "human_feedback": None,
+    }
+    assert events[7].payload == {
+        "human_review_policy": "never",
+        "human_decision_action": "approve",
+        "human_feedback": None,
+    }
+    assert events[8].payload == {"termination_status": "accepted"}
+    assert events[9].payload["final_result"] == final_result.model_dump(mode="json")
     assert events[-1].payload == {
         "termination_status": "accepted",
         "step_stop_reason": None,
@@ -173,6 +184,7 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
         "build_candidate",
         "evaluate_candidate",
         "decide_next_action",
+        "prepare_human_review",
         "review_final_candidate",
         "mark_investigation_accepted",
         "finalize",
@@ -292,9 +304,7 @@ def test_runner_reads_completed_result_when_resuming_finished_thread(
     )
 
     initial_outcome = runner.run(request)
-    resumed_outcome = runner.resume(
-        ResumeRequest(thread_id=initial_outcome.thread_id)
-    )
+    resumed_outcome = runner.resume(ResumeRequest(thread_id=initial_outcome.thread_id))
 
     assert resumed_outcome.thread_id == "persisted-thread"
     assert resumed_outcome.trace.run_id == "resume-attempt"

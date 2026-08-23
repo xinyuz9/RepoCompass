@@ -269,6 +269,7 @@ def test_replanner_preserves_completed_steps_and_resets_execution_state() -> Non
         "investigation_plan": current_plan,
         "candidate_result": candidate,
         "evaluation_report": report,
+        "human_feedback": None,
         "max_tool_calls_per_step": 6,
         "max_explorer_calls_per_step": 3,
         "plan_revision_count": 0,
@@ -286,9 +287,13 @@ def test_replanner_preserves_completed_steps_and_resets_execution_state() -> Non
         "candidate_result": None,
         "evaluation_report": None,
         "next_action": None,
+        "human_review_payload": None,
+        "human_decision_action": None,
+        "human_feedback": None,
     }
     assert len(received_messages[0]) == 2
     prompt = str(received_messages[0][1].content)
+    assert "None provided." in prompt
     assert current_plan.active_step.objective in prompt
     assert candidate.summary in prompt
     assert report.semantic_assessment.summary in prompt
@@ -336,6 +341,7 @@ def test_replanner_rejects_a_revision_that_changes_completed_steps() -> None:
             unresolved_questions=["What implements the behavior?"],
         ),
         "evaluation_report": _report(step_completed=False),
+        "human_feedback": None,
         "max_tool_calls_per_step": 4,
         "max_explorer_calls_per_step": 3,
         "plan_revision_count": 0,
@@ -357,6 +363,7 @@ def test_replanner_rejects_exhausted_revision_budget_before_model_call() -> None
             unresolved_questions=["What implements the behavior?"],
         ),
         "evaluation_report": _report(step_completed=False),
+        "human_feedback": None,
         "max_tool_calls_per_step": 4,
         "max_explorer_calls_per_step": 3,
         "plan_revision_count": 2,

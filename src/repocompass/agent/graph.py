@@ -13,8 +13,10 @@ from repocompass.agent.nodes import (
     finalize_candidate,
     handle_invalid_tool_batch,
     mark_investigation_accepted,
+    mark_investigation_cancelled,
     mark_investigation_exhausted,
     mark_step_explorer_budget_exhausted,
+    prepare_human_review,
     reject_pending_tool_calls,
     review_final_candidate,
     reserve_tool_budget,
@@ -22,6 +24,7 @@ from repocompass.agent.nodes import (
 from repocompass.agent.routing import (
     route_controller,
     route_explorer_invocation,
+    route_human_decision,
     route_tool_calls,
 )
 from repocompass.agent.state import RepoCompassState
@@ -63,7 +66,9 @@ def create_agent_graph(
     builder.add_node("advance_plan_step", advance_plan_step)
     builder.add_node("revise_plan", create_revise_plan_node(models.planner))
     builder.add_node("mark_investigation_accepted", mark_investigation_accepted)
+    builder.add_node("mark_investigation_cancelled", mark_investigation_cancelled)
     builder.add_node("mark_investigation_exhausted", mark_investigation_exhausted)
+    builder.add_node("prepare_human_review", prepare_human_review)
     builder.add_node("review_final_candidate", review_final_candidate)
     builder.add_node("finalize", finalize_candidate)
 
@@ -106,7 +111,7 @@ def create_agent_graph(
         "decide_next_action",
         route_controller,
         {
-            "accepted": "review_final_candidate",
+            "accepted": "prepare_human_review",
             "continue_step": "agent",
             "advance_step": "advance_plan_step",
             "revise_plan": "revise_plan",
@@ -115,8 +120,18 @@ def create_agent_graph(
     )
     builder.add_edge("advance_plan_step", "agent")
     builder.add_edge("revise_plan", "agent")
-    builder.add_edge("review_final_candidate", "mark_investigation_accepted")
+    builder.add_edge("prepare_human_review", "review_final_candidate")
+    builder.add_conditional_edges(
+        "review_final_candidate",
+        route_human_decision,
+        {
+            "approve": "mark_investigation_accepted",
+            "revise": "revise_plan",
+            "cancel": "mark_investigation_cancelled",
+        },
+    )
     builder.add_edge("mark_investigation_accepted", "finalize")
+    builder.add_edge("mark_investigation_cancelled", "finalize")
     builder.add_edge("mark_investigation_exhausted", "finalize")
     builder.add_edge("finalize", END)
 

@@ -186,6 +186,9 @@ Current candidate:
 Evaluation report:
 {evaluation_report}
 
+Human revision feedback (if provided):
+{human_feedback}
+
 Plan revisions already used:
 {plan_revision_count}
 

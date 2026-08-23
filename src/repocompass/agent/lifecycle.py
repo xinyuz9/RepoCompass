@@ -4,7 +4,14 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Literal, TypedDict, cast
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    ValidationError,
+    model_validator,
+)
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.evaluation import EvaluationReport
@@ -36,12 +43,20 @@ class ExecutionStatus(StrEnum):
 
 HUMAN_REVIEW_INTERRUPT_KIND = "human_review"
 HUMAN_REVIEW_INTERRUPT_SCHEMA_VERSION = 1
+HUMAN_DECISION_KIND = "human_decision"
+HUMAN_DECISION_SCHEMA_VERSION = 1
 
 
 class HumanReviewInterruptPayload(TypedDict):
     kind: Literal["human_review"]
     schema_version: Literal[1]
     request: dict[str, JsonValue]
+
+
+class HumanDecisionPayload(TypedDict):
+    kind: Literal["human_decision"]
+    schema_version: Literal[1]
+    decision: dict[str, JsonValue]
 
 
 class _LifecycleModel(BaseModel):
@@ -96,6 +111,10 @@ class HumanResponseRequest(_LifecycleModel):
         min_length=1,
         description="Checkpoint thread currently paused at human review.",
     )
+    interrupt_id: str = Field(
+        min_length=1,
+        description="Exact pending interrupt consumed by this response.",
+    )
     decision: HumanDecision
 
 
@@ -118,11 +137,23 @@ class HumanReviewRequest(_LifecycleModel):
     )
 
     @model_validator(mode="after")
-    def require_complete_action_vocabulary(self) -> "HumanReviewRequest":
-        """Prevent persisted payloads from changing the deterministic action set."""
+    def require_canonical_action_vocabulary(self) -> "HumanReviewRequest":
+        """Allow budget-aware actions without permitting tampered vocabularies."""
 
-        if self.allowed_actions != tuple(HumanDecisionAction):
-            raise ValueError("allowed_actions must contain the complete action vocabulary")
+        action_set = set(self.allowed_actions)
+        required_actions = {
+            HumanDecisionAction.APPROVE,
+            HumanDecisionAction.CANCEL,
+        }
+        canonical_actions = tuple(
+            action for action in HumanDecisionAction if action in action_set
+        )
+        if (
+            not required_actions.issubset(action_set)
+            or len(action_set) != len(self.allowed_actions)
+            or self.allowed_actions != canonical_actions
+        ):
+            raise ValueError("allowed_actions is not a canonical review action set")
 
         return self
 
@@ -140,6 +171,31 @@ class TurnRecord(_LifecycleModel):
     )
     final_result: FinalResult
     termination_status: TerminationStatus
+
+
+def allowed_human_decision_actions(
+    plan_revision_count: int,
+    max_plan_revisions: int,
+) -> tuple[HumanDecisionAction, ...]:
+    """Return the actions valid under the current revision budget."""
+
+    counters = (plan_revision_count, max_plan_revisions)
+    if any(not isinstance(value, int) or isinstance(value, bool) for value in counters):
+        raise ValueError("Human-review revision counters must be integers")
+    if (
+        plan_revision_count < 0
+        or max_plan_revisions < 1
+        or plan_revision_count > max_plan_revisions
+    ):
+        raise ValueError("Human-review revision counters are invalid")
+
+    if plan_revision_count < max_plan_revisions:
+        return tuple(HumanDecisionAction)
+
+    return (
+        HumanDecisionAction.APPROVE,
+        HumanDecisionAction.CANCEL,
+    )
 
 
 def encode_human_review_interrupt(
@@ -187,6 +243,51 @@ def decode_human_review_interrupt(value: object) -> HumanReviewRequest:
     try:
         return HumanReviewRequest.model_validate(
             dict(encoded_request),
+            strict=False,
+        )
+    except ValidationError as error:
+        raise ValueError(f"{error_message}: {error}") from error
+
+
+def encode_human_decision(decision: HumanDecision) -> HumanDecisionPayload:
+    """Encode one validated Human decision for ``Command(resume=...)``."""
+
+    return {
+        "kind": HUMAN_DECISION_KIND,
+        "schema_version": HUMAN_DECISION_SCHEMA_VERSION,
+        "decision": cast(
+            dict[str, JsonValue],
+            decision.model_dump(mode="json", exclude_computed_fields=True),
+        ),
+    }
+
+
+def decode_human_decision(value: object) -> HumanDecision:
+    """Validate one untrusted value returned from the Graph interrupt."""
+
+    error_message = "Invalid human-decision payload"
+    if not isinstance(value, Mapping):
+        raise ValueError(error_message)
+    if set(value) != {"kind", "schema_version", "decision"}:
+        raise ValueError(error_message)
+    if value.get("kind") != HUMAN_DECISION_KIND:
+        raise ValueError(error_message)
+
+    schema_version = value.get("schema_version")
+    if (
+        not isinstance(schema_version, int)
+        or isinstance(schema_version, bool)
+        or schema_version != HUMAN_DECISION_SCHEMA_VERSION
+    ):
+        raise ValueError(error_message)
+
+    encoded_decision = value.get("decision")
+    if not isinstance(encoded_decision, Mapping):
+        raise ValueError(error_message)
+
+    try:
+        return HumanDecision.model_validate(
+            dict(encoded_decision),
             strict=False,
         )
     except ValidationError as error:

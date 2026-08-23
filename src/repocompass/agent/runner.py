@@ -14,16 +14,18 @@ from uuid import uuid4
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.types import StateSnapshot
+from langgraph.types import Command, StateSnapshot
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.lifecycle import (
     ContinueRequest,
     ExecutionStatus,
+    HumanResponseRequest,
     HumanReviewPolicy,
     HumanReviewRequest,
     decode_human_review_interrupt,
+    encode_human_decision,
 )
 from repocompass.agent.result import FinalResult
 from repocompass.agent.routing import TerminationStatus
@@ -37,7 +39,7 @@ from repocompass.models import WorkflowModels
 
 RunIdFactory = Callable[[], str]
 ThreadIdFactory = Callable[[], str]
-ExecutionMode = Literal["start", "resume", "continue"]
+ExecutionMode = Literal["start", "resume", "continue", "respond"]
 DEFAULT_MAX_TOOL_CALLS_PER_STEP = 16
 DEFAULT_MAX_EXPLORER_CALLS_PER_STEP = 12
 DEFAULT_MAX_PLAN_REVISIONS = 2
@@ -134,8 +136,7 @@ class RunRequest(BaseModel):
             active plan step.
         max_plan_revisions: Positive global budget for model-based plan
             revisions.
-        human_review_policy: Optional review gate. M2.1 defines the contract,
-            while M2.3 will connect it to a Graph interrupt.
+        human_review_policy: Optional final-candidate review gate.
     """
 
     model_config = ConfigDict(
@@ -171,11 +172,12 @@ class RunOutcome:
     Attributes:
         thread_id: Stable checkpoint identity of the logical investigation.
         final_result: Structured report for a completed attempt, otherwise None.
-        termination_status: Final accepted or exhausted status, otherwise None.
+        termination_status: Final accepted, exhausted, or cancelled status.
         step_stop_reason: Reason the final active step stopped exploring, if any.
         trace: Ordered local domain trace for this run.
         execution_status: Whether this attempt completed or paused at review.
         human_review_request: Pending public review payload when interrupted.
+        interrupt_id: Exact pending interrupt identity when interrupted.
 
     ``RunOutcome`` deliberately omits the complete RepoCompassState so persistent
     message history and internal orchestration data do not become public API.
@@ -188,6 +190,7 @@ class RunOutcome:
     trace: RunTrace
     execution_status: ExecutionStatus = ExecutionStatus.COMPLETED
     human_review_request: HumanReviewRequest | None = None
+    interrupt_id: str | None = None
 
     def __post_init__(self) -> None:
         """Reject ambiguous combinations of terminal and interrupt fields."""
@@ -201,13 +204,15 @@ class RunOutcome:
                 raise ValueError(
                     "Completed outcome must not contain a human review request"
                 )
+            if self.interrupt_id is not None:
+                raise ValueError("Completed outcome must not contain an interrupt ID")
             return
 
         if self.execution_status is ExecutionStatus.INTERRUPTED:
             if self.human_review_request is None:
-                raise ValueError(
-                    "Interrupted outcome requires a human review request"
-                )
+                raise ValueError("Interrupted outcome requires a human review request")
+            if not self.interrupt_id:
+                raise ValueError("Interrupted outcome requires an interrupt ID")
             if self.final_result is not None or self.termination_status is not None:
                 raise ValueError(
                     "Interrupted outcome must not contain terminal result fields"
@@ -255,6 +260,10 @@ def _build_interrupted_outcome(
         execution_status=ExecutionStatus.INTERRUPTED,
         human_review_request=decode_human_review_interrupt(
             snapshot.interrupts[0].value
+        ),
+        interrupt_id=_normalize_identifier(
+            snapshot.interrupts[0].id,
+            name="interrupt_id",
         ),
     )
 
@@ -369,6 +378,56 @@ class AgentRunner:
             execution_mode="resume",
         )
 
+    def respond(self, request: HumanResponseRequest) -> RunOutcome:
+        """Consume one exact pending Human-review interrupt."""
+
+        thread_id = _normalize_identifier(request.thread_id, name="thread_id")
+        graph = create_agent_graph(
+            self._models,
+            checkpointer=self._checkpointer,
+        )
+        config = _thread_config(thread_id)
+        snapshot = graph.get_state(config)
+        if not snapshot.values:
+            raise ValueError(f"Checkpoint thread does not exist: {thread_id}")
+        if not snapshot.interrupts:
+            raise ValueError(
+                f"Checkpoint thread is not awaiting a Human response: {thread_id}"
+            )
+        if len(snapshot.interrupts) != 1:
+            raise ValueError(
+                "Checkpoint thread has an unsupported number of interrupts: "
+                f"{len(snapshot.interrupts)}"
+            )
+
+        pending_interrupt = snapshot.interrupts[0]
+        pending_interrupt_id = _normalize_identifier(
+            pending_interrupt.id,
+            name="interrupt_id",
+        )
+        response_interrupt_id = _normalize_identifier(
+            request.interrupt_id,
+            name="interrupt_id",
+        )
+        if response_interrupt_id != pending_interrupt_id:
+            raise ValueError(
+                "Human response interrupt ID does not match the pending interrupt"
+            )
+
+        review_request = decode_human_review_interrupt(pending_interrupt.value)
+        if request.decision.action not in review_request.allowed_actions:
+            raise ValueError(
+                "Human decision action is not allowed by the pending review: "
+                f"{request.decision.action.value}"
+            )
+
+        return self._execute_graph(
+            graph,
+            Command(resume=encode_human_decision(request.decision)),
+            thread_id=thread_id,
+            execution_mode="respond",
+        )
+
     def continue_thread(self, request: ContinueRequest) -> RunOutcome:
         """Start a new Human turn on one completed checkpoint thread."""
 
@@ -403,7 +462,7 @@ class AgentRunner:
     def _execute_graph(
         self,
         graph: CompiledStateGraph,
-        graph_input: RepoCompassState | None,
+        graph_input: RepoCompassState | Command | None,
         *,
         thread_id: str,
         execution_mode: ExecutionMode,
@@ -413,7 +472,7 @@ class AgentRunner:
         config = _thread_config(thread_id)
         metadata_state: Mapping[str, object]
         existing_snapshot: StateSnapshot | None = None
-        if graph_input is not None:
+        if isinstance(graph_input, Mapping):
             metadata_state = graph_input
         else:
             existing_snapshot = graph.get_state(config)
@@ -444,7 +503,11 @@ class AgentRunner:
             },
         )
 
-        if existing_snapshot is not None and existing_snapshot.interrupts:
+        if (
+            graph_input is None
+            and existing_snapshot is not None
+            and existing_snapshot.interrupts
+        ):
             return _build_interrupted_outcome(
                 existing_snapshot,
                 thread_id=thread_id,
@@ -489,7 +552,7 @@ class AgentRunner:
             raise ValueError("Graph finished without a FinalResult")
 
         termination_status = final_state.get("termination_status")
-        if termination_status not in ("accepted", "exhausted"):
+        if termination_status not in ("accepted", "exhausted", "cancelled"):
             raise ValueError("Graph finished without a termination status")
 
         trace.record(

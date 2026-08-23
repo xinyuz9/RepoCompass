@@ -7,10 +7,18 @@ from langgraph.graph import MessagesState
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.evaluation import EvaluationReport
-from repocompass.agent.lifecycle import HumanReviewPolicy, TurnRecord
+from repocompass.agent.lifecycle import (
+    HumanReviewInterruptPayload,
+    HumanReviewPolicy,
+    TurnRecord,
+)
 from repocompass.agent.planning import InvestigationPlan
 from repocompass.agent.result import FinalResult
-from repocompass.agent.routing import ControllerAction, TerminationStatus
+from repocompass.agent.routing import (
+    ControllerAction,
+    HumanDecisionActionValue,
+    TerminationStatus,
+)
 
 
 class RepoCompassState(MessagesState):
@@ -21,6 +29,9 @@ class RepoCompassState(MessagesState):
     turn_number: int
     turn_history: list[TurnRecord]
     human_review_policy: HumanReviewPolicy
+    human_review_payload: HumanReviewInterruptPayload | None
+    human_decision_action: HumanDecisionActionValue | None
+    human_feedback: str | None
     investigation_plan: InvestigationPlan | None
 
     step_tool_call_count: int
@@ -47,6 +58,9 @@ class ContinuationStateUpdate(TypedDict):
     turn_number: int
     turn_history: list[TurnRecord]
     human_review_policy: HumanReviewPolicy
+    human_review_payload: None
+    human_decision_action: None
+    human_feedback: None
     investigation_plan: None
     step_tool_call_count: int
     max_tool_calls_per_step: int
@@ -94,6 +108,9 @@ def create_initial_state(
         "turn_number": 1,
         "turn_history": [],
         "human_review_policy": human_review_policy,
+        "human_review_payload": None,
+        "human_decision_action": None,
+        "human_feedback": None,
         "investigation_plan": None,
         "step_tool_call_count": 0,
         "max_tool_calls_per_step": max_tool_calls_per_step,
@@ -125,6 +142,7 @@ def create_continuation_update(
     if not isinstance(final_result, FinalResult) or termination_status not in (
         "accepted",
         "exhausted",
+        "cancelled",
     ):
         raise ValueError("Continuation requires a completed turn")
 
@@ -171,6 +189,9 @@ def create_continuation_update(
         "turn_number": turn_number + 1,
         "turn_history": [*turn_history, archived_turn],
         "human_review_policy": human_review_policy,
+        "human_review_payload": None,
+        "human_decision_action": None,
+        "human_feedback": None,
         "investigation_plan": None,
         "step_tool_call_count": 0,
         "max_tool_calls_per_step": max_tool_calls,

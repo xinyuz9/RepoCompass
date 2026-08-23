@@ -103,6 +103,9 @@ def test_create_continuation_update_archives_and_resets_turn_state(
     assert len(update["messages"]) == 1
     assert isinstance(update["messages"][0], HumanMessage)
     assert update["messages"][0].content == "Second objective"
+    assert update["human_review_payload"] is None
+    assert update["human_decision_action"] is None
+    assert update["human_feedback"] is None
     assert update["investigation_plan"] is None
     assert update["step_tool_call_count"] == 0
     assert update["step_explorer_call_count"] == 0
@@ -113,6 +116,24 @@ def test_create_continuation_update_archives_and_resets_turn_state(
     assert update["evaluation_report"] is None
     assert update["next_action"] is None
     assert update["final_result"] is None
+
+
+def test_create_continuation_update_accepts_cancelled_turn(tmp_path: Path) -> None:
+    result = _result("partial.py", "Best effort result.")
+    state = create_initial_state(tmp_path, "Cancelled objective", 2, 2)
+    state["termination_status"] = "cancelled"
+    state["final_result"] = result
+
+    update = create_continuation_update(state, "Follow-up objective")
+
+    assert update["turn_history"] == [
+        TurnRecord(
+            turn_number=1,
+            objective="Cancelled objective",
+            final_result=result,
+            termination_status="cancelled",
+        )
+    ]
 
 
 @pytest.mark.parametrize(
@@ -233,9 +254,7 @@ def test_continuation_does_not_modify_another_thread(tmp_path: Path) -> None:
     first_result = _result("one.py", "Thread one, turn one.")
     isolated_result = _result("two.py", "Thread two.")
     continued_result = _result("three.py", "Thread one, turn two.")
-    models, _ = _sequential_models(
-        [first_result, isolated_result, continued_result]
-    )
+    models, _ = _sequential_models([first_result, isolated_result, continued_result])
     checkpointer = InMemorySaver()
     thread_ids = iter(["thread-one", "thread-two"])
     runner = AgentRunner(

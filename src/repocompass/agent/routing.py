@@ -12,7 +12,8 @@ ControllerAction = Literal[
     "revise_plan",
     "exhausted",
 ]
-TerminationStatus = Literal["accepted", "exhausted"]
+HumanDecisionActionValue = Literal["approve", "revise", "cancel"]
+TerminationStatus = Literal["accepted", "exhausted", "cancelled"]
 
 
 class ControllerRoutingInput(TypedDict):
@@ -27,6 +28,22 @@ def route_controller(state: ControllerRoutingInput) -> ControllerAction:
         raise ValueError("Controller did not select a next action")
 
     return next_action
+
+
+class HumanDecisionRoutingInput(TypedDict):
+    human_decision_action: HumanDecisionActionValue | None
+
+
+def route_human_decision(
+    state: HumanDecisionRoutingInput,
+) -> HumanDecisionActionValue:
+    """Route only the validated action returned by the review node."""
+
+    action = state["human_decision_action"]
+    if action is None:
+        raise ValueError("Human decision action is missing")
+
+    return action
 
 
 class ExplorerInvocationInput(TypedDict):

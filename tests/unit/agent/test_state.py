@@ -18,6 +18,9 @@ def test_create_initial_state_sets_required_fields(tmp_path: Path) -> None:
     assert state["messages"][0].content == objective
     assert state["repo_path"] == tmp_path.resolve()
     assert state["objective"] == objective
+    assert state["human_review_payload"] is None
+    assert state["human_decision_action"] is None
+    assert state["human_feedback"] is None
     assert state["investigation_plan"] is None
     assert state["step_tool_call_count"] == 0
     assert state["max_tool_calls_per_step"] == 3
