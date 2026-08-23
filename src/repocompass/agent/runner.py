@@ -18,19 +18,24 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.lifecycle import (
+    ContinueRequest,
     ExecutionStatus,
     HumanReviewPolicy,
     HumanReviewRequest,
 )
 from repocompass.agent.result import FinalResult
 from repocompass.agent.routing import TerminationStatus
-from repocompass.agent.state import RepoCompassState, create_initial_state
+from repocompass.agent.state import (
+    RepoCompassState,
+    create_continuation_update,
+    create_initial_state,
+)
 from repocompass.agent.trace import RunTrace, TraceEventKind
 from repocompass.models import WorkflowModels
 
 RunIdFactory = Callable[[], str]
 ThreadIdFactory = Callable[[], str]
-ExecutionMode = Literal["start", "resume"]
+ExecutionMode = Literal["start", "resume", "continue"]
 DEFAULT_MAX_TOOL_CALLS_PER_STEP = 16
 DEFAULT_MAX_EXPLORER_CALLS_PER_STEP = 12
 DEFAULT_MAX_PLAN_REVISIONS = 2
@@ -318,6 +323,37 @@ class AgentRunner:
             None,
             thread_id=thread_id,
             execution_mode="resume",
+        )
+
+    def continue_thread(self, request: ContinueRequest) -> RunOutcome:
+        """Start a new Human turn on one completed checkpoint thread."""
+
+        thread_id = _normalize_identifier(request.thread_id, name="thread_id")
+        graph = create_agent_graph(
+            self._models,
+            checkpointer=self._checkpointer,
+        )
+        config = _thread_config(thread_id)
+        snapshot = graph.get_state(config)
+        if not snapshot.values:
+            raise ValueError(f"Checkpoint thread does not exist: {thread_id}")
+        if snapshot.next or snapshot.interrupts:
+            raise ValueError(f"Checkpoint thread is not completed: {thread_id}")
+
+        continuation_update = create_continuation_update(
+            snapshot.values,
+            request.prompt,
+        )
+        graph.update_state(
+            config,
+            continuation_update,
+            as_node="__start__",
+        )
+        return self._execute_graph(
+            graph,
+            None,
+            thread_id=thread_id,
+            execution_mode="continue",
         )
 
     def _execute_graph(
