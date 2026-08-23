@@ -23,6 +23,22 @@ from repocompass.agent.evaluation import (
 from repocompass.agent.lifecycle import HumanReviewPolicy, TurnRecord
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.result import FinalResult
+from repocompass.tools.contracts import (
+    NoProgressAction,
+    NoProgressDecision,
+    NoProgressReason,
+    ProgressSnapshot,
+    ToolAuditRecord,
+    ToolCallFingerprint,
+    ToolCallRequest,
+    ToolCapability,
+    ToolDecisionOutcome,
+    ToolDecisionReason,
+    ToolDescriptor,
+    ToolPolicyDecision,
+    ToolRiskLevel,
+    ToolSideEffect,
+)
 
 
 _CHECKPOINT_MODEL_TYPES: tuple[type[BaseModel], ...] = (
@@ -35,10 +51,24 @@ _CHECKPOINT_MODEL_TYPES: tuple[type[BaseModel], ...] = (
     PlanStep,
     FinalResult,
     TurnRecord,
+    ToolDescriptor,
+    ToolCallRequest,
+    ToolCallFingerprint,
+    ToolPolicyDecision,
+    ToolAuditRecord,
+    ProgressSnapshot,
+    NoProgressDecision,
 )
 _CHECKPOINT_ALLOWED_TYPES: tuple[type[object], ...] = (
     *_CHECKPOINT_MODEL_TYPES,
     HumanReviewPolicy,
+    ToolCapability,
+    ToolSideEffect,
+    ToolRiskLevel,
+    ToolDecisionOutcome,
+    ToolDecisionReason,
+    NoProgressAction,
+    NoProgressReason,
 )
 
 

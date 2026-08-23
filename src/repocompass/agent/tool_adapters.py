@@ -1,4 +1,6 @@
+from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 from typing import Annotated
 
 from langchain_core.tools import tool
@@ -7,6 +9,12 @@ from langgraph.prebuilt import InjectedState
 from repocompass.tools.repository import list_tree as list_tree_impl
 from repocompass.tools.repository import read_code as read_code_impl
 from repocompass.tools.repository import search_text as search_text_impl
+from repocompass.tools.contracts import (
+    ToolCapability,
+    ToolDescriptor,
+    ToolRiskLevel,
+    ToolSideEffect,
+)
 
 MAX_LIST_TREE_ENTRIES = 200
 MAX_SEARCH_TEXT_RESULT = 100
@@ -92,4 +100,39 @@ REPOSITORY_TOOLS = (
     list_tree_tool,
     search_text_tool,
     read_code_tool,
+)
+
+REPOSITORY_TOOL_DESCRIPTORS: Mapping[str, ToolDescriptor] = MappingProxyType(
+    {
+        descriptor.name: descriptor
+        for descriptor in (
+            ToolDescriptor(
+                name="list_tree",
+                capabilities=(ToolCapability.FILESYSTEM_READ,),
+                side_effect=ToolSideEffect.READ_ONLY,
+                risk_level=ToolRiskLevel.LOW,
+                timeout_ms=5_000,
+                max_output_bytes=65_536,
+                cacheable=True,
+            ),
+            ToolDescriptor(
+                name="search_text",
+                capabilities=(ToolCapability.FILESYSTEM_READ,),
+                side_effect=ToolSideEffect.READ_ONLY,
+                risk_level=ToolRiskLevel.LOW,
+                timeout_ms=6_000,
+                max_output_bytes=65_536,
+                cacheable=True,
+            ),
+            ToolDescriptor(
+                name="read_code",
+                capabilities=(ToolCapability.FILESYSTEM_READ,),
+                side_effect=ToolSideEffect.READ_ONLY,
+                risk_level=ToolRiskLevel.LOW,
+                timeout_ms=5_000,
+                max_output_bytes=131_072,
+                cacheable=True,
+            ),
+        )
+    }
 )
