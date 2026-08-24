@@ -9,11 +9,18 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
 
 from repocompass.agent.context import RawArtifactKind
+from repocompass.agent.cost import (
+    CostBudgetReason,
+    CostBudgetStatus,
+    ModelPrice,
+    create_pricing_table,
+)
 from repocompass.agent.context_gathering import (
     gather_planner_context,
     render_model_context,
 )
 from repocompass.agent.invocation import (
+    CostBudgetExceededError,
     ModelIdentity,
     RawRunRecorder,
     describe_model,
@@ -300,3 +307,78 @@ def test_model_identity_uses_explicit_non_secret_adapter_metadata() -> None:
         provider="deepseek",
         model="deepseek-v4-flash",
     )
+
+
+def test_recorder_blocks_a_second_call_after_post_response_budget_overshoot(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "raw.sqlite"
+    pricing = create_pricing_table(
+        version="test-v1",
+        effective_from="2026-08-24",
+        entries=(
+            ModelPrice(
+                provider="openai",
+                model="gpt-test",
+                input_usd_per_million_tokens="2.5",
+                output_usd_per_million_tokens="10",
+            ),
+        ),
+    )
+    response = AIMessage(
+        content="paid response",
+        usage_metadata={
+            "input_tokens": 100,
+            "output_tokens": 25,
+            "total_tokens": 125,
+        },
+    )
+    denied_provider_call = MagicMock()
+    state = {
+        **_state(tmp_path),
+        "max_attempt_cost_usd": "0.0001",
+    }
+
+    with open_raw_run_store(database) as store:
+        recorder = RawRunRecorder(store, pricing_table=pricing)
+        recorder.start_attempt(
+            run_id="run-budget",
+            thread_id="thread-budget",
+            execution_mode=AttemptExecutionMode.START,
+            state=state,
+        )
+        recorder.invoke_model(
+            state=state,
+            config=_config("run-budget", "thread-budget"),
+            node_name="plan_investigation",
+            role=ModelRole.PLANNER,
+            identity=ModelIdentity(provider="openai", model="gpt-test"),
+            gathered_context=_gathered(),
+            messages=_messages(),
+            plan_step_id=None,
+            invoke=lambda _: response,
+            parse=lambda raw: raw,
+        )
+
+        second_state = {**state, "context_build_count": 1}
+        with pytest.raises(CostBudgetExceededError) as captured:
+            recorder.invoke_model(
+                state=second_state,
+                config=_config("run-budget", "thread-budget"),
+                node_name="agent",
+                role=ModelRole.EXPLORER,
+                identity=ModelIdentity(provider="openai", model="gpt-test"),
+                gathered_context=_gathered(),
+                messages=_messages(),
+                plan_step_id="inspect-auth",
+                invoke=denied_provider_call,
+                parse=lambda raw: raw,
+            )
+
+        decision = captured.value.budget
+        assert decision.status is CostBudgetStatus.OVERSHOT
+        assert decision.reason is CostBudgetReason.POST_RESPONSE_OVERSHOOT
+        assert decision.next_invocation_allowed is False
+        assert len(store.list_model_invocations("run-budget")) == 1
+        assert len(store.list_context_packs("run-budget")) == 1
+    denied_provider_call.assert_not_called()

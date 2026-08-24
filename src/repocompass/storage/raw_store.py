@@ -807,6 +807,8 @@ class RawRunStore:
         self,
         run_id: str,
         pricing_table: PricingTable,
+        *,
+        max_cost_usd: str | None = None,
     ) -> AttemptUsageCostReport | None:
         """Derive one immutable report from stored usage and explicit prices."""
 
@@ -830,6 +832,7 @@ class RawRunStore:
             turn_number=attempt.turn_number,
             invocations=tuple(_decode_invocation_row(row) for row in invocation_rows),
             pricing_table=pricing_table,
+            max_cost_usd=max_cost_usd,
         )
 
     def delete_attempt(self, run_id: str) -> bool:

@@ -300,6 +300,111 @@ class CostSummary(_CostContractModel):
         return self
 
 
+class CostBudgetStatus(StrEnum):
+    """Observed attempt status relative to one configured cost limit."""
+
+    NOT_STARTED = "not_started"
+    WITHIN_BUDGET = "within_budget"
+    EXHAUSTED = "exhausted"
+    OVERSHOT = "overshot"
+    UNAVAILABLE = "unavailable"
+
+
+class CostBudgetReason(StrEnum):
+    """Stable reason for allowing or denying the next model invocation."""
+
+    NO_INVOCATIONS = "no_invocations"
+    WITHIN_BUDGET = "within_budget"
+    LIMIT_REACHED = "limit_reached"
+    POST_RESPONSE_OVERSHOOT = "post_response_overshoot"
+    INCOMPLETE_COST_COVERAGE = "incomplete_cost_coverage"
+
+
+class AttemptCostBudgetSummary(_CostContractModel):
+    """Preflight decision derived only from confirmed historical invocation cost."""
+
+    schema_version: Literal[1] = COST_SCHEMA_VERSION
+    limit_usd: str = Field(max_length=_MAX_COST_LENGTH)
+    status: CostBudgetStatus
+    reason: CostBudgetReason
+    confirmed_cost_usd: str | None = Field(default=None, max_length=_MAX_COST_LENGTH)
+    remaining_cost_usd: str | None = Field(default=None, max_length=_MAX_COST_LENGTH)
+    overshoot_usd: str | None = Field(default=None, max_length=_MAX_COST_LENGTH)
+    next_invocation_allowed: bool
+
+    @field_validator("limit_usd", mode="before")
+    @classmethod
+    def require_positive_limit(cls, value: object) -> object:
+        validate_cost_budget_usd(value)
+        return value
+
+    @field_validator(
+        "confirmed_cost_usd",
+        "remaining_cost_usd",
+        "overshoot_usd",
+        mode="before",
+    )
+    @classmethod
+    def require_canonical_budget_amount(cls, value: object) -> object:
+        if value is not None:
+            _require_canonical_decimal(value, label="cost budget amount")
+        return value
+
+    @model_validator(mode="after")
+    def require_truthful_budget_status(self) -> "AttemptCostBudgetSummary":
+        limit = Decimal(self.limit_usd)
+        confirmed = _optional_decimal(self.confirmed_cost_usd)
+        remaining = _optional_decimal(self.remaining_cost_usd)
+        overshoot = _optional_decimal(self.overshoot_usd)
+        if self.status is CostBudgetStatus.NOT_STARTED:
+            valid = (
+                self.reason is CostBudgetReason.NO_INVOCATIONS
+                and confirmed is None
+                and remaining == limit
+                and overshoot is None
+                and self.next_invocation_allowed
+            )
+        elif self.status is CostBudgetStatus.WITHIN_BUDGET:
+            valid = (
+                self.reason is CostBudgetReason.WITHIN_BUDGET
+                and confirmed is not None
+                and remaining is not None
+                and confirmed < limit
+                and confirmed + remaining == limit
+                and overshoot is None
+                and self.next_invocation_allowed
+            )
+        elif self.status is CostBudgetStatus.EXHAUSTED:
+            valid = (
+                self.reason is CostBudgetReason.LIMIT_REACHED
+                and confirmed == limit
+                and remaining == 0
+                and overshoot is None
+                and not self.next_invocation_allowed
+            )
+        elif self.status is CostBudgetStatus.OVERSHOT:
+            valid = (
+                self.reason is CostBudgetReason.POST_RESPONSE_OVERSHOOT
+                and confirmed is not None
+                and remaining == 0
+                and overshoot is not None
+                and confirmed > limit
+                and confirmed - limit == overshoot
+                and not self.next_invocation_allowed
+            )
+        else:
+            valid = (
+                self.reason is CostBudgetReason.INCOMPLETE_COST_COVERAGE
+                and confirmed is None
+                and remaining is None
+                and overshoot is None
+                and not self.next_invocation_allowed
+            )
+        if not valid:
+            raise ValueError("cost budget status is internally inconsistent")
+        return self
+
+
 class BreakdownDimension(StrEnum):
     """Stable grouping dimensions exposed by an attempt report."""
 
@@ -362,6 +467,7 @@ class AttemptUsageCostReport(_CostContractModel):
     unit_tokens: Literal[1_000_000] = PRICING_UNIT_TOKENS
     invocation_costs: tuple[InvocationCostEstimate, ...]
     breakdowns: tuple[UsageCostBreakdown, ...] = Field(min_length=1)
+    budget: AttemptCostBudgetSummary | None = None
     disclaimer: Literal["estimate_not_invoice"] = COST_DISCLAIMER
 
     @model_validator(mode="after")
@@ -377,6 +483,7 @@ class AttemptUsageCostReport(_CostContractModel):
             pricing_effective_from=self.pricing_effective_from,
             invocation_costs=self.invocation_costs,
             breakdowns=self.breakdowns,
+            budget=self.budget,
         )
         if self.report_id != expected_id:
             raise ValueError("report_id does not match usage and cost report contents")
@@ -501,6 +608,7 @@ def build_attempt_usage_cost_report(
     turn_number: int,
     invocations: Iterable[ModelInvocationRecord],
     pricing_table: PricingTable,
+    max_cost_usd: str | None = None,
 ) -> AttemptUsageCostReport:
     """Build stable attempt, role, node, and model usage/cost breakdowns."""
 
@@ -525,9 +633,13 @@ def build_attempt_usage_cost_report(
         estimate_invocation_cost(item, pricing_table) for item in records
     )
     costs_by_id = {item.invocation_id: item for item in invocation_costs}
-    breakdowns = [
-        _build_breakdown(BreakdownDimension.ATTEMPT, run_id, records, costs_by_id)
-    ]
+    attempt_breakdown = _build_breakdown(
+        BreakdownDimension.ATTEMPT,
+        run_id,
+        records,
+        costs_by_id,
+    )
+    breakdowns = [attempt_breakdown]
     breakdowns.extend(
         _group_breakdowns(
             BreakdownDimension.ROLE,
@@ -553,6 +665,15 @@ def build_attempt_usage_cost_report(
         )
     )
     canonical_breakdowns = tuple(breakdowns)
+    budget = (
+        None
+        if max_cost_usd is None
+        else _build_attempt_cost_budget(
+            attempt_breakdown.cost,
+            invocation_count=len(records),
+            max_cost_usd=max_cost_usd,
+        )
+    )
     report_id = _attempt_report_id(
         run_id=run_id,
         thread_id=thread_id,
@@ -562,6 +683,7 @@ def build_attempt_usage_cost_report(
         pricing_effective_from=pricing_table.effective_from,
         invocation_costs=invocation_costs,
         breakdowns=canonical_breakdowns,
+        budget=budget,
     )
     return AttemptUsageCostReport(
         report_id=report_id,
@@ -573,6 +695,7 @@ def build_attempt_usage_cost_report(
         pricing_effective_from=pricing_table.effective_from,
         invocation_costs=invocation_costs,
         breakdowns=canonical_breakdowns,
+        budget=budget,
     )
 
 
@@ -679,6 +802,59 @@ def _cost_summary(costs: Sequence[InvocationCostEstimate]) -> CostSummary:
     )
 
 
+def _build_attempt_cost_budget(
+    cost: CostSummary,
+    *,
+    invocation_count: int,
+    max_cost_usd: object,
+) -> AttemptCostBudgetSummary:
+    limit_text = validate_cost_budget_usd(max_cost_usd)
+    if invocation_count == 0:
+        return AttemptCostBudgetSummary(
+            limit_usd=limit_text,
+            status=CostBudgetStatus.NOT_STARTED,
+            reason=CostBudgetReason.NO_INVOCATIONS,
+            remaining_cost_usd=limit_text,
+            next_invocation_allowed=True,
+        )
+    if cost.coverage is not CostCoverage.COMPLETE:
+        return AttemptCostBudgetSummary(
+            limit_usd=limit_text,
+            status=CostBudgetStatus.UNAVAILABLE,
+            reason=CostBudgetReason.INCOMPLETE_COST_COVERAGE,
+            next_invocation_allowed=False,
+        )
+    confirmed = Decimal(cost.estimated_cost_usd or "0")
+    limit = Decimal(limit_text)
+    if confirmed < limit:
+        return AttemptCostBudgetSummary(
+            limit_usd=limit_text,
+            status=CostBudgetStatus.WITHIN_BUDGET,
+            reason=CostBudgetReason.WITHIN_BUDGET,
+            confirmed_cost_usd=_decimal_string(confirmed),
+            remaining_cost_usd=_decimal_string(limit - confirmed),
+            next_invocation_allowed=True,
+        )
+    if confirmed == limit:
+        return AttemptCostBudgetSummary(
+            limit_usd=limit_text,
+            status=CostBudgetStatus.EXHAUSTED,
+            reason=CostBudgetReason.LIMIT_REACHED,
+            confirmed_cost_usd=_decimal_string(confirmed),
+            remaining_cost_usd="0",
+            next_invocation_allowed=False,
+        )
+    return AttemptCostBudgetSummary(
+        limit_usd=limit_text,
+        status=CostBudgetStatus.OVERSHOT,
+        reason=CostBudgetReason.POST_RESPONSE_OVERSHOOT,
+        confirmed_cost_usd=_decimal_string(confirmed),
+        remaining_cost_usd="0",
+        overshoot_usd=_decimal_string(confirmed - limit),
+        next_invocation_allowed=False,
+    )
+
+
 def _unavailable_estimate(
     invocation: ModelInvocationRecord,
     pricing_table: PricingTable,
@@ -735,6 +911,21 @@ def _checked_integer_sum(values: Iterable[int]) -> int:
     return total
 
 
+def validate_cost_budget_usd(value: object) -> str:
+    """Return one canonical positive USD limit or fail before execution."""
+
+    if not isinstance(value, str):
+        raise TypeError("cost budget must be a decimal string")
+    _require_canonical_decimal(value, label="cost budget")
+    if Decimal(value) <= 0:
+        raise ValueError("cost budget must be greater than zero")
+    return value
+
+
+def _optional_decimal(value: str | None) -> Decimal | None:
+    return None if value is None else Decimal(value)
+
+
 def _require_canonical_decimal(value: object, *, label: str) -> None:
     if not isinstance(value, str) or not _CANONICAL_DECIMAL_PATTERN.fullmatch(value):
         raise ValueError(f"{label} must be a canonical non-negative decimal string")
@@ -778,6 +969,7 @@ def _attempt_report_id(
     pricing_effective_from: str,
     invocation_costs: Sequence[InvocationCostEstimate],
     breakdowns: Sequence[UsageCostBreakdown],
+    budget: AttemptCostBudgetSummary | None,
 ) -> str:
     return _content_digest(
         b"repocompass:attempt-usage-cost-report:v1\0",
@@ -794,6 +986,7 @@ def _attempt_report_id(
                 item.model_dump(mode="json") for item in invocation_costs
             ],
             "breakdowns": [item.model_dump(mode="json") for item in breakdowns],
+            "budget": None if budget is None else budget.model_dump(mode="json"),
             "disclaimer": COST_DISCLAIMER,
         },
     )

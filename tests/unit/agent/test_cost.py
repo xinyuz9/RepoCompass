@@ -6,8 +6,11 @@ import pytest
 from pydantic import ValidationError
 
 from repocompass.agent.cost import (
+    AttemptUsageCostReport,
     BreakdownDimension,
     CostAvailability,
+    CostBudgetReason,
+    CostBudgetStatus,
     CostCoverage,
     CostUnavailableReason,
     MetricCoverage,
@@ -16,6 +19,7 @@ from repocompass.agent.cost import (
     build_attempt_usage_cost_report,
     create_pricing_table,
     estimate_invocation_cost,
+    validate_cost_budget_usd,
 )
 from repocompass.agent.usage import (
     ModelInvocationRecord,
@@ -371,3 +375,115 @@ def test_public_builders_fail_deterministically_on_wrong_member_types() -> None:
             invocations=({"sequence": 0},),  # type: ignore[arg-type]
             pricing_table=_table(),
         )
+
+
+def test_empty_attempt_budget_allows_the_first_call_without_fabricated_spend() -> None:
+    report = build_attempt_usage_cost_report(
+        run_id="run-1",
+        thread_id="thread-1",
+        turn_number=1,
+        invocations=(),
+        pricing_table=_table(),
+        max_cost_usd="0.01",
+    )
+
+    assert report.budget is not None
+    assert report.budget.status is CostBudgetStatus.NOT_STARTED
+    assert report.budget.reason is CostBudgetReason.NO_INVOCATIONS
+    assert report.budget.confirmed_cost_usd is None
+    assert report.budget.remaining_cost_usd == "0.01"
+    assert report.budget.overshoot_usd is None
+    assert report.budget.next_invocation_allowed is True
+
+
+@pytest.mark.parametrize(
+    (
+        "limit",
+        "status",
+        "reason",
+        "allowed",
+        "remaining",
+        "overshoot",
+    ),
+    [
+        (
+            "0.01",
+            CostBudgetStatus.WITHIN_BUDGET,
+            CostBudgetReason.WITHIN_BUDGET,
+            True,
+            "0.0065",
+            None,
+        ),
+        (
+            "0.0035",
+            CostBudgetStatus.EXHAUSTED,
+            CostBudgetReason.LIMIT_REACHED,
+            False,
+            "0",
+            None,
+        ),
+        (
+            "0.003",
+            CostBudgetStatus.OVERSHOT,
+            CostBudgetReason.POST_RESPONSE_OVERSHOOT,
+            False,
+            "0",
+            "0.0005",
+        ),
+    ],
+)
+def test_attempt_budget_uses_confirmed_cost_and_reports_post_response_overshoot(
+    limit: str,
+    status: CostBudgetStatus,
+    reason: CostBudgetReason,
+    allowed: bool,
+    remaining: str,
+    overshoot: str | None,
+) -> None:
+    report = build_attempt_usage_cost_report(
+        run_id="run-1",
+        thread_id="thread-1",
+        turn_number=1,
+        invocations=(_invocation(),),
+        pricing_table=_table(),
+        max_cost_usd=limit,
+    )
+
+    assert report.budget is not None
+    assert report.budget.status is status
+    assert report.budget.reason is reason
+    assert report.budget.confirmed_cost_usd == "0.0035"
+    assert report.budget.remaining_cost_usd == remaining
+    assert report.budget.overshoot_usd == overshoot
+    assert report.budget.next_invocation_allowed is allowed
+    assert (
+        AttemptUsageCostReport.model_validate_json(report.model_dump_json()) == report
+    )
+
+
+def test_partial_cost_coverage_conservatively_denies_another_call() -> None:
+    report = build_attempt_usage_cost_report(
+        run_id="run-1",
+        thread_id="thread-1",
+        turn_number=1,
+        invocations=(
+            _invocation(usage=UsageRecord(availability=UsageAvailability.UNAVAILABLE)),
+        ),
+        pricing_table=_table(),
+        max_cost_usd="1",
+    )
+
+    assert report.budget is not None
+    assert report.budget.status is CostBudgetStatus.UNAVAILABLE
+    assert report.budget.reason is CostBudgetReason.INCOMPLETE_COST_COVERAGE
+    assert report.budget.confirmed_cost_usd is None
+    assert report.budget.remaining_cost_usd is None
+    assert report.budget.next_invocation_allowed is False
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "01", "1.0", "NaN", 1])
+def test_cost_budget_requires_a_canonical_positive_decimal_string(
+    value: object,
+) -> None:
+    with pytest.raises((TypeError, ValueError), match="cost budget"):
+        validate_cost_budget_usd(value)

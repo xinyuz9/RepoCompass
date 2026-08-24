@@ -18,6 +18,11 @@ from repocompass.agent.context import (
     RawArtifactKind,
     create_raw_artifact_metadata,
 )
+from repocompass.agent.cost import (
+    AttemptCostBudgetSummary,
+    PricingTable,
+    validate_cost_budget_usd,
+)
 from repocompass.agent.context_gathering import GatheredContext
 from repocompass.agent.usage import (
     ModelInvocationStatus,
@@ -86,6 +91,16 @@ def describe_model(model: object) -> ModelIdentity:
     return ModelIdentity(provider=provider, model=model_name)
 
 
+class CostBudgetExceededError(RuntimeError):
+    """The confirmed attempt ledger denied another provider invocation."""
+
+    def __init__(self, budget: AttemptCostBudgetSummary) -> None:
+        self.budget = budget
+        super().__init__(
+            f"model invocation denied by attempt cost budget: {budget.reason.value}"
+        )
+
+
 class RawRunRecorder:
     """Persist raw context and invocation provenance without entering graph state."""
 
@@ -93,12 +108,16 @@ class RawRunRecorder:
         self,
         store: RawRunStore,
         *,
+        pricing_table: PricingTable | None = None,
         wall_clock_ms: Callable[[], int] | None = None,
         monotonic_ns: Callable[[], int] | None = None,
     ) -> None:
         if not isinstance(store, RawRunStore):
             raise TypeError("store must be a RawRunStore")
         self._store = store
+        if pricing_table is not None and not isinstance(pricing_table, PricingTable):
+            raise TypeError("pricing_table must be a PricingTable or None")
+        self._pricing_table = pricing_table
         self._wall_clock_ms = wall_clock_ms or _wall_clock_ms
         self._monotonic_ns = monotonic_ns or perf_counter_ns
 
@@ -169,6 +188,34 @@ class RawRunRecorder:
             finished_at_ms=finished_at_ms,
         )
 
+    def assess_cost_budget(
+        self,
+        *,
+        state: Mapping[str, object],
+        config: RunnableConfig,
+    ) -> AttemptCostBudgetSummary | None:
+        """Assess the next call from persisted confirmed cost only."""
+
+        configured_limit = state.get("max_attempt_cost_usd")
+        if configured_limit is None:
+            return None
+        limit = validate_cost_budget_usd(configured_limit)
+        if self._pricing_table is None:
+            raise ValueError("max_attempt_cost_usd requires an explicit pricing table")
+        run_id, thread_id, turn_number = _runtime_identity(config)
+        report = self._store.get_attempt_usage_cost_report(
+            run_id,
+            self._pricing_table,
+            max_cost_usd=limit,
+        )
+        if report is None:
+            raise ValueError("cost budget attempt does not exist in the Raw Run Store")
+        if report.thread_id != thread_id or report.turn_number != turn_number:
+            raise ValueError("cost budget report does not match runtime identity")
+        if report.budget is None:
+            raise ValueError("cost budget report is missing its budget decision")
+        return report.budget
+
     def invoke_model(
         self,
         *,
@@ -208,6 +255,10 @@ class RawRunRecorder:
             isinstance(message, BaseMessage) for message in invocation_messages
         ):
             raise TypeError("messages must contain at least one BaseMessage")
+
+        budget = self.assess_cost_budget(state=state, config=config)
+        if budget is not None and not budget.next_invocation_allowed:
+            raise CostBudgetExceededError(budget)
 
         for artifact in gathered_context.raw_artifacts:
             self._store.put_artifact(run_id, artifact.metadata, artifact.content)
