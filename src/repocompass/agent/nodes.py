@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TypedDict
 
@@ -32,6 +33,7 @@ from repocompass.agent.context_gathering import (
     gather_replanner_context,
     render_model_context,
 )
+from repocompass.agent.cost import AttemptCostBudgetSummary
 from repocompass.agent.evaluation import (
     EvaluationReport,
     EvidenceExcerpt,
@@ -39,7 +41,11 @@ from repocompass.agent.evaluation import (
     ValidationIssue,
     validate_candidate,
 )
-from repocompass.agent.invocation import RawRunRecorder, describe_model
+from repocompass.agent.invocation import (
+    CostBudgetExceededError,
+    RawRunRecorder,
+    describe_model,
+)
 from repocompass.agent.lifecycle import (
     HumanReviewInterruptPayload,
     HumanReviewPolicy,
@@ -59,6 +65,7 @@ from repocompass.agent.prompts import (
 )
 from repocompass.agent.result import FinalResult
 from repocompass.agent.routing import (
+    ATTEMPT_COST_BUDGET_STOP_REASON,
     ControllerAction,
     HumanDecisionActionValue,
     TerminationStatus,
@@ -100,6 +107,25 @@ def _next_context_build_count(state: Mapping[str, object]) -> int:
     return value + 1
 
 
+@dataclass(frozen=True, slots=True)
+class _ModelCostBudgetDenied:
+    budget: AttemptCostBudgetSummary
+
+
+class CostBudgetDeniedUpdate(TypedDict):
+    cost_budget: AttemptCostBudgetSummary
+    step_stop_reason: str
+
+
+def _cost_budget_denied_update(
+    budget: AttemptCostBudgetSummary,
+) -> CostBudgetDeniedUpdate:
+    return {
+        "cost_budget": budget,
+        "step_stop_reason": ATTEMPT_COST_BUDGET_STOP_REASON,
+    }
+
+
 def _invoke_model(
     *,
     recorder: RawRunRecorder | None,
@@ -113,27 +139,32 @@ def _invoke_model(
     plan_step_id: str | None,
     invoke: Callable[[list[AnyMessage]], object],
     parse: Callable[[object], object],
-) -> object:
+) -> object | _ModelCostBudgetDenied:
     """Invoke directly or through the fail-closed Raw Run recording boundary."""
 
     if recorder is None:
+        if state.get("max_attempt_cost_usd") is not None:
+            raise ValueError("attempt cost budget requires Raw Run recording")
         return parse(invoke(messages))
     if config is None:
         raise ValueError(
             "Runnable config is required when Raw Run recording is enabled"
         )
-    return recorder.invoke_model(
-        state=state,
-        config=config,
-        node_name=node_name,
-        role=role,
-        identity=describe_model(model),
-        gathered_context=gathered_context,
-        messages=messages,
-        plan_step_id=plan_step_id,
-        invoke=invoke,
-        parse=parse,
-    )
+    try:
+        return recorder.invoke_model(
+            state=state,
+            config=config,
+            node_name=node_name,
+            role=role,
+            identity=describe_model(model),
+            gathered_context=gathered_context,
+            messages=messages,
+            plan_step_id=plan_step_id,
+            invoke=invoke,
+            parse=parse,
+        )
+    except CostBudgetExceededError as error:
+        return _ModelCostBudgetDenied(error.budget)
 
 
 def _parse_structured_response(
@@ -168,6 +199,7 @@ class PlannerInput(TypedDict):
     max_explorer_calls_per_step: int
     context_budget_tokens: int
     context_build_count: int
+    max_attempt_cost_usd: str | None
 
 
 class PlannerNodeUpdate(TypedDict):
@@ -240,6 +272,8 @@ def create_plan_investigation_node(
                 error_message="Planner model did not return InvestigationPlan",
             ),
         )
+        if isinstance(response, _ModelCostBudgetDenied):
+            return _cost_budget_denied_update(response.budget)  # type: ignore[return-value]
         assert isinstance(response, InvestigationPlan)
 
         return {
@@ -264,6 +298,7 @@ class AgentNodeInput(MessagesState):
     evaluation_report: EvaluationReport | None
     context_budget_tokens: int
     context_build_count: int
+    max_attempt_cost_usd: str | None
 
 
 class AgentNodeUpdate(TypedDict):
@@ -357,6 +392,8 @@ def create_agent_node(
             invoke=bound_model.invoke,
             parse=_parse_explorer_response,
         )
+        if isinstance(response, _ModelCostBudgetDenied):
+            return _cost_budget_denied_update(response.budget)  # type: ignore[return-value]
         assert isinstance(response, AIMessage)
         return {
             "messages": [response],
@@ -625,6 +662,7 @@ class CandidateBuilderInput(MessagesState):
     step_stop_reason: str | None
     context_budget_tokens: int
     context_build_count: int
+    max_attempt_cost_usd: str | None
 
 
 class CandidateBuilderUpdate(TypedDict):
@@ -710,6 +748,8 @@ def create_build_candidate_node(
                 error_message="Candidate builder model did not return CandidateResult",
             ),
         )
+        if isinstance(response, _ModelCostBudgetDenied):
+            return _cost_budget_denied_update(response.budget)  # type: ignore[return-value]
         assert isinstance(response, CandidateResult)
 
         return {
@@ -730,6 +770,7 @@ class EvaluatorInput(TypedDict):
     candidate_result: CandidateResult | None
     context_budget_tokens: int
     context_build_count: int
+    max_attempt_cost_usd: str | None
 
 
 class EvaluationPromptInput(TypedDict):
@@ -839,6 +880,8 @@ def create_evaluate_candidate_node(
                 error_message="Evaluator model did not return SemanticAssessment",
             ),
         )
+        if isinstance(response, _ModelCostBudgetDenied):
+            return _cost_budget_denied_update(response.budget)  # type: ignore[return-value]
         assert isinstance(response, SemanticAssessment)
 
         return {
@@ -975,6 +1018,7 @@ class ReplannerInput(TypedDict):
     max_plan_revisions: int
     context_budget_tokens: int
     context_build_count: int
+    max_attempt_cost_usd: str | None
 
 
 class ReplannerNodeUpdate(TypedDict):
@@ -1095,6 +1139,8 @@ def create_revise_plan_node(
                 error_message="Replanner model did not return InvestigationPlan",
             ),
         )
+        if isinstance(response, _ModelCostBudgetDenied):
+            return _cost_budget_denied_update(response.budget)  # type: ignore[return-value]
         assert isinstance(response, InvestigationPlan)
 
         revised_by_id = {step.id: step for step in response.steps}
@@ -1125,6 +1171,61 @@ def create_revise_plan_node(
         }
 
     return revise_plan_node
+
+
+class CostBudgetFinalizerInput(TypedDict):
+    """State available to the model-free cost-budget fallback."""
+
+    objective: str
+    candidate_result: CandidateResult | None
+    cost_budget: AttemptCostBudgetSummary | None
+
+
+class CostBudgetFinalizerUpdate(TypedDict):
+    termination_status: TerminationStatus
+    step_stop_reason: str
+    final_result: FinalResult
+
+
+def finalize_cost_budget_exhausted(
+    state: CostBudgetFinalizerInput,
+) -> CostBudgetFinalizerUpdate:
+    """Publish the best available result without making another model call."""
+
+    budget = state["cost_budget"]
+    if budget is None or budget.next_invocation_allowed:
+        raise ValueError("cost budget fallback requires a denied decision")
+    objective = state["objective"].strip()
+    if not objective:
+        raise ValueError("cost budget fallback requires a non-empty objective")
+    budget_message = (
+        "Investigation stopped before another model invocation because the "
+        f"attempt cost budget denied it ({budget.reason.value})."
+    )
+    candidate = state["candidate_result"]
+    if candidate is None:
+        result = FinalResult(
+            relevant_files=[],
+            evidence=[],
+            summary=budget_message,
+            unresolved_questions=[objective],
+        )
+    else:
+        result = FinalResult(
+            relevant_files=list(
+                dict.fromkeys(item.path for item in candidate.evidence)
+            ),
+            evidence=[item.claim for item in candidate.evidence],
+            summary=f"{candidate.summary}\n\n{budget_message}",
+            unresolved_questions=list(
+                dict.fromkeys([*candidate.unresolved_questions, budget_message])
+            ),
+        )
+    return {
+        "termination_status": "exhausted",
+        "step_stop_reason": ATTEMPT_COST_BUDGET_STOP_REASON,
+        "final_result": result,
+    }
 
 
 class TerminationInput(TypedDict):

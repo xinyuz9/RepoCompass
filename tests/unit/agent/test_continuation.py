@@ -63,6 +63,7 @@ def test_create_continuation_update_archives_and_resets_turn_state(
         max_explorer_calls_per_step=5,
         max_plan_revisions=3,
         max_no_progress_rounds=4,
+        max_attempt_cost_usd="0.5",
     )
     state.update(
         {
@@ -92,6 +93,8 @@ def test_create_continuation_update_archives_and_resets_turn_state(
     assert update["max_explorer_calls_per_step"] == 5
     assert update["max_no_progress_rounds"] == 4
     assert update["max_plan_revisions"] == 3
+    assert update["max_attempt_cost_usd"] == "0.5"
+    assert update["cost_budget"] is None
     assert update["human_review_policy"] == state["human_review_policy"]
     assert update["objective"] == "Second objective"
     assert update["turn_number"] == 2

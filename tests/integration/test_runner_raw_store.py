@@ -9,6 +9,12 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 from langgraph.checkpoint.memory import InMemorySaver
 
+from repocompass.agent.cost import (
+    CostBudgetReason,
+    CostBudgetStatus,
+    ModelPrice,
+    create_pricing_table,
+)
 from repocompass.agent.lifecycle import ExecutionStatus, HumanReviewPolicy
 from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, RunRequest
@@ -213,3 +219,66 @@ def test_runner_marks_attempt_failed_after_provider_error(tmp_path: Path) -> Non
         assert (
             "private provider failure detail" not in invocations[-1].model_dump_json()
         )
+
+
+def test_graph_closes_deterministically_after_planner_cost_overshoot(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "example.py").write_text("value = True\n", encoding="utf-8")
+    pricing = create_pricing_table(
+        version="integration-v1",
+        effective_from="2026-08-24",
+        entries=(
+            ModelPrice(
+                provider="openai",
+                model="gpt-integration",
+                input_usd_per_million_tokens="10",
+                output_usd_per_million_tokens="10",
+            ),
+        ),
+    )
+
+    with open_raw_run_store(tmp_path / "raw.sqlite") as store:
+        outcome = AgentRunner(
+            _models(_result()),
+            checkpointer=InMemorySaver(),
+            raw_run_store=store,
+            pricing_table=pricing,
+            run_id_factory=lambda: "cost-run",
+            thread_id_factory=lambda: "cost-thread",
+        ).run(
+            RunRequest(
+                repo_path=tmp_path,
+                objective="Inspect the repository.",
+                max_tool_calls_per_step=2,
+                max_explorer_calls_per_step=2,
+                max_attempt_cost_usd="0.0001",
+            )
+        )
+
+        assert outcome.termination_status == "exhausted"
+        assert outcome.step_stop_reason == "attempt_cost_budget_exhausted"
+        assert outcome.final_result is not None
+        assert outcome.final_result.relevant_files == []
+        assert "cost budget" in outcome.final_result.summary
+        assert outcome.usage_cost_report is not None
+        assert outcome.usage_cost_report.budget is not None
+        assert outcome.usage_cost_report.budget.status is CostBudgetStatus.OVERSHOT
+        assert (
+            outcome.usage_cost_report.budget.reason
+            is CostBudgetReason.POST_RESPONSE_OVERSHOOT
+        )
+        assert outcome.usage_cost_report.budget.overshoot_usd == "0.00002"
+        assert [item.role for item in store.list_model_invocations("cost-run")] == [
+            ModelRole.PLANNER
+        ]
+        attempt = store.get_attempt("cost-run")
+        assert attempt is not None
+        assert attempt.status is AttemptStatus.COMPLETED
+        assert [
+            event.node for event in outcome.trace.events if event.node is not None
+        ] == [
+            "plan_investigation",
+            "agent",
+            "finalize_cost_budget_exhausted",
+        ]

@@ -9,6 +9,10 @@ from langgraph.graph import MessagesState
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.context import ContextPack
 from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
+from repocompass.agent.cost import (
+    AttemptCostBudgetSummary,
+    validate_cost_budget_usd,
+)
 from repocompass.agent.evaluation import EvaluationReport
 from repocompass.agent.lifecycle import (
     HumanReviewInterruptPayload,
@@ -58,6 +62,8 @@ class RepoCompassState(MessagesState):
     context_budget_tokens: int
     context_build_count: int
     active_context_pack: ContextPack | None
+    max_attempt_cost_usd: str | None
+    cost_budget: AttemptCostBudgetSummary | None
 
     step_stop_reason: str | None
     termination_status: TerminationStatus | None
@@ -97,6 +103,8 @@ class ContinuationStateUpdate(TypedDict):
     context_budget_tokens: int
     context_build_count: int
     active_context_pack: None
+    max_attempt_cost_usd: str | None
+    cost_budget: None
     termination_status: None
     candidate_result: None
     evaluation_report: None
@@ -113,6 +121,7 @@ def create_initial_state(
     human_review_policy: HumanReviewPolicy = HumanReviewPolicy.NEVER,
     max_no_progress_rounds: int = 3,
     context_budget_tokens: int = DEFAULT_CONTEXT_BUDGET_TOKENS,
+    max_attempt_cost_usd: str | None = None,
 ) -> RepoCompassState:
     objective = objective.strip()
     if not objective:
@@ -145,6 +154,8 @@ def create_initial_state(
         raise TypeError("Context budget must be an integer")
     if context_budget_tokens < 1:
         raise ValueError("Context budget must be positive")
+    if max_attempt_cost_usd is not None:
+        max_attempt_cost_usd = validate_cost_budget_usd(max_attempt_cost_usd)
     return {
         "messages": [HumanMessage(content=objective)],
         "repo_path": repo_path.resolve(),
@@ -175,6 +186,8 @@ def create_initial_state(
         "context_budget_tokens": context_budget_tokens,
         "context_build_count": 0,
         "active_context_pack": None,
+        "max_attempt_cost_usd": max_attempt_cost_usd,
+        "cost_budget": None,
         "evaluation_report": None,
         "next_action": None,
         "final_result": None,
@@ -216,6 +229,9 @@ def create_continuation_update(
     context_budget_tokens = state.get(
         "context_budget_tokens", DEFAULT_CONTEXT_BUDGET_TOKENS
     )
+    max_attempt_cost_usd = state.get("max_attempt_cost_usd")
+    if max_attempt_cost_usd is not None:
+        max_attempt_cost_usd = validate_cost_budget_usd(max_attempt_cost_usd)
     if not isinstance(previous_objective, str) or not previous_objective.strip():
         raise ValueError("Completed turn objective is missing")
     if not isinstance(turn_history, list) or not all(
@@ -273,6 +289,8 @@ def create_continuation_update(
         "context_budget_tokens": context_budget_tokens,
         "context_build_count": 0,
         "active_context_pack": None,
+        "max_attempt_cost_usd": max_attempt_cost_usd,
+        "cost_budget": None,
         "next_action": None,
         "final_result": None,
     }

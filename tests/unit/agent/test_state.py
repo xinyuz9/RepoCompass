@@ -39,6 +39,8 @@ def test_create_initial_state_sets_required_fields(tmp_path: Path) -> None:
     assert state["context_budget_tokens"] == DEFAULT_CONTEXT_BUDGET_TOKENS
     assert state["context_build_count"] == 0
     assert state["active_context_pack"] is None
+    assert state["max_attempt_cost_usd"] is None
+    assert state["cost_budget"] is None
     assert state["step_stop_reason"] is None
     assert state["termination_status"] is None
     assert state["candidate_result"] is None
@@ -122,6 +124,35 @@ def test_create_initial_state_rejects_invalid_context_budget(
             max_tool_calls_per_step=3,
             max_explorer_calls_per_step=3,
             context_budget_tokens=context_budget_tokens,  # type: ignore[arg-type]
+        )
+
+
+def test_create_initial_state_accepts_canonical_attempt_cost_budget(
+    tmp_path: Path,
+) -> None:
+    state = create_initial_state(
+        tmp_path,
+        "Find the authentication code",
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=3,
+        max_attempt_cost_usd="0.25",
+    )
+
+    assert state["max_attempt_cost_usd"] == "0.25"
+
+
+@pytest.mark.parametrize("value", ["0", "1.0", -1, True])
+def test_create_initial_state_rejects_invalid_attempt_cost_budget(
+    tmp_path: Path,
+    value: object,
+) -> None:
+    with pytest.raises((TypeError, ValueError), match="cost budget"):
+        create_initial_state(
+            tmp_path,
+            "Find the authentication code",
+            max_tool_calls_per_step=3,
+            max_explorer_calls_per_step=3,
+            max_attempt_cost_usd=value,  # type: ignore[arg-type]
         )
 
 

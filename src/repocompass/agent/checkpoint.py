@@ -32,6 +32,11 @@ from repocompass.agent.context import (
     RepositoryLocation,
     VerificationStatus,
 )
+from repocompass.agent.cost import (
+    AttemptCostBudgetSummary,
+    CostBudgetReason,
+    CostBudgetStatus,
+)
 from repocompass.agent.evaluation import (
     EvaluationReport,
     SemanticAssessment,
@@ -92,6 +97,7 @@ _CHECKPOINT_MODEL_TYPES: tuple[type[BaseModel], ...] = (
     ContextPack,
     UsageRecord,
     ModelInvocationRecord,
+    AttemptCostBudgetSummary,
 )
 _CHECKPOINT_ALLOWED_TYPES: tuple[type[object], ...] = (
     *_CHECKPOINT_MODEL_TYPES,
@@ -113,6 +119,8 @@ _CHECKPOINT_ALLOWED_TYPES: tuple[type[object], ...] = (
     ModelRole,
     ModelInvocationStatus,
     UsageAvailability,
+    CostBudgetStatus,
+    CostBudgetReason,
 )
 
 

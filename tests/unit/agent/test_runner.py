@@ -8,6 +8,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, ToolCall
 from langchain_core.runnables import RunnableLambda
 from langgraph.checkpoint.memory import InMemorySaver
+from pydantic import ValidationError
 
 from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, ResumeRequest, RunRequest
@@ -395,3 +396,35 @@ def test_runner_reads_completed_result_when_resuming_finished_thread(
         "termination_status": "accepted",
         "step_stop_reason": None,
     }
+
+
+@pytest.mark.parametrize("value", ["0", "1.0", "-1", 1])
+def test_run_request_rejects_noncanonical_attempt_cost_budget(value: object) -> None:
+    with pytest.raises(ValidationError, match="cost budget"):
+        RunRequest(
+            repo_path=Path("."),
+            objective="Inspect repository.",
+            max_tool_calls_per_step=2,
+            max_explorer_calls_per_step=2,
+            max_attempt_cost_usd=value,  # type: ignore[arg-type]
+        )
+
+
+def test_runner_rejects_cost_budget_without_raw_store_and_pricing(
+    tmp_path: Path,
+) -> None:
+    runner = AgentRunner(
+        with_scripted_planner(MagicMock(spec=BaseChatModel)),
+        checkpointer=InMemorySaver(),
+    )
+
+    with pytest.raises(ValueError, match="raw store and pricing table"):
+        runner.run(
+            RunRequest(
+                repo_path=tmp_path,
+                objective="Inspect repository.",
+                max_tool_calls_per_step=2,
+                max_explorer_calls_per_step=2,
+                max_attempt_cost_usd="0.1",
+            )
+        )

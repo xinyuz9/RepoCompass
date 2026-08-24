@@ -20,6 +20,7 @@ from repocompass.agent.context import (
 )
 from repocompass.agent.cost import (
     AttemptCostBudgetSummary,
+    AttemptUsageCostReport,
     PricingTable,
     validate_cost_budget_usd,
 )
@@ -188,6 +189,34 @@ class RawRunRecorder:
             finished_at_ms=finished_at_ms,
         )
 
+    def get_usage_cost_report(
+        self,
+        *,
+        state: Mapping[str, object],
+        config: RunnableConfig,
+    ) -> AttemptUsageCostReport | None:
+        """Return the current report when an explicit pricing table is configured."""
+
+        if self._pricing_table is None:
+            return None
+        configured_limit = state.get("max_attempt_cost_usd")
+        limit = (
+            None
+            if configured_limit is None
+            else validate_cost_budget_usd(configured_limit)
+        )
+        run_id, thread_id, turn_number = _runtime_identity(config)
+        report = self._store.get_attempt_usage_cost_report(
+            run_id,
+            self._pricing_table,
+            max_cost_usd=limit,
+        )
+        if report is None:
+            raise ValueError("usage/cost attempt does not exist in the Raw Run Store")
+        if report.thread_id != thread_id or report.turn_number != turn_number:
+            raise ValueError("usage/cost report does not match runtime identity")
+        return report
+
     def assess_cost_budget(
         self,
         *,
@@ -199,19 +228,11 @@ class RawRunRecorder:
         configured_limit = state.get("max_attempt_cost_usd")
         if configured_limit is None:
             return None
-        limit = validate_cost_budget_usd(configured_limit)
         if self._pricing_table is None:
             raise ValueError("max_attempt_cost_usd requires an explicit pricing table")
-        run_id, thread_id, turn_number = _runtime_identity(config)
-        report = self._store.get_attempt_usage_cost_report(
-            run_id,
-            self._pricing_table,
-            max_cost_usd=limit,
-        )
+        report = self.get_usage_cost_report(state=state, config=config)
         if report is None:
-            raise ValueError("cost budget attempt does not exist in the Raw Run Store")
-        if report.thread_id != thread_id or report.turn_number != turn_number:
-            raise ValueError("cost budget report does not match runtime identity")
+            raise ValueError("cost budget requires an explicit pricing table")
         if report.budget is None:
             raise ValueError("cost budget report is missing its budget decision")
         return report.budget

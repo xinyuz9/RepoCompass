@@ -6,7 +6,7 @@ duplicating node routing, tool execution, or budget enforcement.
 """
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
@@ -15,10 +15,15 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command, StateSnapshot
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 from repocompass.agent.context import ContextPack
 from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
+from repocompass.agent.cost import (
+    AttemptUsageCostReport,
+    PricingTable,
+    validate_cost_budget_usd,
+)
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.invocation import RawRunRecorder
 from repocompass.agent.lifecycle import (
@@ -258,6 +263,8 @@ class RunRequest(BaseModel):
             active plan step.
         max_plan_revisions: Positive global budget for model-based plan
             revisions.
+        max_attempt_cost_usd: Optional canonical positive USD limit for each
+            lifecycle attempt, enforced from confirmed provider usage.
         context_budget_tokens: Positive hard budget for dynamic active-context
             JSONL records in each model invocation.
         human_review_policy: Optional final-candidate review gate.
@@ -276,7 +283,18 @@ class RunRequest(BaseModel):
     max_no_progress_rounds: int = Field(default=DEFAULT_MAX_NO_PROGRESS_ROUNDS, gt=0)
     max_plan_revisions: int = Field(default=DEFAULT_MAX_PLAN_REVISIONS, gt=0)
     context_budget_tokens: int = Field(default=DEFAULT_CONTEXT_BUDGET_TOKENS, gt=0)
+    max_attempt_cost_usd: str | None = None
     human_review_policy: HumanReviewPolicy = HumanReviewPolicy.NEVER
+
+    @field_validator("max_attempt_cost_usd", mode="before")
+    @classmethod
+    def require_canonical_attempt_cost_budget(cls, value: object) -> object:
+        if value is None:
+            return None
+        try:
+            return validate_cost_budget_usd(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(str(error)) from error
 
 
 class ResumeRequest(BaseModel):
@@ -320,6 +338,7 @@ class RunOutcome:
     tool_audit_records: tuple[ToolAuditRecord, ...] = ()
     no_progress_decision: NoProgressDecision | None = None
     consecutive_no_progress_rounds: int = 0
+    usage_cost_report: AttemptUsageCostReport | None = None
 
     def __post_init__(self) -> None:
         """Reject ambiguous combinations of terminal and interrupt fields."""
@@ -462,6 +481,7 @@ class AgentRunner:
         *,
         checkpointer: BaseCheckpointSaver,
         raw_run_store: RawRunStore | None = None,
+        pricing_table: PricingTable | None = None,
         run_id_factory: RunIdFactory = generate_run_id,
         thread_id_factory: ThreadIdFactory = generate_thread_id,
     ) -> None:
@@ -472,6 +492,8 @@ class AgentRunner:
             checkpointer: Persistence backend shared by start and resume calls.
             raw_run_store: Optional durable store for attempts, active context,
                 and exact model I/O provenance.
+            pricing_table: Optional immutable snapshot used for reports and
+                required when an attempt cost budget is configured.
             run_id_factory: Zero-argument factory for run IDs. Tests can inject
                 a deterministic factory; production uses UUID strings.
             thread_id_factory: Zero-argument factory for logical investigation
@@ -487,8 +509,13 @@ class AgentRunner:
 
         self._models = models
         self._checkpointer = checkpointer
+        if pricing_table is not None and not isinstance(pricing_table, PricingTable):
+            raise TypeError("pricing_table must be a PricingTable or None")
+        self._pricing_table = pricing_table
         self._raw_run_recorder = (
-            None if raw_run_store is None else RawRunRecorder(raw_run_store)
+            None
+            if raw_run_store is None
+            else RawRunRecorder(raw_run_store, pricing_table=pricing_table)
         )
         self._run_id_factory = run_id_factory
         self._thread_id_factory = thread_id_factory
@@ -515,6 +542,12 @@ class AgentRunner:
             checkpointer. It does not write the completed domain trace to disk.
         """
 
+        if request.max_attempt_cost_usd is not None and (
+            self._raw_run_recorder is None or self._pricing_table is None
+        ):
+            raise ValueError(
+                "attempt cost budget requires a raw store and pricing table"
+            )
         repo_path = resolve_repository_path(request.repo_path)
         thread_id = _normalize_identifier(
             self._thread_id_factory(),
@@ -529,6 +562,7 @@ class AgentRunner:
             request.human_review_policy,
             max_no_progress_rounds=request.max_no_progress_rounds,
             context_budget_tokens=request.context_budget_tokens,
+            max_attempt_cost_usd=request.max_attempt_cost_usd,
         )
         graph = create_agent_graph(
             self._models,
@@ -677,6 +711,13 @@ class AgentRunner:
             existing_snapshot = graph.get_state(checkpoint_config)
             metadata_state = existing_snapshot.values
 
+        configured_cost_budget = metadata_state.get("max_attempt_cost_usd")
+        if configured_cost_budget is not None:
+            configured_cost_budget = validate_cost_budget_usd(configured_cost_budget)
+            if self._raw_run_recorder is None or self._pricing_table is None:
+                raise ValueError(
+                    "attempt cost budget requires a raw store and pricing table"
+                )
         trace = RunTrace(
             _normalize_identifier(
                 self._run_id_factory(),
@@ -717,6 +758,10 @@ class AgentRunner:
                 )
             ),
         }
+        if configured_cost_budget is not None:
+            started_payload["max_attempt_cost_usd"] = configured_cost_budget
+            if self._pricing_table is not None:
+                started_payload["pricing_table_id"] = self._pricing_table.table_id
         if human_decision is not None:
             started_payload["human_decision"] = {
                 "action": human_decision.action.value,
@@ -747,6 +792,7 @@ class AgentRunner:
                 recorder.finish_attempt(trace.run_id, status=AttemptStatus.FAILED)
             raise
 
+        usage_cost_report = None
         if recorder is not None:
             status = (
                 AttemptStatus.INTERRUPTED
@@ -754,7 +800,11 @@ class AgentRunner:
                 else AttemptStatus.COMPLETED
             )
             recorder.finish_attempt(trace.run_id, status=status)
-        return outcome
+            usage_cost_report = recorder.get_usage_cost_report(
+                state=metadata_state,
+                config=config,
+            )
+        return replace(outcome, usage_cost_report=usage_cost_report)
 
     @staticmethod
     def _stream_graph_attempt(
