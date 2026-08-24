@@ -19,6 +19,11 @@ from repocompass.agent.context import (
     RawArtifactMetadata,
     create_raw_artifact_metadata,
 )
+from repocompass.agent.cost import (
+    AttemptUsageCostReport,
+    PricingTable,
+    build_attempt_usage_cost_report,
+)
 from repocompass.agent.domain_model import CheckpointSafeModel
 from repocompass.agent.usage import ModelInvocationRecord
 from repocompass.tools.contracts import (
@@ -797,6 +802,35 @@ class RawRunStore:
                 (run_id,),
             ).fetchall()
         return tuple(_decode_invocation_row(row) for row in rows)
+
+    def get_attempt_usage_cost_report(
+        self,
+        run_id: str,
+        pricing_table: PricingTable,
+    ) -> AttemptUsageCostReport | None:
+        """Derive one immutable report from stored usage and explicit prices."""
+
+        if not isinstance(pricing_table, PricingTable):
+            raise TypeError("pricing_table must be a PricingTable")
+        with self._lock:
+            attempt_row = self._connection.execute(
+                "SELECT * FROM attempts WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+            if attempt_row is None:
+                return None
+            invocation_rows = self._connection.execute(
+                "SELECT * FROM model_invocations WHERE run_id = ? ORDER BY sequence",
+                (run_id,),
+            ).fetchall()
+        attempt = _decode_attempt_row(attempt_row)
+        return build_attempt_usage_cost_report(
+            run_id=attempt.run_id,
+            thread_id=attempt.thread_id,
+            turn_number=attempt.turn_number,
+            invocations=tuple(_decode_invocation_row(row) for row in invocation_rows),
+            pricing_table=pricing_table,
+        )
 
     def delete_attempt(self, run_id: str) -> bool:
         """Delete one attempt and collect only artifacts with no remaining links."""

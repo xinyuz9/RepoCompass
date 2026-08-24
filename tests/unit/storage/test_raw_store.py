@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from repocompass.agent.cost import ModelPrice, create_pricing_table
 from repocompass.agent.context import (
     ContextSection,
     ContextSelectionDecision,
@@ -326,6 +327,23 @@ def test_model_invocation_round_trip_requires_full_provenance_chain(
         assert store.record_model_invocation(invocation) is False
         assert store.get_model_invocation(invocation.invocation_id) == invocation
         assert store.list_model_invocations("run-1") == (invocation,)
+        report = store.get_attempt_usage_cost_report(
+            "run-1",
+            create_pricing_table(
+                version="test-v1",
+                effective_from="2026-08-24",
+                entries=(
+                    ModelPrice(
+                        provider="openai",
+                        model="gpt-5-mini",
+                        input_usd_per_million_tokens="2",
+                        output_usd_per_million_tokens="8",
+                    ),
+                ),
+            ),
+        )
+        assert report is not None
+        assert report.breakdowns[0].cost.estimated_cost_usd == "0.00036"
 
 
 @pytest.mark.parametrize("missing", ["input", "output", "context"])
