@@ -1,5 +1,6 @@
 """Unit tests for the local SQLite checkpoint lifecycle."""
 
+import warnings
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,8 @@ from repocompass.agent.evaluation import (
     ValidationIssue,
 )
 from repocompass.agent.planning import InvestigationPlan, PlanStep
+from repocompass.structure.contracts import create_symbol_record
+from repocompass.structure.python_index import build_python_file_index
 
 
 def test_open_sqlite_checkpointer_creates_parent_and_database(
@@ -119,3 +122,42 @@ def test_checkpoint_serializer_rehydrates_strict_models_for_repeated_writes(
     assert isinstance(restored_plan, InvestigationPlan)
     assert isinstance(restored_plan.active_step, PlanStep)
     assert "Blocked deserialization" not in caplog.text
+
+
+def test_checkpoint_round_trip_canonicalizes_symbol_decorators_without_warning(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "example.py"
+    source.write_text(
+        "@registry.register\ndef example():\n    return True\n",
+        encoding="utf-8",
+    )
+    index = build_python_file_index(
+        tmp_path,
+        Path("example.py"),
+        repository_id="a" * 64,
+        commit_sha="1" * 40,
+    )
+    indexed_symbol = next(item for item in index.symbols if item.name == "example")
+    symbol = create_symbol_record(
+        name=indexed_symbol.name,
+        qualified_name=indexed_symbol.qualified_name,
+        kind=indexed_symbol.kind,
+        parent_symbol_id=indexed_symbol.parent_symbol_id,
+        definition=indexed_symbol.definition,
+        body=indexed_symbol.body,
+        decorators=("registry.register",),
+        is_test=indexed_symbol.is_test,
+    )
+    serializer = RepoCompassCheckpointSerializer()
+
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+        restored = serializer.loads_typed(serializer.dumps_typed(symbol))
+        restored = serializer.loads_typed(serializer.dumps_typed(restored))
+
+    assert restored == symbol
+    assert restored.decorators == ("registry.register",)
+    assert not any(
+        "Pydantic serializer warnings" in str(item.message) for item in captured
+    )

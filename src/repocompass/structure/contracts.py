@@ -144,6 +144,13 @@ class PythonSymbolRecord(_StructureContractModel):
                 raise ValueError("decorator exceeds the character limit")
         return value
 
+    @field_validator("decorators", mode="before")
+    @classmethod
+    def canonicalize_decorator_sequence(cls, value: object) -> object:
+        """Restore the immutable tuple after msgpack decodes arrays as lists."""
+
+        return tuple(value) if isinstance(value, list) else value
+
     @model_validator(mode="after")
     def require_verified_content_addressed_symbol(self) -> "PythonSymbolRecord":
         if self.kind is not PythonSymbolKind.MODULE and not self.name.isidentifier():
