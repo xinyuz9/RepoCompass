@@ -32,28 +32,40 @@ from repocompass.tools.repository_tools import (
 )
 
 
-def _return_normalized_text(_root: Path, _arguments: BaseModel) -> str:
+def _return_normalized_text(
+    _root: Path, _arguments: BaseModel, _repository_id: str, _commit_sha: str | None
+) -> str:
     return "first\r\nsecond\rthird"
 
 
-def _return_oversized_text(_root: Path, _arguments: BaseModel) -> str:
+def _return_oversized_text(
+    _root: Path, _arguments: BaseModel, _repository_id: str, _commit_sha: str | None
+) -> str:
     return "界" * 3
 
 
-def _return_invalid_unicode(_root: Path, _arguments: BaseModel) -> str:
+def _return_invalid_unicode(
+    _root: Path, _arguments: BaseModel, _repository_id: str, _commit_sha: str | None
+) -> str:
     return "\ud800"
 
 
-def _sleep_past_deadline(_root: Path, _arguments: BaseModel) -> str:
+def _sleep_past_deadline(
+    _root: Path, _arguments: BaseModel, _repository_id: str, _commit_sha: str | None
+) -> str:
     time.sleep(0.25)
     return "late"
 
 
-def _raise_secret_error(_root: Path, _arguments: BaseModel) -> str:
+def _raise_secret_error(
+    _root: Path, _arguments: BaseModel, _repository_id: str, _commit_sha: str | None
+) -> str:
     raise RuntimeError("authorization=Bearer super-secret")
 
 
-def _write_forbidden_marker(root: Path, _arguments: BaseModel) -> str:
+def _write_forbidden_marker(
+    root: Path, _arguments: BaseModel, _repository_id: str, _commit_sha: str | None
+) -> str:
     (root / "forbidden.txt").write_text("should not execute", encoding="utf-8")
     return "written"
 

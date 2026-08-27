@@ -1,12 +1,22 @@
 """Typed arguments, descriptors, and normalized repository tool executors."""
 
 import json
-from pathlib import Path
+import keyword
+from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from repocompass.structure.queries import (
+    MAX_PYTHON_SCAN_FILES,
+    MAX_STRUCTURAL_QUERY_CHARACTERS,
+    MAX_STRUCTURAL_RESULTS,
+    find_python_references,
+    find_python_symbol_definitions,
+    inspect_python_imports,
+    list_python_symbols,
+)
 from repocompass.tools.contracts import (
     ToolCapability,
     ToolDescriptor,
@@ -102,6 +112,62 @@ class ReadCodeArguments(_RepositoryToolArguments):
         return self
 
 
+class _PythonFileArguments(_RepositoryToolArguments):
+    relative_path: str = Field(min_length=1, max_length=MAX_RELATIVE_PATH_CHARACTERS)
+
+    @field_validator("relative_path")
+    @classmethod
+    def require_python_path(cls, value: str) -> str:
+        _validate_python_tool_path(value)
+        return value
+
+
+class ListSymbolsArguments(_PythonFileArguments):
+    """Bounded arguments accepted by ``list_symbols``."""
+
+    max_results: int = Field(default=100, ge=1, le=MAX_STRUCTURAL_RESULTS)
+
+
+class InspectImportsArguments(_PythonFileArguments):
+    """Bounded arguments accepted by ``inspect_imports``."""
+
+    max_results: int = Field(default=100, ge=1, le=MAX_STRUCTURAL_RESULTS)
+
+
+class _PythonRepositoryQueryArguments(_RepositoryToolArguments):
+    name: str = Field(min_length=1, max_length=MAX_STRUCTURAL_QUERY_CHARACTERS)
+    relative_path: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_RELATIVE_PATH_CHARACTERS,
+    )
+    max_files: int = Field(default=200, ge=1, le=MAX_PYTHON_SCAN_FILES)
+    max_results: int = Field(default=100, ge=1, le=MAX_STRUCTURAL_RESULTS)
+
+    @field_validator("name")
+    @classmethod
+    def require_dotted_python_name(cls, value: str) -> str:
+        parts = value.split(".")
+        if any(not part.isidentifier() or keyword.iskeyword(part) for part in parts):
+            raise ValueError("name must be a dotted Python identifier")
+        return value
+
+    @field_validator("relative_path")
+    @classmethod
+    def require_optional_python_path(cls, value: str | None) -> str | None:
+        if value is not None:
+            _validate_python_tool_path(value)
+        return value
+
+
+class FindSymbolDefinitionArguments(_PythonRepositoryQueryArguments):
+    """Bounded arguments accepted by ``find_symbol_definition``."""
+
+
+class FindReferencesArguments(_PythonRepositoryQueryArguments):
+    """Bounded arguments accepted by ``find_references``."""
+
+
 REPOSITORY_TOOL_DESCRIPTORS = MappingProxyType(
     {
         descriptor.name: descriptor
@@ -131,6 +197,42 @@ REPOSITORY_TOOL_DESCRIPTORS = MappingProxyType(
                 risk_level=ToolRiskLevel.LOW,
                 timeout_ms=5_000,
                 max_output_bytes=131_072,
+                cacheable=True,
+            ),
+            ToolDescriptor(
+                name="list_symbols",
+                capabilities=(ToolCapability.FILESYSTEM_READ,),
+                side_effect=ToolSideEffect.READ_ONLY,
+                risk_level=ToolRiskLevel.LOW,
+                timeout_ms=6_000,
+                max_output_bytes=262_144,
+                cacheable=True,
+            ),
+            ToolDescriptor(
+                name="inspect_imports",
+                capabilities=(ToolCapability.FILESYSTEM_READ,),
+                side_effect=ToolSideEffect.READ_ONLY,
+                risk_level=ToolRiskLevel.LOW,
+                timeout_ms=6_000,
+                max_output_bytes=262_144,
+                cacheable=True,
+            ),
+            ToolDescriptor(
+                name="find_symbol_definition",
+                capabilities=(ToolCapability.FILESYSTEM_READ,),
+                side_effect=ToolSideEffect.READ_ONLY,
+                risk_level=ToolRiskLevel.LOW,
+                timeout_ms=10_000,
+                max_output_bytes=524_288,
+                cacheable=True,
+            ),
+            ToolDescriptor(
+                name="find_references",
+                capabilities=(ToolCapability.FILESYSTEM_READ,),
+                side_effect=ToolSideEffect.READ_ONLY,
+                risk_level=ToolRiskLevel.LOW,
+                timeout_ms=10_000,
+                max_output_bytes=524_288,
                 cacheable=True,
             ),
         )
@@ -176,6 +278,90 @@ def execute_read_code(repository_root: Path, arguments: ReadCodeArguments) -> st
     return _normalized_json(result)
 
 
+def execute_list_symbols(
+    repository_root: Path,
+    arguments: ListSymbolsArguments,
+    *,
+    repository_id: str,
+    commit_sha: str | None,
+) -> str:
+    """Execute one bounded content-addressed symbol listing."""
+
+    return _normalized_json(
+        list_python_symbols(
+            repository_root,
+            arguments.relative_path,
+            max_results=arguments.max_results,
+            repository_id=repository_id,
+            commit_sha=commit_sha,
+        )
+    )
+
+
+def execute_inspect_imports(
+    repository_root: Path,
+    arguments: InspectImportsArguments,
+    *,
+    repository_id: str,
+    commit_sha: str | None,
+) -> str:
+    """Execute one bounded content-addressed import inspection."""
+
+    return _normalized_json(
+        inspect_python_imports(
+            repository_root,
+            arguments.relative_path,
+            max_results=arguments.max_results,
+            repository_id=repository_id,
+            commit_sha=commit_sha,
+        )
+    )
+
+
+def execute_find_symbol_definition(
+    repository_root: Path,
+    arguments: FindSymbolDefinitionArguments,
+    *,
+    repository_id: str,
+    commit_sha: str | None,
+) -> str:
+    """Execute one bounded repository-wide definition query."""
+
+    return _normalized_json(
+        find_python_symbol_definitions(
+            repository_root,
+            arguments.name,
+            relative_path=arguments.relative_path,
+            max_files=arguments.max_files,
+            max_results=arguments.max_results,
+            repository_id=repository_id,
+            commit_sha=commit_sha,
+        )
+    )
+
+
+def execute_find_references(
+    repository_root: Path,
+    arguments: FindReferencesArguments,
+    *,
+    repository_id: str,
+    commit_sha: str | None,
+) -> str:
+    """Execute one bounded repository-wide syntactic reference query."""
+
+    return _normalized_json(
+        find_python_references(
+            repository_root,
+            arguments.name,
+            relative_path=arguments.relative_path,
+            max_files=arguments.max_files,
+            max_results=arguments.max_results,
+            repository_id=repository_id,
+            commit_sha=commit_sha,
+        )
+    )
+
+
 def _normalized_json(value: object) -> str:
     return json.dumps(
         value,
@@ -184,3 +370,14 @@ def _normalized_json(value: object) -> str:
         sort_keys=True,
         separators=(",", ":"),
     )
+
+
+def _validate_python_tool_path(value: str) -> None:
+    path = PurePosixPath(value)
+    if (
+        "\x00" in value
+        or "\\" in value
+        or not value.endswith(".py")
+        or path.as_posix() != value
+    ):
+        raise ValueError("relative_path must identify a canonical Python file")

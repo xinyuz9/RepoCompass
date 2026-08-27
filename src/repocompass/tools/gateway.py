@@ -34,15 +34,23 @@ from repocompass.tools.contracts import (
 )
 from repocompass.tools.repository_tools import (
     REPOSITORY_TOOL_DESCRIPTORS,
+    FindReferencesArguments,
+    FindSymbolDefinitionArguments,
+    InspectImportsArguments,
     ListTreeArguments,
+    ListSymbolsArguments,
     ReadCodeArguments,
     SearchTextArguments,
+    execute_find_references,
+    execute_find_symbol_definition,
+    execute_inspect_imports,
     execute_list_tree,
+    execute_list_symbols,
     execute_read_code,
     execute_search_text,
 )
 
-ToolExecutor = Callable[[Path, BaseModel], str]
+ToolExecutor = Callable[[Path, BaseModel, str, str | None], str]
 DEFAULT_TOOL_CACHE_MAX_ENTRIES = 128
 DEFAULT_TOOL_CACHE_MAX_BYTES = 8 * 1_024 * 1_024
 _EXECUTION_FAILURE_REASONS = frozenset(
@@ -626,6 +634,8 @@ class ToolGateway:
             registration,
             parsed_arguments,
             context.repository_root,
+            context.repository_id,
+            context.commit_sha,
             process_context=self._process_context,
         )
         if isolated_result.reason is not None:
@@ -805,7 +815,7 @@ class ToolGateway:
 
 
 def create_repository_tool_registry() -> ToolRegistry:
-    """Build the immutable registry for the three current repository tools."""
+    """Build the immutable registry for every model-visible repository tool."""
 
     return ToolRegistry(
         (
@@ -825,26 +835,129 @@ def create_repository_tool_registry() -> ToolRegistry:
                 executor=_execute_read_code,
                 repository_path_field="relative_path",
             ),
+            ToolRegistration(
+                descriptor=REPOSITORY_TOOL_DESCRIPTORS["list_symbols"],
+                arguments_model=ListSymbolsArguments,
+                executor=_execute_list_symbols,
+                repository_path_field="relative_path",
+            ),
+            ToolRegistration(
+                descriptor=REPOSITORY_TOOL_DESCRIPTORS["inspect_imports"],
+                arguments_model=InspectImportsArguments,
+                executor=_execute_inspect_imports,
+                repository_path_field="relative_path",
+            ),
+            ToolRegistration(
+                descriptor=REPOSITORY_TOOL_DESCRIPTORS["find_symbol_definition"],
+                arguments_model=FindSymbolDefinitionArguments,
+                executor=_execute_find_symbol_definition,
+                repository_path_field="relative_path",
+            ),
+            ToolRegistration(
+                descriptor=REPOSITORY_TOOL_DESCRIPTORS["find_references"],
+                arguments_model=FindReferencesArguments,
+                executor=_execute_find_references,
+                repository_path_field="relative_path",
+            ),
         )
     )
 
 
-def _execute_list_tree(repository_root: Path, arguments: BaseModel) -> str:
+def _execute_list_tree(
+    repository_root: Path,
+    arguments: BaseModel,
+    _repository_id: str,
+    _commit_sha: str | None,
+) -> str:
     if not isinstance(arguments, ListTreeArguments):
         raise TypeError("list_tree received invalid parsed arguments")
     return execute_list_tree(repository_root, arguments)
 
 
-def _execute_search_text(repository_root: Path, arguments: BaseModel) -> str:
+def _execute_search_text(
+    repository_root: Path,
+    arguments: BaseModel,
+    _repository_id: str,
+    _commit_sha: str | None,
+) -> str:
     if not isinstance(arguments, SearchTextArguments):
         raise TypeError("search_text received invalid parsed arguments")
     return execute_search_text(repository_root, arguments)
 
 
-def _execute_read_code(repository_root: Path, arguments: BaseModel) -> str:
+def _execute_read_code(
+    repository_root: Path,
+    arguments: BaseModel,
+    _repository_id: str,
+    _commit_sha: str | None,
+) -> str:
     if not isinstance(arguments, ReadCodeArguments):
         raise TypeError("read_code received invalid parsed arguments")
     return execute_read_code(repository_root, arguments)
+
+
+def _execute_list_symbols(
+    repository_root: Path,
+    arguments: BaseModel,
+    repository_id: str,
+    commit_sha: str | None,
+) -> str:
+    if not isinstance(arguments, ListSymbolsArguments):
+        raise TypeError("list_symbols received invalid parsed arguments")
+    return execute_list_symbols(
+        repository_root,
+        arguments,
+        repository_id=repository_id,
+        commit_sha=commit_sha,
+    )
+
+
+def _execute_inspect_imports(
+    repository_root: Path,
+    arguments: BaseModel,
+    repository_id: str,
+    commit_sha: str | None,
+) -> str:
+    if not isinstance(arguments, InspectImportsArguments):
+        raise TypeError("inspect_imports received invalid parsed arguments")
+    return execute_inspect_imports(
+        repository_root,
+        arguments,
+        repository_id=repository_id,
+        commit_sha=commit_sha,
+    )
+
+
+def _execute_find_symbol_definition(
+    repository_root: Path,
+    arguments: BaseModel,
+    repository_id: str,
+    commit_sha: str | None,
+) -> str:
+    if not isinstance(arguments, FindSymbolDefinitionArguments):
+        raise TypeError("find_symbol_definition received invalid parsed arguments")
+    return execute_find_symbol_definition(
+        repository_root,
+        arguments,
+        repository_id=repository_id,
+        commit_sha=commit_sha,
+    )
+
+
+def _execute_find_references(
+    repository_root: Path,
+    arguments: BaseModel,
+    repository_id: str,
+    commit_sha: str | None,
+) -> str:
+    if not isinstance(arguments, FindReferencesArguments):
+        raise TypeError("find_references received invalid parsed arguments")
+    return execute_find_references(
+        repository_root,
+        arguments,
+        repository_id=repository_id,
+        commit_sha=commit_sha,
+    )
 
 
 def _parse_arguments(
@@ -871,6 +984,8 @@ def _repository_path_policy(
         return None
 
     path_text = getattr(arguments, field_name)
+    if path_text is None:
+        return None
     if not isinstance(path_text, str):
         return ToolDecisionReason.INVALID_ARGUMENTS
     relative_path = Path(path_text)
@@ -906,6 +1021,8 @@ def _execute_isolated(
     registration: ToolRegistration,
     arguments: BaseModel,
     repository_root: Path,
+    repository_id: str,
+    commit_sha: str | None,
     *,
     process_context: BaseContext,
 ) -> _IsolatedExecutionResult:
@@ -917,6 +1034,8 @@ def _execute_isolated(
             registration.executor,
             repository_root,
             arguments,
+            repository_id,
+            commit_sha,
         ),
         daemon=True,
     )
@@ -984,9 +1103,11 @@ def _tool_process_worker(
     executor: ToolExecutor,
     repository_root: Path,
     arguments: BaseModel,
+    repository_id: str,
+    commit_sha: str | None,
 ) -> None:
     try:
-        output = executor(repository_root, arguments)
+        output = executor(repository_root, arguments, repository_id, commit_sha)
         if not isinstance(output, str):
             connection.send_bytes(b"E")
             return

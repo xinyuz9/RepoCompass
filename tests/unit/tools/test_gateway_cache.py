@@ -81,12 +81,22 @@ def _execute(
     )
 
 
-def _sleep_past_deadline(_root: Path, _arguments: BaseModel) -> str:
+def _sleep_past_deadline(
+    _root: Path,
+    _arguments: BaseModel,
+    _repository_id: str,
+    _commit_sha: str | None,
+) -> str:
     time.sleep(0.25)
     return "late"
 
 
-def _return_text(_root: Path, _arguments: BaseModel) -> str:
+def _return_text(
+    _root: Path,
+    _arguments: BaseModel,
+    _repository_id: str,
+    _commit_sha: str | None,
+) -> str:
     return "stable output"
 
 

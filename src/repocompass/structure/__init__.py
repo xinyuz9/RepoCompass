@@ -26,8 +26,22 @@ from repocompass.structure.python_index import (
     PythonIndexErrorReason,
     build_python_file_index,
 )
+from repocompass.structure.queries import (
+    MAX_PYTHON_SCAN_DEPTH,
+    MAX_PYTHON_SCAN_ENTRIES,
+    MAX_PYTHON_SCAN_FILES,
+    PythonFileDiscovery,
+    discover_python_files,
+    find_python_references,
+    find_python_symbol_definitions,
+    inspect_python_imports,
+    list_python_symbols,
+)
 
 __all__ = [
+    "MAX_PYTHON_SCAN_DEPTH",
+    "MAX_PYTHON_SCAN_ENTRIES",
+    "MAX_PYTHON_SCAN_FILES",
     "MAX_PYTHON_AST_DEPTH",
     "MAX_PYTHON_AST_NODES",
     "MAX_PYTHON_SOURCE_BYTES",
@@ -37,6 +51,7 @@ __all__ = [
     "PythonImportKind",
     "PythonImportRecord",
     "PythonIndexError",
+    "PythonFileDiscovery",
     "PythonIndexErrorReason",
     "PythonReferenceKind",
     "PythonReferenceRecord",
@@ -45,9 +60,14 @@ __all__ = [
     "SourceLocation",
     "StructuralVerificationStatus",
     "build_python_file_index",
+    "discover_python_files",
     "create_import_record",
     "create_python_file_index",
     "create_reference_record",
     "create_source_location",
     "create_symbol_record",
+    "find_python_references",
+    "find_python_symbol_definitions",
+    "inspect_python_imports",
+    "list_python_symbols",
 ]

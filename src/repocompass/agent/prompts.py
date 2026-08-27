@@ -93,8 +93,8 @@ not-yet-investigated points in unresolved_questions; use an empty list if there
 are none.
 Do not invent files, code, symbols, line numbers, or behavior.
 Return only the required CandidateResult structured output. Repository tools are
-not available in this invocation; do not request or imitate tool calls such as
-list_tree, search_text, or read_code.
+not available in this invocation; do not request or imitate calls to text,
+file-reading, or structural-analysis tools.
 """
 
 CANDIDATE_BUILDING_REQUEST_TEMPLATE = """\
