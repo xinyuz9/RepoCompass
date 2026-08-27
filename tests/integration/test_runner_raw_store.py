@@ -1,5 +1,6 @@
 """Runner integration with durable raw context and model provenance."""
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -9,6 +10,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 from langgraph.checkpoint.memory import InMemorySaver
 
+from repocompass import cli
 from repocompass.agent.cost import (
     CostBudgetReason,
     CostBudgetStatus,
@@ -177,6 +179,68 @@ def test_runner_persists_complete_model_provenance(tmp_path: Path) -> None:
         explorer_output = store.get_artifact(invocations[1].output_artifact_id or "")
         assert explorer_output is not None
         assert b"Enough evidence is available." in explorer_output.content
+
+
+def test_cli_queries_exact_usage_report_after_raw_store_reopen(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "example.py").write_text("value = True\n", encoding="utf-8")
+    database_path = tmp_path / "raw.sqlite"
+    pricing = create_pricing_table(
+        version="cli-integration-v1",
+        effective_from="2026-08-27",
+        entries=(
+            ModelPrice(
+                provider="openai",
+                model="gpt-integration",
+                input_usd_per_million_tokens="10",
+                output_usd_per_million_tokens="10",
+            ),
+        ),
+    )
+    with open_raw_run_store(database_path) as store:
+        outcome = AgentRunner(
+            _models(_result()),
+            checkpointer=InMemorySaver(),
+            raw_run_store=store,
+            pricing_table=pricing,
+            run_id_factory=lambda: "cli-report-run",
+            thread_id_factory=lambda: "cli-report-thread",
+        ).run(_request(tmp_path))
+
+    assert outcome.usage_cost_report is not None
+    pricing_file = tmp_path / "pricing.json"
+    pricing_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "version": pricing.version,
+                "effective_from": pricing.effective_from,
+                "entries": [entry.model_dump(mode="json") for entry in pricing.entries],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = cli.main(
+        [
+            "--usage-report",
+            "cli-report-run",
+            "--pricing-file",
+            str(pricing_file),
+            "--raw-store-db",
+            str(database_path),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload == outcome.usage_cost_report.model_dump(mode="json")
+    assert payload["breakdowns"][0]["cost"]["estimated_cost_usd"] == "0.0012"
+    assert "Usage/cost: 4 invocations" in captured.err
+    assert "estimated cost USD 0.0012 (complete)" in captured.err
 
 
 def test_runner_marks_human_review_attempt_interrupted(tmp_path: Path) -> None:

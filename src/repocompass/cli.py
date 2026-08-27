@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Literal
 
 from repocompass.agent.checkpoint import open_sqlite_checkpointer
+from repocompass.agent.cost import (
+    AttemptUsageCostReport,
+    PricingTable,
+    validate_cost_budget_usd,
+)
 from repocompass.agent.lifecycle import (
     ContinueRequest,
     ExecutionStatus,
@@ -30,12 +35,13 @@ from repocompass.agent.runner import (
 )
 from repocompass.agent.trace_sink import JsonlTraceSink
 from repocompass.models import create_workflow_models
+from repocompass.pricing import load_pricing_table_file
 from repocompass.storage.raw_store import RawStoreError, open_raw_run_store
 
 DEFAULT_TRACE_DIRECTORY = Path(".repocompass/traces")
 DEFAULT_CHECKPOINT_DATABASE = Path(".repocompass/checkpoints.sqlite")
 DEFAULT_RAW_STORE_DATABASE = Path(".repocompass/raw_runs.sqlite")
-LifecycleMode = Literal["start", "resume", "continue", "respond"]
+LifecycleMode = Literal["start", "resume", "continue", "respond", "usage_report"]
 
 
 def _positive_int(value: str) -> int:
@@ -50,6 +56,15 @@ def _positive_int(value: str) -> int:
         raise argparse.ArgumentTypeError("must be greater than zero")
 
     return parsed
+
+
+def _positive_cost_budget(value: str) -> str:
+    """Parse one canonical positive decimal USD command-line budget."""
+
+    try:
+        return validate_cost_budget_usd(value)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -88,6 +103,11 @@ def create_parser() -> argparse.ArgumentParser:
         "--respond",
         metavar="THREAD_ID",
         help="respond to one pending Human-review interrupt",
+    )
+    lifecycle_modes.add_argument(
+        "--usage-report",
+        metavar="RUN_ID",
+        help="query one persisted run's machine-readable usage/cost report",
     )
     parser.add_argument(
         "--prompt",
@@ -153,6 +173,22 @@ def create_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-attempt-cost-usd",
+        type=_positive_cost_budget,
+        help=(
+            "canonical positive USD budget for a new attempt, or comparison "
+            "limit for --usage-report"
+        ),
+    )
+    parser.add_argument(
+        "--pricing-file",
+        type=Path,
+        help=(
+            "strict versioned JSON pricing document used for cost estimates "
+            "and required for cost budgets or --usage-report"
+        ),
+    )
+    parser.add_argument(
         "--trace-dir",
         type=Path,
         default=DEFAULT_TRACE_DIRECTORY,
@@ -190,6 +226,8 @@ def _validate_lifecycle_arguments(
         mode = "continue"
     elif arguments.respond is not None:
         mode = "respond"
+    elif arguments.usage_report is not None:
+        mode = "usage_report"
     else:
         mode = "start"
 
@@ -206,12 +244,18 @@ def _validate_lifecycle_arguments(
         ):
             if value is not None:
                 parser.error(f"{option} can only be supplied with its lifecycle mode")
+        if (
+            arguments.max_attempt_cost_usd is not None
+            and arguments.pricing_file is None
+        ):
+            parser.error("--pricing-file is required with --max-attempt-cost-usd")
         return mode
 
     mode_option = {
         "resume": "--resume",
         "continue": "--continue",
         "respond": "--respond",
+        "usage_report": "--usage-report",
     }[mode]
     if arguments.repo_path is not None:
         parser.error(f"repo_path cannot be supplied with {mode_option}")
@@ -222,6 +266,7 @@ def _validate_lifecycle_arguments(
     if any(
         value is not None
         for value in (
+            arguments.max_attempt_cost_usd if mode != "usage_report" else None,
             arguments.max_tool_calls_per_step,
             arguments.max_explorer_calls_per_step,
             arguments.max_no_progress_rounds,
@@ -230,6 +275,19 @@ def _validate_lifecycle_arguments(
         )
     ):
         parser.error("budget options can only be supplied for a new investigation")
+
+    if mode == "usage_report":
+        for option, value in (
+            ("--prompt", arguments.prompt),
+            ("--interrupt-id", arguments.interrupt_id),
+            ("--decision", arguments.decision),
+            ("--feedback", arguments.feedback),
+        ):
+            if value is not None:
+                parser.error(f"{option} cannot be supplied with --usage-report")
+        if arguments.pricing_file is None:
+            parser.error("--pricing-file is required with --usage-report")
+        return mode
 
     if mode == "resume":
         for option, value in (
@@ -287,6 +345,35 @@ def _render_outcome(outcome: RunOutcome) -> str:
     )
 
 
+def _render_usage_cost_summary(report: AttemptUsageCostReport) -> str:
+    """Render one concise summary strictly from the report aggregate."""
+
+    total = report.breakdowns[0]
+    token_value = (
+        "unavailable"
+        if total.total_tokens.value is None
+        else str(total.total_tokens.value)
+    )
+    cost_value = total.cost.estimated_cost_usd or "unavailable"
+    budget = ""
+    if report.budget is not None:
+        budget = (
+            f"; budget {report.budget.status.value} "
+            f"({report.budget.reason.value}, limit USD {report.budget.limit_usd})"
+        )
+    return (
+        f"Usage/cost: {total.invocation_count} invocations; total tokens "
+        f"{token_value} ({total.total_tokens.coverage.value}); estimated cost USD "
+        f"{cost_value} ({total.cost.coverage.value}); pricing "
+        f"{report.pricing_version}@{report.pricing_effective_from} "
+        f"[{report.pricing_table_id[:12]}]{budget}; estimate, not provider invoice"
+    )
+
+
+def _load_optional_pricing_table(path: Path | None) -> PricingTable | None:
+    return None if path is None else load_pricing_table_file(path)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run one investigation from command-line arguments."""
 
@@ -295,6 +382,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     lifecycle_mode = _validate_lifecycle_arguments(parser, arguments)
 
     try:
+        pricing_table = _load_optional_pricing_table(arguments.pricing_file)
+        if lifecycle_mode == "usage_report":
+            assert pricing_table is not None
+            with open_raw_run_store(arguments.raw_store_db) as raw_run_store:
+                report = raw_run_store.get_attempt_usage_cost_report(
+                    arguments.usage_report,
+                    pricing_table,
+                    max_cost_usd=arguments.max_attempt_cost_usd,
+                )
+            if report is None:
+                raise ValueError(f"Raw run does not exist: {arguments.usage_report}")
+            print(report.model_dump_json(indent=2))
+            print(_render_usage_cost_summary(report), file=sys.stderr)
+            print(
+                f"Raw store: {arguments.raw_store_db.resolve()}",
+                file=sys.stderr,
+            )
+            return 0
+
         with (
             open_sqlite_checkpointer(arguments.checkpoint_db) as checkpointer,
             open_raw_run_store(arguments.raw_store_db) as raw_run_store,
@@ -303,6 +409,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 create_workflow_models(),
                 checkpointer=checkpointer,
                 raw_run_store=raw_run_store,
+                **(
+                    {"pricing_table": pricing_table}
+                    if pricing_table is not None
+                    else {}
+                ),
             )
             if lifecycle_mode == "start":
                 outcome = runner.run(
@@ -328,6 +439,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                             arguments.context_budget_tokens
                             or DEFAULT_CONTEXT_BUDGET_TOKENS
                         ),
+                        max_attempt_cost_usd=arguments.max_attempt_cost_usd,
                         human_review_policy=(
                             arguments.human_review_policy or HumanReviewPolicy.NEVER
                         ),
@@ -384,6 +496,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         file=sys.stderr,
     )
     print(f"Trace: {trace_path}", file=sys.stderr)
+    if outcome.usage_cost_report is not None:
+        print(_render_usage_cost_summary(outcome.usage_cost_report), file=sys.stderr)
     print(f"Raw store: {arguments.raw_store_db.resolve()}", file=sys.stderr)
     return 0
 

@@ -1,6 +1,7 @@
 """Unit tests for the RepoCompass command-line assembly boundary."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import ANY, MagicMock
 
@@ -8,6 +9,11 @@ import pytest
 
 from repocompass import cli
 from repocompass.agent.candidate import CandidateResult, EvidenceItem
+from repocompass.agent.cost import (
+    ModelPrice,
+    build_attempt_usage_cost_report,
+    create_pricing_table,
+)
 from repocompass.agent.evaluation import EvaluationReport, SemanticAssessment
 from repocompass.agent.lifecycle import (
     ExecutionStatus,
@@ -501,3 +507,200 @@ def test_main_rejects_revise_without_feedback_before_runner_call(
     assert exit_code == 1
     assert "feedback is required" in captured.err
     assert runner.respond.call_count == 0
+
+
+def _pricing_table():
+    return create_pricing_table(
+        version="cli-test-v1",
+        effective_from="2026-08-27",
+        entries=(
+            ModelPrice(
+                provider="openai",
+                model="gpt-cli-test",
+                input_usd_per_million_tokens="2",
+                output_usd_per_million_tokens="8",
+            ),
+        ),
+    )
+
+
+def _write_pricing_file(path: Path) -> None:
+    pricing = _pricing_table()
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "version": pricing.version,
+                "effective_from": pricing.effective_from,
+                "entries": [entry.model_dump(mode="json") for entry in pricing.entries],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _empty_usage_report(*, max_cost_usd: str | None = None):
+    return build_attempt_usage_cost_report(
+        run_id="reported-run",
+        thread_id="reported-thread",
+        turn_number=1,
+        invocations=(),
+        pricing_table=_pricing_table(),
+        max_cost_usd=max_cost_usd,
+    )
+
+
+def test_main_loads_pricing_enforces_cost_budget_and_prints_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    outcome, _ = _completed_cli_outcome(
+        thread_id="reported-thread",
+        run_id="reported-run",
+        summary="Priced result.",
+    )
+    outcome = replace(
+        outcome,
+        usage_cost_report=_empty_usage_report(max_cost_usd="0.5"),
+    )
+    runner = MagicMock()
+    runner.run.return_value = outcome
+    runner_factory = MagicMock(return_value=runner)
+    monkeypatch.setattr(cli, "AgentRunner", runner_factory)
+    monkeypatch.setattr(cli, "create_workflow_models", MagicMock(return_value=object()))
+    pricing_file = tmp_path / "pricing.json"
+    _write_pricing_file(pricing_file)
+
+    exit_code = cli.main(
+        [
+            str(tmp_path),
+            "--objective",
+            "Inspect priced usage.",
+            "--pricing-file",
+            str(pricing_file),
+            "--max-attempt-cost-usd",
+            "0.5",
+            "--checkpoint-db",
+            str(tmp_path / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(tmp_path / "raw.sqlite"),
+            "--trace-dir",
+            str(tmp_path / "traces"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    request = runner.run.call_args.args[0]
+    assert exit_code == 0
+    assert request.max_attempt_cost_usd == "0.5"
+    assert runner_factory.call_args.kwargs["pricing_table"] == _pricing_table()
+    assert json.loads(captured.out)["summary"] == "Priced result."
+    assert "Usage/cost: 0 invocations" in captured.err
+    assert "pricing cli-test-v1" in captured.err
+    assert "estimate, not provider invoice" in captured.err
+
+
+def test_usage_report_mode_outputs_contract_without_loading_model_or_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report = _empty_usage_report(max_cost_usd="0.5")
+    store = MagicMock()
+    store.get_attempt_usage_cost_report.return_value = report
+    store_context = MagicMock()
+    store_context.__enter__.return_value = store
+    store_context.__exit__.return_value = False
+    open_store = MagicMock(return_value=store_context)
+    create_models = MagicMock(side_effect=AssertionError("model must not load"))
+    open_checkpointer = MagicMock(
+        side_effect=AssertionError("checkpoint must not open")
+    )
+    monkeypatch.setattr(cli, "open_raw_run_store", open_store)
+    monkeypatch.setattr(cli, "create_workflow_models", create_models)
+    monkeypatch.setattr(cli, "open_sqlite_checkpointer", open_checkpointer)
+    pricing_file = tmp_path / "pricing.json"
+    _write_pricing_file(pricing_file)
+    raw_store_path = tmp_path / "raw.sqlite"
+
+    exit_code = cli.main(
+        [
+            "--usage-report",
+            "reported-run",
+            "--pricing-file",
+            str(pricing_file),
+            "--max-attempt-cost-usd",
+            "0.5",
+            "--raw-store-db",
+            str(raw_store_path),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert json.loads(captured.out) == report.model_dump(mode="json")
+    assert "Usage/cost: 0 invocations" in captured.err
+    assert "Raw store:" in captured.err
+    open_store.assert_called_once_with(raw_store_path)
+    store.get_attempt_usage_cost_report.assert_called_once_with(
+        "reported-run",
+        _pricing_table(),
+        max_cost_usd="0.5",
+    )
+    assert create_models.call_count == 0
+    assert open_checkpointer.call_count == 0
+
+
+def test_usage_report_mode_returns_stable_error_for_unknown_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    store = MagicMock()
+    store.get_attempt_usage_cost_report.return_value = None
+    store_context = MagicMock()
+    store_context.__enter__.return_value = store
+    store_context.__exit__.return_value = False
+    monkeypatch.setattr(
+        cli,
+        "open_raw_run_store",
+        MagicMock(return_value=store_context),
+    )
+    pricing_file = tmp_path / "pricing.json"
+    _write_pricing_file(pricing_file)
+
+    exit_code = cli.main(
+        [
+            "--usage-report",
+            "missing-run",
+            "--pricing-file",
+            str(pricing_file),
+            "--raw-store-db",
+            str(tmp_path / "raw.sqlite"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err == "repocompass: error: Raw run does not exist: missing-run\n"
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        [".", "--objective", "Inspect.", "--max-attempt-cost-usd", "0.5"],
+        ["--usage-report", "run-1"],
+    ],
+)
+def test_pricing_file_is_required_for_cost_budget_and_report_modes(
+    arguments: list[str],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.main(arguments)
+
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert "--pricing-file is required" in captured.err

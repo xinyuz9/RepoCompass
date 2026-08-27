@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "version": "example-v1",
+  "effective_from": "2026-08-27",
+  "entries": [
+    {
+      "schema_version": 1,
+      "provider": "deepseek",
+      "model": "example-deepseek-model",
+      "input_usd_per_million_tokens": "1",
+      "output_usd_per_million_tokens": "2",
+      "cached_input_usd_per_million_tokens": "same_as_input",
+      "reasoning_output_usd_per_million_tokens": "same_as_output"
+    },
+    {
+      "schema_version": 1,
+      "provider": "openai",
+      "model": "example-openai-model",
+      "input_usd_per_million_tokens": "1",
+      "output_usd_per_million_tokens": "2",
+      "cached_input_usd_per_million_tokens": "same_as_input",
+      "reasoning_output_usd_per_million_tokens": "same_as_output"
+    }
+  ]
+}
