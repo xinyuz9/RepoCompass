@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from repocompass.agent.context import (
+    MAX_CONTEXT_ITEMS,
     ContextItem,
     ContextSection,
     ContextSourceKind,
@@ -73,7 +74,9 @@ class ContextAblationCase(_AblationModel):
     case_id: Sha256Digest
     name: str = Field(pattern=IDENTIFIER_PATTERN)
     budget_tokens: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
-    candidates: tuple[ContextItem, ...] = Field(min_length=1)
+    candidates: tuple[ContextItem, ...] = Field(
+        min_length=1, max_length=MAX_CONTEXT_ITEMS
+    )
     required_evidence_item_ids: tuple[Sha256Digest, ...] = Field(min_length=1)
 
     @model_validator(mode="after")

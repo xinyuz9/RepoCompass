@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "case_id": "7d1ed305ed070de5468d667b3222f928ffda6d039465859a3d0c03b705ca4e82",
+  "name": "context-pressure-v1",
+  "budget_tokens": 2330,
+  "candidates": [
+    {
+      "schema_version": 1,
+      "item_id": "07626f3d1dbd784d42b80e2551f83a88d56b6b48bf4dc5268e25a8582272f7dc",
+      "source": {
+        "schema_version": 1,
+        "source_id": "09ee3d7881473c725394089766b7ed9088e044067174ff2108ab5a6d1ba0e4f7",
+        "kind": "objective",
+        "raw_artifact_id": null,
+        "location": null,
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "objective",
+            "id": "objective"
+          }
+        ]
+      },
+      "section": "objective",
+      "verification_status": "human_approved",
+      "content": "Trace an unauthenticated HTTP request from route registration to the credential verification function.",
+      "content_digest": "deaecd2dd0ba711bf2d6c424c31c7d4737035032a8143b1cf71a4914ed76dbe6",
+      "estimated_tokens": 1,
+      "priority": 100,
+      "pinned": true
+    },
+    {
+      "schema_version": 1,
+      "item_id": "4d848b8d363d5d260619361656ffa667742b43c0f9938bce409ea92f2fa7d632",
+      "source": {
+        "schema_version": 1,
+        "source_id": "7fc63e38b3e7805e030520e30120dc1b3e20fee21b77bbe4019963055ebbb3ba",
+        "kind": "tool_result",
+        "raw_artifact_id": "9b92eaada648d2e61f2d76e67b876635da2ec09c421f3d000842366fd3cbd7ab",
+        "location": null,
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "tool_call",
+            "id": "search-generated-client"
+          }
+        ]
+      },
+      "section": "evidence",
+      "verification_status": "unverified",
+      "content": "Generated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\nGenerated client methods mirror remote API schemas but do not register authentication middleware.\n",
+      "content_digest": "549a26615f28449f44f265133e05b25518b532db66bde07170594f5fcf0f5755",
+      "estimated_tokens": 1,
+      "priority": 1,
+      "pinned": false
+    },
+    {
+      "schema_version": 1,
+      "item_id": "696c3bfbc32f0378c74ac0584f80413ac92660890aea61e530ea8e6ab1c9e646",
+      "source": {
+        "schema_version": 1,
+        "source_id": "7e5d6222f6d455177f8d5aedad8211b5b4ee4478d779c0547e037927f4acc55b",
+        "kind": "source_excerpt",
+        "raw_artifact_id": "0393368e91401a5e00da45f3a0c594eed9f736f687ce47afb69d26d2f65da0f5",
+        "location": {
+          "schema_version": 1,
+          "repository_id": "bb8f9a93f50a7ff700564baa3fcea78af39e87d1f6ecf4331c86469ad10eea8b",
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "path": "src/http/routes.py",
+          "line_start": 1,
+          "line_end": 2,
+          "symbol": "login_route"
+        },
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "plan_step",
+            "id": "trace-auth-path"
+          },
+          {
+            "schema_version": 1,
+            "kind": "tool_call",
+            "id": "read-login_route"
+          }
+        ]
+      },
+      "section": "evidence",
+      "verification_status": "verified",
+      "content": "def login_route(request):\n    return authenticate(request.json[\"username\"], request.json[\"password\"] )",
+      "content_digest": "2a662210df5f8a3227f84b56750e661787361ce16a889efeed34b9ac2e73dd1f",
+      "estimated_tokens": 1,
+      "priority": 100,
+      "pinned": false
+    },
+    {
+      "schema_version": 1,
+      "item_id": "7c9c031be9d97fec98a10afabc05ecfcd75debe5a8d8e24ebcf27e36cfcbf12e",
+      "source": {
+        "schema_version": 1,
+        "source_id": "ff66c5fec583b819d25d34945b564c43e37969eb38ff82f34281e40d6eed42c3",
+        "kind": "summary",
+        "raw_artifact_id": null,
+        "location": null,
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "plan_step",
+            "id": "inspect-generated-code"
+          }
+        ]
+      },
+      "section": "history",
+      "verification_status": "rejected",
+      "content": "Earlier exploration followed generated clients and produced no evidence.",
+      "content_digest": "9bc31cccdb238098ec3e6aa03fbaa59aefb3172f0b45cedc8f63323f4c3d586c",
+      "estimated_tokens": 1,
+      "priority": 0,
+      "pinned": false
+    },
+    {
+      "schema_version": 1,
+      "item_id": "82a4c3f2f6bcca21c22b9f6592336614aa94eac9f23017944ee2faa51232e64c",
+      "source": {
+        "schema_version": 1,
+        "source_id": "0f07ff80b4d1eb317d7148368e6e76e7339cbe8fc95b4eb97d3030936880ed82",
+        "kind": "source_excerpt",
+        "raw_artifact_id": "702388931d55543d83f407ebb25e4dec4a5d692c3c5c8adc575846fc3a6c114a",
+        "location": {
+          "schema_version": 1,
+          "repository_id": "bb8f9a93f50a7ff700564baa3fcea78af39e87d1f6ecf4331c86469ad10eea8b",
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "path": "src/auth/service.py",
+          "line_start": 1,
+          "line_end": 3,
+          "symbol": "authenticate"
+        },
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "plan_step",
+            "id": "trace-auth-path"
+          },
+          {
+            "schema_version": 1,
+            "kind": "tool_call",
+            "id": "read-authenticate"
+          }
+        ]
+      },
+      "section": "evidence",
+      "verification_status": "verified",
+      "content": "def authenticate(username, password):\n    account = accounts.find_by_username(username)\n    return account if verify_password(password, account.password_hash) else None",
+      "content_digest": "0d599fbb4cfe09f1182f24e792c90867a23ba19a351a4dc160cbd2a493f696f9",
+      "estimated_tokens": 1,
+      "priority": 99,
+      "pinned": false
+    },
+    {
+      "schema_version": 1,
+      "item_id": "869f7c38b58772798982e030f983872e2f3fc22f78ef6d05d5a4f1929f427850",
+      "source": {
+        "schema_version": 1,
+        "source_id": "b6204b3f710696f01509fcf3c830cc26615739a907f4a062c066338eb3e18bfd",
+        "kind": "memory",
+        "raw_artifact_id": null,
+        "location": null,
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "memory",
+            "id": "memory-auth"
+          }
+        ]
+      },
+      "section": "memory",
+      "verification_status": "inferred",
+      "content": "A prior run guessed that authentication may live under src/security/.",
+      "content_digest": "95f02eed410ec245c87f0528f4140b5f2d51988381d589f0489c9e9ba0904c4c",
+      "estimated_tokens": 1,
+      "priority": 20,
+      "pinned": false
+    }
+  ],
+  "required_evidence_item_ids": [
+    "696c3bfbc32f0378c74ac0584f80413ac92660890aea61e530ea8e6ab1c9e646",
+    "82a4c3f2f6bcca21c22b9f6592336614aa94eac9f23017944ee2faa51232e64c"
+  ]
+}
