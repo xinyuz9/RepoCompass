@@ -1,0 +1,232 @@
+{
+  "schema_version": 1,
+  "case_id": "0c817884151f5d7e4586f71e3e3dee7dce6556a60ee434df003c4127009aa43e",
+  "name": "memory-recall-v1",
+  "budget_tokens": 5000,
+  "base_candidates": [
+    {
+      "schema_version": 1,
+      "item_id": "07626f3d1dbd784d42b80e2551f83a88d56b6b48bf4dc5268e25a8582272f7dc",
+      "source": {
+        "schema_version": 1,
+        "source_id": "09ee3d7881473c725394089766b7ed9088e044067174ff2108ab5a6d1ba0e4f7",
+        "kind": "objective",
+        "raw_artifact_id": null,
+        "location": null,
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "objective",
+            "id": "objective"
+          }
+        ],
+        "memory": null
+      },
+      "section": "objective",
+      "verification_status": "human_approved",
+      "content": "Trace an unauthenticated HTTP request from route registration to the credential verification function.",
+      "content_digest": "deaecd2dd0ba711bf2d6c424c31c7d4737035032a8143b1cf71a4914ed76dbe6",
+      "estimated_tokens": 1,
+      "priority": 100,
+      "pinned": true
+    },
+    {
+      "schema_version": 1,
+      "item_id": "696c3bfbc32f0378c74ac0584f80413ac92660890aea61e530ea8e6ab1c9e646",
+      "source": {
+        "schema_version": 1,
+        "source_id": "7e5d6222f6d455177f8d5aedad8211b5b4ee4478d779c0547e037927f4acc55b",
+        "kind": "source_excerpt",
+        "raw_artifact_id": "0393368e91401a5e00da45f3a0c594eed9f736f687ce47afb69d26d2f65da0f5",
+        "location": {
+          "schema_version": 1,
+          "repository_id": "bb8f9a93f50a7ff700564baa3fcea78af39e87d1f6ecf4331c86469ad10eea8b",
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "path": "src/http/routes.py",
+          "line_start": 1,
+          "line_end": 2,
+          "symbol": "login_route"
+        },
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "plan_step",
+            "id": "trace-auth-path"
+          },
+          {
+            "schema_version": 1,
+            "kind": "tool_call",
+            "id": "read-login_route"
+          }
+        ],
+        "memory": null
+      },
+      "section": "evidence",
+      "verification_status": "verified",
+      "content": "def login_route(request):\n    return authenticate(request.json[\"username\"], request.json[\"password\"] )",
+      "content_digest": "2a662210df5f8a3227f84b56750e661787361ce16a889efeed34b9ac2e73dd1f",
+      "estimated_tokens": 1,
+      "priority": 100,
+      "pinned": false
+    },
+    {
+      "schema_version": 1,
+      "item_id": "82a4c3f2f6bcca21c22b9f6592336614aa94eac9f23017944ee2faa51232e64c",
+      "source": {
+        "schema_version": 1,
+        "source_id": "0f07ff80b4d1eb317d7148368e6e76e7339cbe8fc95b4eb97d3030936880ed82",
+        "kind": "source_excerpt",
+        "raw_artifact_id": "702388931d55543d83f407ebb25e4dec4a5d692c3c5c8adc575846fc3a6c114a",
+        "location": {
+          "schema_version": 1,
+          "repository_id": "bb8f9a93f50a7ff700564baa3fcea78af39e87d1f6ecf4331c86469ad10eea8b",
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "path": "src/auth/service.py",
+          "line_start": 1,
+          "line_end": 3,
+          "symbol": "authenticate"
+        },
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "plan_step",
+            "id": "trace-auth-path"
+          },
+          {
+            "schema_version": 1,
+            "kind": "tool_call",
+            "id": "read-authenticate"
+          }
+        ],
+        "memory": null
+      },
+      "section": "evidence",
+      "verification_status": "verified",
+      "content": "def authenticate(username, password):\n    account = accounts.find_by_username(username)\n    return account if verify_password(password, account.password_hash) else None",
+      "content_digest": "0d599fbb4cfe09f1182f24e792c90867a23ba19a351a4dc160cbd2a493f696f9",
+      "estimated_tokens": 1,
+      "priority": 99,
+      "pinned": false
+    }
+  ],
+  "memory_candidates": [
+    {
+      "schema_version": 1,
+      "item_id": "358ba784559ae180afe81ed49379011d22841e4078e4728ae77e75c57d2b9411",
+      "source": {
+        "schema_version": 1,
+        "source_id": "d4b19fba2580bea4d58d2cc56f064212b5b8cc5edced0845d1d0d68a54970214",
+        "kind": "memory",
+        "raw_artifact_id": null,
+        "location": null,
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "memory",
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "memory": {
+          "schema_version": 1,
+          "memory_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "retrieval_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "query_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "repository_key": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "source_repository_id": "bb8f9a93f50a7ff700564baa3fcea78af39e87d1f6ecf4331c86469ad10eea8b",
+          "source_commit_sha": "1111111111111111111111111111111111111111",
+          "scope": "repository",
+          "freshness": "revalidation_required",
+          "staleness_reason": "commit_mismatch"
+        }
+      },
+      "section": "memory",
+      "verification_status": "unverified",
+      "content": "A prior run guessed that authentication may live under src/security/.",
+      "content_digest": "95f02eed410ec245c87f0528f4140b5f2d51988381d589f0489c9e9ba0904c4c",
+      "estimated_tokens": 1,
+      "priority": 55,
+      "pinned": false
+    },
+    {
+      "schema_version": 1,
+      "item_id": "fa25dac980cd7523a9a2c7d6ca34c11b092efb7e1f9b8fee1af3d93e8412527c",
+      "source": {
+        "schema_version": 1,
+        "source_id": "30f42188cc93d68f1b63e3d33877738c6f27bcbc08a368a4d1daf6f37b515da0",
+        "kind": "memory",
+        "raw_artifact_id": null,
+        "location": null,
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "memory",
+            "id": "5c37fe55c4009b3439c3e9d827f70450fa2976689a734ec25755a0fa051d35c8"
+          }
+        ],
+        "memory": {
+          "schema_version": 1,
+          "memory_id": "5c37fe55c4009b3439c3e9d827f70450fa2976689a734ec25755a0fa051d35c8",
+          "retrieval_id": "0f9582ba9bb031e13ebca2230dd05801831baf14bfdfd34cfdfde75d56d1105e",
+          "query_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "repository_key": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "source_repository_id": "bb8f9a93f50a7ff700564baa3fcea78af39e87d1f6ecf4331c86469ad10eea8b",
+          "source_commit_sha": "1111111111111111111111111111111111111111",
+          "scope": "episodic",
+          "freshness": "observed",
+          "staleness_reason": null
+        }
+      },
+      "section": "memory",
+      "verification_status": "unverified",
+      "content": "{\"failed_hypotheses\":[\"generated clients own authentication\"],\"memory_id\":\"5c37fe55c4009b3439c3e9d827f70450fa2976689a734ec25755a0fa051d35c8\",\"query_sequence\":[\"search_text:authentication\"],\"successful_paths\":[\"src/http/routes.py\",\"src/auth/service.py\"],\"summary\":\"A prior accepted turn followed route registration to the authentication service.\",\"termination_status\":\"accepted\",\"usage_policy\":\"observed_strategy_history_only_never_code_evidence\"}",
+      "content_digest": "04aba67bfa58142b808325a74f64bae734f4c4997a6739e2fd2c9901f3a0bd2c",
+      "estimated_tokens": 1,
+      "priority": 40,
+      "pinned": false
+    }
+  ],
+  "recall_report": {
+    "schema_version": 1,
+    "recall_id": "e415a282dd6a4f3fb8ded2c15ee45b49df2d8abba49d6714ddb4e69213ef0eb7",
+    "query_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "repository_result_count": 2,
+    "episodic_result_count": 1,
+    "decisions": [
+      {
+        "schema_version": 1,
+        "retrieval_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "memory_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "scope": "repository",
+        "freshness": "revalidation_required",
+        "staleness_reason": "commit_mismatch",
+        "context_item_id": "358ba784559ae180afe81ed49379011d22841e4078e4728ae77e75c57d2b9411"
+      },
+      {
+        "schema_version": 1,
+        "retrieval_id": "1142d753a3ea885f5d3c779ec53dc131cfd6266a4b53fe0cf6b791a5d1442770",
+        "memory_id": "6e10e93f18c9abcb669c3a04381515bba527c7c0e505c6d3f86d7c5d214b0cc7",
+        "scope": "repository",
+        "freshness": "stale",
+        "staleness_reason": "source_missing",
+        "context_item_id": null
+      },
+      {
+        "schema_version": 1,
+        "retrieval_id": "0f9582ba9bb031e13ebca2230dd05801831baf14bfdfd34cfdfde75d56d1105e",
+        "memory_id": "5c37fe55c4009b3439c3e9d827f70450fa2976689a734ec25755a0fa051d35c8",
+        "scope": "episodic",
+        "freshness": "observed",
+        "staleness_reason": null,
+        "context_item_id": "fa25dac980cd7523a9a2c7d6ca34c11b092efb7e1f9b8fee1af3d93e8412527c"
+      }
+    ],
+    "context_item_ids": [
+      "358ba784559ae180afe81ed49379011d22841e4078e4728ae77e75c57d2b9411",
+      "fa25dac980cd7523a9a2c7d6ca34c11b092efb7e1f9b8fee1af3d93e8412527c"
+    ]
+  },
+  "required_evidence_item_ids": [
+    "696c3bfbc32f0378c74ac0584f80413ac92660890aea61e530ea8e6ab1c9e646",
+    "82a4c3f2f6bcca21c22b9f6592336614aa94eac9f23017944ee2faa51232e64c"
+  ]
+}

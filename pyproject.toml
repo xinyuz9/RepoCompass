@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 repocompass = "repocompass.cli:main"
 repocompass-benchmark = "repocompass.evaluation.cli:main"
+repocompass-memory-benchmark = "repocompass.evaluation.memory_cli:main"
 repocompass-live-smoke = "repocompass.evaluation.live_smoke:main"
 
 [build-system]
