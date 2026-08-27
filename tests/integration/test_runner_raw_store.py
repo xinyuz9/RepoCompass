@@ -210,6 +210,25 @@ def test_cli_queries_exact_usage_report_after_raw_store_reopen(
         ).run(_request(tmp_path))
 
     assert outcome.usage_cost_report is not None
+    report = outcome.usage_cost_report
+    assert outcome.trace.events[0].payload["pricing_table_id"] == pricing.table_id
+    assert outcome.trace.events[-1].payload["usage_cost_report"] == {
+        "schema_version": 1,
+        "report_id": report.report_id,
+        "pricing_table_id": pricing.table_id,
+        "pricing_version": pricing.version,
+        "pricing_effective_from": pricing.effective_from,
+        "invocation_count": 4,
+        "cost_coverage": "complete",
+        "estimated_cost_usd": "0.0012",
+        "disclaimer": "estimate_not_invoice",
+    }
+    serialized_trace = json.dumps(
+        [event.model_dump(mode="json") for event in outcome.trace.events]
+    )
+    assert "invocation_costs" not in serialized_trace
+    assert "model input" not in serialized_trace
+    assert outcome.trace.events[-1].kind.value == "run_finished"
     pricing_file = tmp_path / "pricing.json"
     pricing_file.write_text(
         json.dumps(
@@ -258,6 +277,53 @@ def test_runner_marks_human_review_attempt_interrupted(tmp_path: Path) -> None:
         assert attempt is not None
         assert attempt.status is AttemptStatus.INTERRUPTED
         assert len(store.list_model_invocations("raw-run")) == 4
+
+
+def test_priced_interrupted_attempt_trace_references_partial_usage_report(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "example.py").write_text("value = True\n", encoding="utf-8")
+    pricing = create_pricing_table(
+        version="interrupt-integration-v1",
+        effective_from="2026-08-27",
+        entries=(
+            ModelPrice(
+                provider="openai",
+                model="gpt-integration",
+                input_usd_per_million_tokens="10",
+                output_usd_per_million_tokens="10",
+            ),
+        ),
+    )
+    request = _request(tmp_path).model_copy(
+        update={"human_review_policy": HumanReviewPolicy.BEFORE_FINALIZE}
+    )
+
+    with open_raw_run_store(tmp_path / "raw.sqlite") as store:
+        outcome = AgentRunner(
+            _models(_result()),
+            checkpointer=InMemorySaver(),
+            raw_run_store=store,
+            pricing_table=pricing,
+            run_id_factory=lambda: "priced-interrupt-run",
+            thread_id_factory=lambda: "priced-interrupt-thread",
+        ).run(request)
+
+    assert outcome.execution_status is ExecutionStatus.INTERRUPTED
+    assert outcome.usage_cost_report is not None
+    report = outcome.usage_cost_report
+    assert outcome.trace.events[-1].kind.value == "run_interrupted"
+    assert outcome.trace.events[-1].payload["usage_cost_report"] == {
+        "schema_version": 1,
+        "report_id": report.report_id,
+        "pricing_table_id": pricing.table_id,
+        "pricing_version": pricing.version,
+        "pricing_effective_from": pricing.effective_from,
+        "invocation_count": 4,
+        "cost_coverage": "complete",
+        "estimated_cost_usd": "0.0012",
+        "disclaimer": "estimate_not_invoice",
+    }
 
 
 def test_runner_marks_attempt_failed_after_provider_error(tmp_path: Path) -> None:

@@ -417,6 +417,60 @@ def _read_progress_metadata(
     return decision, stalled_rounds
 
 
+def _usage_cost_trace_metadata(
+    report: AttemptUsageCostReport,
+) -> dict[str, JsonValue]:
+    """Return a bounded report reference without copying invocation payloads."""
+
+    total = report.breakdowns[0]
+    return {
+        "schema_version": report.schema_version,
+        "report_id": report.report_id,
+        "pricing_table_id": report.pricing_table_id,
+        "pricing_version": report.pricing_version,
+        "pricing_effective_from": report.pricing_effective_from,
+        "invocation_count": total.invocation_count,
+        "cost_coverage": total.cost.coverage.value,
+        "estimated_cost_usd": total.cost.estimated_cost_usd,
+        "disclaimer": report.disclaimer,
+    }
+
+
+def _record_terminal_trace_event(
+    outcome: RunOutcome,
+    *,
+    execution_mode: ExecutionMode,
+    usage_cost_report: AttemptUsageCostReport | None,
+) -> None:
+    """Append the lifecycle terminal only after optional ledger finalization."""
+
+    if outcome.execution_status is ExecutionStatus.INTERRUPTED:
+        review_request = outcome.human_review_request
+        interrupt_id = outcome.interrupt_id
+        if review_request is None or interrupt_id is None:
+            raise ValueError("Interrupted outcome is missing review metadata")
+        kind = TraceEventKind.RUN_INTERRUPTED
+        payload: dict[str, JsonValue] = {
+            "thread_id": outcome.thread_id,
+            "execution_mode": execution_mode,
+            "interrupt_id": interrupt_id,
+            "turn_number": review_request.turn_number,
+        }
+    else:
+        if outcome.termination_status is None:
+            raise ValueError("Completed outcome is missing termination status")
+        kind = TraceEventKind.RUN_FINISHED
+        payload = {
+            "thread_id": outcome.thread_id,
+            "execution_mode": execution_mode,
+            "termination_status": outcome.termination_status,
+            "step_stop_reason": outcome.step_stop_reason,
+        }
+    if usage_cost_report is not None:
+        payload["usage_cost_report"] = _usage_cost_trace_metadata(usage_cost_report)
+    outcome.trace.record(kind, payload=payload)
+
+
 def _build_interrupted_outcome(
     snapshot: StateSnapshot,
     *,
@@ -443,15 +497,6 @@ def _build_interrupted_outcome(
         name="interrupt_id",
     )
     review_request = decode_human_review_interrupt(pending_interrupt.value)
-    trace.record(
-        TraceEventKind.RUN_INTERRUPTED,
-        payload={
-            "thread_id": thread_id,
-            "execution_mode": execution_mode,
-            "interrupt_id": interrupt_id,
-            "turn_number": review_request.turn_number,
-        },
-    )
     progress_decision, stalled_rounds = _read_progress_metadata(snapshot.values)
 
     return RunOutcome(
@@ -774,10 +819,12 @@ class AgentRunner:
                 )
             ),
         }
+        if self._pricing_table is not None:
+            started_payload["pricing_table_id"] = self._pricing_table.table_id
         if configured_cost_budget is not None:
             started_payload["max_attempt_cost_usd"] = configured_cost_budget
             assert isinstance(configured_pricing_table_id, str)
-            started_payload["pricing_table_id"] = configured_pricing_table_id
+            assert configured_pricing_table_id == self._pricing_table.table_id
         if human_decision is not None:
             started_payload["human_decision"] = {
                 "action": human_decision.action.value,
@@ -820,6 +867,11 @@ class AgentRunner:
                 state=metadata_state,
                 config=config,
             )
+        _record_terminal_trace_event(
+            outcome,
+            execution_mode=execution_mode,
+            usage_cost_report=usage_cost_report,
+        )
         return replace(outcome, usage_cost_report=usage_cost_report)
 
     @staticmethod
@@ -889,16 +941,6 @@ class AgentRunner:
         if termination_status not in ("accepted", "exhausted", "cancelled"):
             raise ValueError("Graph finished without a termination status")
         progress_decision, stalled_rounds = _read_progress_metadata(final_state)
-
-        trace.record(
-            TraceEventKind.RUN_FINISHED,
-            payload={
-                "thread_id": thread_id,
-                "execution_mode": execution_mode,
-                "termination_status": termination_status,
-                "step_stop_reason": step_stop_reason,
-            },
-        )
 
         return RunOutcome(
             thread_id=thread_id,
