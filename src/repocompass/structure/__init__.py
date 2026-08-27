@@ -1,0 +1,53 @@
+"""Public structural-evidence contracts and Python AST indexer."""
+
+from repocompass.structure.contracts import (
+    MAX_STRUCTURE_RECORDS,
+    STRUCTURE_SCHEMA_VERSION,
+    PythonFileIndex,
+    PythonImportKind,
+    PythonImportRecord,
+    PythonReferenceKind,
+    PythonReferenceRecord,
+    PythonSymbolKind,
+    PythonSymbolRecord,
+    SourceLocation,
+    StructuralVerificationStatus,
+    create_import_record,
+    create_python_file_index,
+    create_reference_record,
+    create_source_location,
+    create_symbol_record,
+)
+from repocompass.structure.python_index import (
+    MAX_PYTHON_AST_DEPTH,
+    MAX_PYTHON_AST_NODES,
+    MAX_PYTHON_SOURCE_BYTES,
+    PythonIndexError,
+    PythonIndexErrorReason,
+    build_python_file_index,
+)
+
+__all__ = [
+    "MAX_PYTHON_AST_DEPTH",
+    "MAX_PYTHON_AST_NODES",
+    "MAX_PYTHON_SOURCE_BYTES",
+    "MAX_STRUCTURE_RECORDS",
+    "STRUCTURE_SCHEMA_VERSION",
+    "PythonFileIndex",
+    "PythonImportKind",
+    "PythonImportRecord",
+    "PythonIndexError",
+    "PythonIndexErrorReason",
+    "PythonReferenceKind",
+    "PythonReferenceRecord",
+    "PythonSymbolKind",
+    "PythonSymbolRecord",
+    "SourceLocation",
+    "StructuralVerificationStatus",
+    "build_python_file_index",
+    "create_import_record",
+    "create_python_file_index",
+    "create_reference_record",
+    "create_source_location",
+    "create_symbol_record",
+]
