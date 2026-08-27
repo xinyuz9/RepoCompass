@@ -15,6 +15,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from repocompass.memory.contracts import (
+    EpisodicMemory,
     MemoryAuditAction,
     MemoryAuditEvent,
     MemoryAuditReason,
@@ -33,7 +34,7 @@ from repocompass.memory.revalidation import (
 from repocompass.tools.contracts import IDENTIFIER_PATTERN, SHA256_PATTERN
 from repocompass.tools.gateway import ToolExecutionContext
 
-MEMORY_STORE_SCHEMA_VERSION = 1
+MEMORY_STORE_SCHEMA_VERSION = 2
 _SQLITE_TIMEOUT_SECONDS = 10.0
 _FTS_TOKENIZER = "unicode61 remove_diacritics 2"
 _MAX_MEMORY_QUERY_CHARACTERS = 512
@@ -72,7 +73,7 @@ def _normalize_schema_sql(value: str) -> str:
     return " ".join(value.lower().split())
 
 
-_SCHEMA_STATEMENTS = (
+_SCHEMA_V1_STATEMENTS = (
     """
     CREATE TABLE memory_schema (
         key TEXT NOT NULL PRIMARY KEY,
@@ -191,6 +192,28 @@ _SCHEMA_STATEMENTS = (
     "CREATE INDEX idx_memory_audit_target_time "
     "ON memory_audit_events(memory_id, created_at_ms)",
 )
+_SCHEMA_V2_STATEMENTS = (
+    """
+    CREATE TABLE memory_episodes (
+        episode_id TEXT NOT NULL PRIMARY KEY CHECK(length(episode_id) = 64),
+        repository_key TEXT NOT NULL CHECK(length(repository_key) = 64),
+        run_id TEXT NOT NULL CHECK(length(run_id) BETWEEN 1 AND 128),
+        thread_id TEXT NOT NULL CHECK(length(thread_id) BETWEEN 1 AND 128),
+        turn_number INTEGER NOT NULL CHECK(turn_number >= 1),
+        termination_status TEXT NOT NULL
+            CHECK(termination_status IN ('accepted', 'exhausted', 'cancelled')),
+        objective_digest TEXT NOT NULL CHECK(length(objective_digest) = 64),
+        final_result_digest TEXT NOT NULL CHECK(length(final_result_digest) = 64),
+        FOREIGN KEY(episode_id) REFERENCES memory_entries(memory_id)
+            ON DELETE CASCADE
+    )
+    """,
+    "CREATE UNIQUE INDEX idx_memory_episodes_repository_thread_turn "
+    "ON memory_episodes(repository_key, thread_id, turn_number)",
+    "CREATE INDEX idx_memory_episodes_repository_run "
+    "ON memory_episodes(repository_key, run_id)",
+    "UPDATE memory_schema SET value = '2' WHERE key = 'schema_version'",
+)
 
 _REQUIRED_COLUMNS = {
     "memory_schema": ("key", "value"),
@@ -225,6 +248,16 @@ _REQUIRED_COLUMNS = {
         "created_at_ms",
         "event_json",
     ),
+    "memory_episodes": (
+        "episode_id",
+        "repository_key",
+        "run_id",
+        "thread_id",
+        "turn_number",
+        "termination_status",
+        "objective_digest",
+        "final_result_digest",
+    ),
 }
 _REQUIRED_NOT_NULL = {
     "memory_schema": frozenset(_REQUIRED_COLUMNS["memory_schema"]),
@@ -245,11 +278,22 @@ _REQUIRED_NOT_NULL = {
     ),
     "memory_sources": frozenset(_REQUIRED_COLUMNS["memory_sources"]),
     "memory_audit_events": frozenset(_REQUIRED_COLUMNS["memory_audit_events"]),
+    "memory_episodes": frozenset(_REQUIRED_COLUMNS["memory_episodes"]),
 }
 _EXPECTED_TRIGGER_SQL = {
-    "memory_entries_fts_insert": _normalize_schema_sql(_SCHEMA_STATEMENTS[6]),
-    "memory_entries_fts_delete": _normalize_schema_sql(_SCHEMA_STATEMENTS[7]),
-    "memory_entries_fts_update": _normalize_schema_sql(_SCHEMA_STATEMENTS[8]),
+    "memory_entries_fts_insert": _normalize_schema_sql(_SCHEMA_V1_STATEMENTS[6]),
+    "memory_entries_fts_delete": _normalize_schema_sql(_SCHEMA_V1_STATEMENTS[7]),
+    "memory_entries_fts_update": _normalize_schema_sql(_SCHEMA_V1_STATEMENTS[8]),
+}
+_EXPECTED_V1_INDEX_SQL = {
+    str(index).split()[2]: _normalize_schema_sql(str(index))
+    for index in _SCHEMA_V1_STATEMENTS[9:12]
+}
+_EXPECTED_V2_INDEX_SQL = {
+    str(index).split()[3 if str(index).startswith("CREATE UNIQUE") else 2]: (
+        _normalize_schema_sql(str(index))
+    )
+    for index in _SCHEMA_V2_STATEMENTS[1:3]
 }
 _ForeignKeyEdge = tuple[str, str, str, str]
 _EXPECTED_FOREIGN_KEYS: dict[str, Counter[_ForeignKeyEdge]] = {
@@ -259,9 +303,11 @@ _EXPECTED_FOREIGN_KEYS: dict[str, Counter[_ForeignKeyEdge]] = {
         [("memory_entries", "memory_id", "memory_id", "CASCADE")]
     ),
     "memory_audit_events": Counter(),
+    "memory_episodes": Counter(
+        [("memory_entries", "episode_id", "memory_id", "CASCADE")]
+    ),
 }
-_EXPECTED_METADATA = {
-    "schema_version": str(MEMORY_STORE_SCHEMA_VERSION),
+_EXPECTED_BASE_METADATA = {
     "fts_tokenizer": _FTS_TOKENIZER,
 }
 
@@ -296,6 +342,218 @@ class MemoryStore:
         with self._lock:
             self._connection.execute("SELECT count(*) FROM memory_fts").fetchone()
         return True
+
+    def put_episodic_memory(
+        self,
+        memory: EpisodicMemory,
+        *,
+        context: ToolExecutionContext,
+    ) -> bool:
+        """Atomically persist one observed terminal investigation episode."""
+
+        memory = _revalidate_episodic_memory_contract(memory)
+        if not isinstance(context, ToolExecutionContext):
+            raise TypeError("context must be a ToolExecutionContext")
+        identity = resolve_memory_repository_identity(context)
+        if (
+            memory.repository_key != identity.repository_key
+            or memory.source_repository_id != context.repository_id
+        ):
+            raise MemoryStoreIntegrityError(
+                "episodic memory identity does not match trusted context"
+            )
+        if memory.commit_sha != context.commit_sha:
+            raise MemoryStoreIntegrityError(
+                "episodic memory commit does not match trusted context"
+            )
+
+        event = create_memory_audit_event(
+            memory_id=memory.episode_id,
+            repository_key=memory.repository_key,
+            action=MemoryAuditAction.CREATED,
+            reason=MemoryAuditReason.WRITE_POLICY_ALLOWED,
+            created_at_ms=memory.created_at_ms,
+            run_id=memory.run_id,
+        )
+        inserted = False
+        with self._transaction():
+            existing_row = self._connection.execute(
+                "SELECT * FROM memory_entries WHERE memory_id = ?",
+                (memory.episode_id,),
+            ).fetchone()
+            if existing_row is None:
+                turn_row = self._connection.execute(
+                    "SELECT episode_id FROM memory_episodes "
+                    "WHERE repository_key = ? AND thread_id = ? "
+                    "AND turn_number = ?",
+                    (
+                        memory.repository_key,
+                        memory.thread_id,
+                        memory.turn_number,
+                    ),
+                ).fetchone()
+                if turn_row is not None:
+                    raise MemoryStoreConflictError(
+                        "episodic memory thread turn already exists"
+                    )
+                try:
+                    self._connection.execute(
+                        """
+                        INSERT INTO memory_entries (
+                            memory_id, memory_scope, repository_key,
+                            source_repository_id, commit_sha,
+                            verification_status, write_authority, title,
+                            content, tags_text, created_at_ms, record_json
+                        ) VALUES (?, 'episodic', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            memory.episode_id,
+                            memory.repository_key,
+                            memory.source_repository_id,
+                            memory.commit_sha,
+                            memory.verification_status.value,
+                            memory.write_authority.value,
+                            _episode_title(memory),
+                            _episode_search_content(memory),
+                            _episode_tags_text(memory),
+                            memory.created_at_ms,
+                            _canonical_model_json(memory),
+                        ),
+                    )
+                    self._insert_episode_index(memory)
+                except sqlite3.IntegrityError as error:
+                    raise MemoryStoreIntegrityError(
+                        "episodic memory violates storage integrity"
+                    ) from error
+                inserted = True
+            else:
+                existing = _decode_episodic_memory(
+                    self._connection,
+                    existing_row,
+                )
+                if existing != memory:
+                    raise MemoryStoreConflictError(
+                        "episode identity already exists with different contents"
+                    )
+            self._insert_audit_event(event)
+        return inserted
+
+    def get_episodic_memory(self, episode_id: str) -> EpisodicMemory | None:
+        """Strictly load one terminal investigation episode."""
+
+        _validate_digest(episode_id, name="episode_id")
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM memory_entries WHERE memory_id = ?",
+                (episode_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            return _decode_episodic_memory(self._connection, row)
+
+    def get_episodic_memory_for_turn(
+        self,
+        repository_key: str,
+        thread_id: str,
+        turn_number: int,
+    ) -> EpisodicMemory | None:
+        """Load the unique consolidated episode for one logical thread turn."""
+
+        _validate_digest(repository_key, name="repository_key")
+        _validate_optional_identifier(thread_id, name="thread_id")
+        _validate_turn_number(turn_number)
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT memory_entries.*
+                FROM memory_episodes
+                JOIN memory_entries
+                  ON memory_entries.memory_id = memory_episodes.episode_id
+                WHERE memory_episodes.repository_key = ?
+                  AND memory_episodes.thread_id = ?
+                  AND memory_episodes.turn_number = ?
+                """,
+                (repository_key, thread_id, turn_number),
+            ).fetchone()
+            if row is None:
+                return None
+            return _decode_episodic_memory(self._connection, row)
+
+    def list_episodic_memories(
+        self,
+        *,
+        context: ToolExecutionContext,
+        max_results: int,
+        source_run_id: str | None = None,
+        thread_id: str | None = None,
+    ) -> tuple[EpisodicMemory, ...]:
+        """List bounded repository-scoped episodes in stable newest-first order."""
+
+        _validate_context_and_result_limit(context, max_results)
+        _validate_optional_identifier(source_run_id, name="source_run_id")
+        _validate_optional_identifier(thread_id, name="thread_id")
+        identity = resolve_memory_repository_identity(context)
+        predicates = ["memory_episodes.repository_key = ?"]
+        parameters: list[object] = [identity.repository_key]
+        if source_run_id is not None:
+            predicates.append("memory_episodes.run_id = ?")
+            parameters.append(source_run_id)
+        if thread_id is not None:
+            predicates.append("memory_episodes.thread_id = ?")
+            parameters.append(thread_id)
+        parameters.append(max_results)
+        statement = (
+            "SELECT memory_entries.* FROM memory_episodes "
+            "JOIN memory_entries "
+            "ON memory_entries.memory_id = memory_episodes.episode_id "
+            f"WHERE {' AND '.join(predicates)} "
+            "ORDER BY memory_entries.created_at_ms DESC, "
+            "memory_entries.memory_id LIMIT ?"
+        )
+        with self._lock:
+            rows = self._connection.execute(statement, parameters).fetchall()
+            return tuple(_decode_episodic_memory(self._connection, row) for row in rows)
+
+    def search_episodic_memories(
+        self,
+        query: str,
+        *,
+        context: ToolExecutionContext,
+        max_results: int,
+        audit_at_ms: int,
+        run_id: str | None = None,
+    ) -> tuple[EpisodicMemory, ...]:
+        """Search observed history without upgrading it to verified evidence."""
+
+        _validate_context_and_result_limit(context, max_results)
+        _validate_timestamp(audit_at_ms, name="audit_at_ms")
+        _validate_optional_identifier(run_id, name="run_id")
+        _, fts_query = _bounded_fts_query(query)
+        identity = resolve_memory_repository_identity(context)
+        with self._lock:
+            rows = self._execute_bounded_search(
+                fts_query=fts_query,
+                repository_key=identity.repository_key,
+                memory_scope="episodic",
+                max_results=max_results,
+            )
+            episodes = tuple(
+                _decode_episodic_memory(self._connection, row) for row in rows
+            )
+        if episodes:
+            with self._transaction():
+                for episode in episodes:
+                    self._insert_audit_event(
+                        create_memory_audit_event(
+                            memory_id=episode.episode_id,
+                            repository_key=episode.repository_key,
+                            action=MemoryAuditAction.RETRIEVED,
+                            reason=MemoryAuditReason.EPISODIC_HISTORY_HIT,
+                            created_at_ms=audit_at_ms,
+                            run_id=run_id,
+                        )
+                    )
+        return episodes
 
     def put_repository_memory(
         self,
@@ -435,6 +693,7 @@ class MemoryStore:
             rows = self._execute_bounded_search(
                 fts_query=fts_query,
                 repository_key=identity.repository_key,
+                memory_scope="repository",
                 max_results=max_results,
             )
             memories = tuple(
@@ -522,6 +781,26 @@ class MemoryStore:
             ),
         )
 
+    def _insert_episode_index(self, memory: EpisodicMemory) -> None:
+        self._connection.execute(
+            """
+            INSERT INTO memory_episodes (
+                episode_id, repository_key, run_id, thread_id, turn_number,
+                termination_status, objective_digest, final_result_digest
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                memory.episode_id,
+                memory.repository_key,
+                memory.run_id,
+                memory.thread_id,
+                memory.turn_number,
+                memory.termination_status,
+                memory.objective_digest,
+                memory.final_result_digest,
+            ),
+        )
+
     def _insert_audit_event(self, event: MemoryAuditEvent) -> None:
         event_json = _canonical_model_json(event)
         existing = self._connection.execute(
@@ -556,6 +835,7 @@ class MemoryStore:
         *,
         fts_query: str,
         repository_key: str,
+        memory_scope: str,
         max_results: int,
     ) -> tuple[sqlite3.Row, ...]:
         deadline = time.monotonic() + _MEMORY_QUERY_TIMEOUT_SECONDS
@@ -571,11 +851,11 @@ class MemoryStore:
                 JOIN memory_entries ON memory_entries.rowid = memory_fts.rowid
                 WHERE memory_fts MATCH ?
                   AND memory_entries.repository_key = ?
-                  AND memory_entries.memory_scope = 'repository'
+                  AND memory_entries.memory_scope = ?
                 ORDER BY bm25(memory_fts), memory_entries.memory_id
                 LIMIT ?
                 """,
-                (fts_query, repository_key, max_results),
+                (fts_query, repository_key, memory_scope, max_results),
             ).fetchall()
         except sqlite3.OperationalError as error:
             raise MemoryStoreQueryError("bounded memory query failed") from error
@@ -631,10 +911,26 @@ def _migrate_and_validate(connection: sqlite3.Connection) -> None:
                 raise MemoryStoreMigrationError(
                     "unversioned nonempty memory database cannot be migrated safely"
                 )
-            for statement in _SCHEMA_STATEMENTS:
+            for statement in _SCHEMA_V1_STATEMENTS:
                 connection.execute(statement)
-            connection.execute(f"PRAGMA user_version = {MEMORY_STORE_SCHEMA_VERSION}")
-        elif version != MEMORY_STORE_SCHEMA_VERSION:
+            connection.execute("PRAGMA user_version = 1")
+            version = 1
+        if version == 1:
+            _validate_schema(connection, schema_version=1)
+            episodic_count = int(
+                connection.execute(
+                    "SELECT count(*) FROM memory_entries "
+                    "WHERE memory_scope = 'episodic'"
+                ).fetchone()[0]
+            )
+            if episodic_count:
+                raise MemoryStoreMigrationError(
+                    "v1 episodic rows cannot be migrated without trusted provenance"
+                )
+            for statement in _SCHEMA_V2_STATEMENTS:
+                connection.execute(statement)
+            connection.execute("PRAGMA user_version = 2")
+        elif version != 2:
             raise MemoryStoreMigrationError(
                 f"Unsupported Memory Store schema version: {version}"
             )
@@ -647,19 +943,36 @@ def _migrate_and_validate(connection: sqlite3.Connection) -> None:
         raise MemoryStoreMigrationError(
             "Memory Store schema migration failed"
         ) from error
-    _validate_schema(connection)
+    _validate_schema(connection, schema_version=MEMORY_STORE_SCHEMA_VERSION)
 
 
-def _validate_schema(connection: sqlite3.Connection) -> None:
+def _validate_schema(
+    connection: sqlite3.Connection,
+    *,
+    schema_version: int,
+) -> None:
+    if schema_version not in {1, MEMORY_STORE_SCHEMA_VERSION}:
+        raise MemoryStoreMigrationError("Memory Store validation version is invalid")
+    has_episodes = schema_version >= 2
+    required_columns = {
+        table: columns
+        for table, columns in _REQUIRED_COLUMNS.items()
+        if has_episodes or table != "memory_episodes"
+    }
+    expected_foreign_keys = {
+        table: edges
+        for table, edges in _EXPECTED_FOREIGN_KEYS.items()
+        if has_episodes or table != "memory_episodes"
+    }
     tables = _schema_object_names(connection, "table")
-    if not {*_REQUIRED_COLUMNS, "memory_fts"}.issubset(tables):
+    if not {*required_columns, "memory_fts"}.issubset(tables):
         raise MemoryStoreMigrationError(
             "Memory Store schema is missing required tables"
         )
 
     if int(connection.execute("PRAGMA foreign_keys").fetchone()[0]) != 1:
         raise MemoryStoreMigrationError("Memory Store foreign keys are disabled")
-    for table, expected in _EXPECTED_FOREIGN_KEYS.items():
+    for table, expected in expected_foreign_keys.items():
         actual = Counter(
             (
                 str(row["table"]),
@@ -674,7 +987,7 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
                 f"Memory Store foreign key schema for {table} is incompatible"
             )
 
-    for table, expected_columns in _REQUIRED_COLUMNS.items():
+    for table, expected_columns in required_columns.items():
         column_rows = tuple(connection.execute(f"PRAGMA table_info({table})"))
         actual_columns = tuple(str(row["name"]) for row in column_rows)
         if actual_columns != expected_columns:
@@ -700,11 +1013,28 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
             "Memory Store FTS trigger schema is incompatible"
         )
 
+    expected_index_sql = dict(_EXPECTED_V1_INDEX_SQL)
+    if has_episodes:
+        expected_index_sql.update(_EXPECTED_V2_INDEX_SQL)
+    index_sql = {
+        str(row["name"]): _normalize_schema_sql(str(row["sql"]))
+        for row in connection.execute(
+            "SELECT name, sql FROM sqlite_master "
+            "WHERE type = 'index' AND name NOT LIKE 'sqlite_%'"
+        )
+    }
+    if index_sql != expected_index_sql:
+        raise MemoryStoreMigrationError("Memory Store index schema is incompatible")
+
     metadata = {
         str(row["key"]): str(row["value"])
         for row in connection.execute("SELECT key, value FROM memory_schema")
     }
-    if metadata != _EXPECTED_METADATA:
+    expected_metadata = {
+        **_EXPECTED_BASE_METADATA,
+        "schema_version": str(schema_version),
+    }
+    if metadata != expected_metadata:
         raise MemoryStoreMigrationError("Memory Store schema metadata is incompatible")
 
     fts_row = connection.execute(
@@ -725,6 +1055,39 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
             "Memory Store FTS5 index is unavailable"
         ) from error
     _validate_fts_integrity(connection)
+    if has_episodes:
+        _validate_episode_index_integrity(connection)
+
+
+def _validate_episode_index_integrity(connection: sqlite3.Connection) -> None:
+    inconsistent = connection.execute(
+        """
+        SELECT 1
+        FROM memory_entries
+        LEFT JOIN memory_episodes
+          ON memory_episodes.episode_id = memory_entries.memory_id
+        WHERE (
+            (memory_entries.memory_scope = 'episodic')
+            != (memory_episodes.episode_id IS NOT NULL)
+        )
+        OR (
+            memory_episodes.episode_id IS NOT NULL
+            AND memory_episodes.repository_key != memory_entries.repository_key
+        )
+        OR (
+            memory_entries.memory_scope = 'episodic'
+            AND EXISTS (
+                SELECT 1 FROM memory_sources
+                WHERE memory_sources.memory_id = memory_entries.memory_id
+            )
+        )
+        LIMIT 1
+        """
+    ).fetchone()
+    if inconsistent is not None:
+        raise MemoryStoreMigrationError(
+            "Memory Store episodic index integrity check failed"
+        )
 
 
 def _validate_fts_integrity(connection: sqlite3.Connection) -> None:
@@ -754,6 +1117,97 @@ def _revalidate_repository_memory_contract(value: object) -> RepositoryMemory:
         raise MemoryStoreIntegrityError(
             "repository memory contract failed revalidation"
         ) from error
+
+
+def _revalidate_episodic_memory_contract(value: object) -> EpisodicMemory:
+    if not isinstance(value, EpisodicMemory):
+        raise TypeError("memory must be an EpisodicMemory")
+    try:
+        return EpisodicMemory.model_validate_json(
+            value.model_dump_json(exclude_computed_fields=True, warnings=False)
+        )
+    except (ValidationError, ValueError, TypeError) as error:
+        raise MemoryStoreIntegrityError(
+            "episodic memory contract failed revalidation"
+        ) from error
+
+
+def _decode_episodic_memory(
+    connection: sqlite3.Connection,
+    row: sqlite3.Row,
+) -> EpisodicMemory:
+    if str(row["memory_scope"]) != "episodic":
+        raise MemoryStoreCorruptionError("stored memory is not an episode record")
+    try:
+        memory = EpisodicMemory.model_validate_json(str(row["record_json"]))
+    except (ValidationError, ValueError, TypeError) as error:
+        raise MemoryStoreCorruptionError("stored episode record is invalid") from error
+    stored_commit = row["commit_sha"]
+    if stored_commit is not None:
+        stored_commit = str(stored_commit)
+    mirrored = (
+        memory.episode_id,
+        memory.repository_key,
+        memory.source_repository_id,
+        memory.commit_sha,
+        memory.verification_status.value,
+        memory.write_authority.value,
+        _episode_title(memory),
+        _episode_search_content(memory),
+        _episode_tags_text(memory),
+        memory.created_at_ms,
+    )
+    stored = (
+        str(row["memory_id"]),
+        str(row["repository_key"]),
+        str(row["source_repository_id"]),
+        stored_commit,
+        str(row["verification_status"]),
+        str(row["write_authority"]),
+        str(row["title"]),
+        str(row["content"]),
+        str(row["tags_text"]),
+        int(row["created_at_ms"]),
+    )
+    if mirrored != stored:
+        raise MemoryStoreCorruptionError("stored episode mirrored columns disagree")
+    source_count = int(
+        connection.execute(
+            "SELECT count(*) FROM memory_sources WHERE memory_id = ?",
+            (memory.episode_id,),
+        ).fetchone()[0]
+    )
+    if source_count != 0:
+        raise MemoryStoreCorruptionError("stored episode has repository source rows")
+    index_row = connection.execute(
+        "SELECT * FROM memory_episodes WHERE episode_id = ?",
+        (memory.episode_id,),
+    ).fetchone()
+    if index_row is None:
+        raise MemoryStoreCorruptionError("stored episode index is missing")
+    index_mirrored = (
+        memory.episode_id,
+        memory.repository_key,
+        memory.run_id,
+        memory.thread_id,
+        memory.turn_number,
+        memory.termination_status,
+        memory.objective_digest,
+        memory.final_result_digest,
+    )
+    index_stored = (
+        str(index_row["episode_id"]),
+        str(index_row["repository_key"]),
+        str(index_row["run_id"]),
+        str(index_row["thread_id"]),
+        int(index_row["turn_number"]),
+        str(index_row["termination_status"]),
+        str(index_row["objective_digest"]),
+        str(index_row["final_result_digest"]),
+    )
+    if index_mirrored != index_stored:
+        raise MemoryStoreCorruptionError("stored episode index disagrees with record")
+    return memory
 
 
 def _decode_repository_memory(
@@ -883,6 +1337,45 @@ def _bounded_fts_query(query: str) -> tuple[str, str]:
     return " ".join(tokens), " OR ".join(f'"{token}"' for token in tokens)
 
 
+def _episode_title(memory: EpisodicMemory) -> str:
+    one_line_summary = " ".join(memory.summary.split())
+    return f"Investigation turn {memory.turn_number}: {one_line_summary}"[:512]
+
+
+def _episode_search_content(memory: EpisodicMemory) -> str:
+    values = (
+        memory.summary,
+        *memory.query_sequence,
+        *memory.successful_paths,
+        *memory.failed_hypotheses,
+    )
+    return "\n".join(values)[:16_384]
+
+
+def _episode_tags_text(memory: EpisodicMemory) -> str:
+    return f"episodic {memory.termination_status}"
+
+
+def _validate_context_and_result_limit(
+    context: ToolExecutionContext,
+    max_results: int,
+) -> None:
+    if not isinstance(context, ToolExecutionContext):
+        raise TypeError("context must be a ToolExecutionContext")
+    if type(max_results) is not int or not 1 <= max_results <= _MAX_MEMORY_RESULTS:
+        raise ValueError("max_results is outside the memory query limit")
+
+
+def _validate_timestamp(value: object, *, name: str) -> None:
+    if type(value) is not int or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+
+
+def _validate_turn_number(value: object) -> None:
+    if type(value) is not int or value < 1:
+        raise ValueError("turn_number must be a positive integer")
+
+
 def _canonical_model_json(model: object) -> str:
     if not hasattr(model, "model_dump"):
         raise TypeError("model must be a Pydantic domain object")
@@ -902,7 +1395,9 @@ def _validate_digest(value: object, *, name: str) -> None:
 
 
 def _validate_optional_identifier(value: str | None, *, name: str) -> None:
-    if value is not None and re.fullmatch(IDENTIFIER_PATTERN, value) is None:
+    if value is not None and (
+        not isinstance(value, str) or re.fullmatch(IDENTIFIER_PATTERN, value) is None
+    ):
         raise ValueError(f"{name} is not a canonical identifier")
 
 

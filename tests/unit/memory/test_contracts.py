@@ -222,6 +222,7 @@ def test_episodic_memory_is_observed_terminal_history_not_repository_fact() -> N
         run_id="run-1",
         thread_id="thread-1",
         turn_number=2,
+        termination_status="accepted",
         objective_digest=OBJECTIVE_DIGEST,
         summary="The request flow was localized and accepted.",
         query_sequence=("handle_request", "service.run"),
@@ -233,9 +234,14 @@ def test_episodic_memory_is_observed_terminal_history_not_repository_fact() -> N
 
     assert episode.verification_status is MemoryVerificationStatus.OBSERVED
     assert episode.write_authority is MemoryWriteAuthority.TERMINAL_CONSOLIDATION
+    assert episode.termination_status == "accepted"
     assert episode == EpisodicMemory.model_validate_json(episode.model_dump_json())
 
     tampered = episode.model_copy(update={"summary": "Different outcome."})
+    with pytest.raises(ValidationError, match="episode_id"):
+        EpisodicMemory.model_validate_json(tampered.model_dump_json())
+
+    tampered = episode.model_copy(update={"termination_status": "exhausted"})
     with pytest.raises(ValidationError, match="episode_id"):
         EpisodicMemory.model_validate_json(tampered.model_dump_json())
 
@@ -247,6 +253,7 @@ def test_episodic_memory_requires_canonical_paths_and_terminal_digest() -> None:
         "run_id": "run-1",
         "thread_id": "thread-1",
         "turn_number": 1,
+        "termination_status": "accepted",
         "objective_digest": OBJECTIVE_DIGEST,
         "summary": "Completed investigation.",
         "query_sequence": (),
@@ -259,6 +266,8 @@ def test_episodic_memory_requires_canonical_paths_and_terminal_digest() -> None:
         create_episodic_memory(**{**values, "successful_paths": ("../escape.py",)})
     with pytest.raises(ValidationError):
         create_episodic_memory(**{**values, "final_result_digest": "bad"})
+    with pytest.raises(ValidationError):
+        create_episodic_memory(**{**values, "termination_status": "interrupted"})
 
 
 def test_current_retrieval_hit_is_content_addressed_and_snapshot_exact() -> None:

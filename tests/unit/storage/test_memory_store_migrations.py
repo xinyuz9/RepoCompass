@@ -16,12 +16,17 @@ REQUIRED_TABLES = {
     "memory_entries",
     "memory_sources",
     "memory_audit_events",
+    "memory_episodes",
     "memory_fts",
 }
 REQUIRED_TRIGGERS = {
     "memory_entries_fts_insert",
     "memory_entries_fts_delete",
     "memory_entries_fts_update",
+}
+REQUIRED_INDEXES = {
+    "idx_memory_episodes_repository_thread_turn",
+    "idx_memory_episodes_repository_run",
 }
 
 
@@ -53,7 +58,7 @@ def _foreign_key_edges(
         )
 
 
-def test_fresh_memory_store_creates_exact_v1_schema_and_fts5(
+def test_fresh_memory_store_creates_exact_v2_schema_and_fts5(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "nested" / "memory.sqlite"
@@ -66,8 +71,12 @@ def test_fresh_memory_store_creates_exact_v1_schema_and_fts5(
     assert _user_version(database_path) == MEMORY_STORE_SCHEMA_VERSION
     assert REQUIRED_TABLES.issubset(_schema_objects(database_path, "table"))
     assert _schema_objects(database_path, "trigger") == REQUIRED_TRIGGERS
+    assert REQUIRED_INDEXES.issubset(_schema_objects(database_path, "index"))
     assert _foreign_key_edges(database_path, "memory_sources") == [
         ("memory_entries", "memory_id", "memory_id", "CASCADE")
+    ]
+    assert _foreign_key_edges(database_path, "memory_episodes") == [
+        ("memory_entries", "episode_id", "memory_id", "CASCADE")
     ]
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -156,6 +165,135 @@ def test_reopening_current_memory_schema_is_idempotent(tmp_path: Path) -> None:
 
     assert _schema_objects(database_path, "table") == first_tables
     assert _schema_objects(database_path, "trigger") == first_triggers
+
+
+def _downgrade_empty_current_store_to_v1(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP TABLE memory_episodes")
+        connection.execute(
+            "UPDATE memory_schema SET value = '1' WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 1")
+
+
+def test_v1_memory_store_migrates_to_v2_without_losing_entries(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "v1.sqlite"
+    with open_memory_store(database_path):
+        pass
+    _downgrade_empty_current_store_to_v1(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO memory_entries (
+                memory_id, memory_scope, repository_key, source_repository_id,
+                commit_sha, verification_status, write_authority, title,
+                content, tags_text, created_at_ms, record_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "a" * 64,
+                "repository",
+                "b" * 64,
+                "c" * 64,
+                "d" * 40,
+                "verified",
+                "validated_evidence",
+                "Preserved memory",
+                "Preserved content",
+                "preserved",
+                1,
+                "{}",
+            ),
+        )
+
+    with open_memory_store(database_path) as store:
+        assert store.schema_version == MEMORY_STORE_SCHEMA_VERSION
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT title FROM memory_entries WHERE memory_id = ?",
+            ("a" * 64,),
+        ).fetchone() == ("Preserved memory",)
+    assert "memory_episodes" in _schema_objects(database_path, "table")
+
+
+def test_tampered_v1_schema_is_rejected_before_v2_migration(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "tampered-v1.sqlite"
+    with open_memory_store(database_path):
+        pass
+    _downgrade_empty_current_store_to_v1(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP TRIGGER memory_entries_fts_update")
+
+    with pytest.raises(MemoryStoreMigrationError, match="trigger"):
+        with open_memory_store(database_path):
+            pass
+
+    assert _user_version(database_path) == 1
+    assert "memory_episodes" not in _schema_objects(database_path, "table")
+
+
+def test_v1_with_unindexed_episode_is_preserved_and_rejected(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "v1-episode.sqlite"
+    with open_memory_store(database_path):
+        pass
+    _downgrade_empty_current_store_to_v1(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO memory_entries (
+                memory_id, memory_scope, repository_key, source_repository_id,
+                commit_sha, verification_status, write_authority, title,
+                content, tags_text, created_at_ms, record_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "a" * 64,
+                "episodic",
+                "b" * 64,
+                "c" * 64,
+                "d" * 40,
+                "observed",
+                "terminal_consolidation",
+                "Legacy episode",
+                "Cannot be safely indexed without validating JSON",
+                "episodic",
+                1,
+                "{}",
+            ),
+        )
+
+    with pytest.raises(MemoryStoreMigrationError, match="episodic"):
+        with open_memory_store(database_path):
+            pass
+
+    assert _user_version(database_path) == 1
+    assert "memory_episodes" not in _schema_objects(database_path, "table")
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT title FROM memory_entries WHERE memory_id = ?",
+            ("a" * 64,),
+        ).fetchone() == ("Legacy episode",)
+
+
+def test_current_schema_with_missing_episode_unique_index_fails_closed(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "missing-episode-index.sqlite"
+    with open_memory_store(database_path):
+        pass
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP INDEX idx_memory_episodes_repository_thread_turn")
+
+    with pytest.raises(MemoryStoreMigrationError, match="index"):
+        with open_memory_store(database_path):
+            pass
 
 
 def test_future_memory_schema_fails_closed_without_mutation(tmp_path: Path) -> None:

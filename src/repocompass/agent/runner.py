@@ -5,10 +5,13 @@ execution, and the local domain trace. It must reuse graph behavior rather than
 duplicating node routing, tool execution, or budget enforcement.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Literal
+from time import time_ns
+from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 from langchain_core.runnables import RunnableConfig
@@ -57,9 +60,15 @@ from repocompass.tools.contracts import (
     decode_no_progress_decision,
     decode_tool_audit_record,
 )
+from repocompass.tools.gateway import ToolExecutionContext
+
+if TYPE_CHECKING:
+    from repocompass.memory.consolidation import EpisodeConsolidationResult
+    from repocompass.memory.store import MemoryStore
 
 RunIdFactory = Callable[[], str]
 ThreadIdFactory = Callable[[], str]
+EpisodeClockFactory = Callable[[], int]
 ExecutionMode = Literal["start", "resume", "continue", "respond"]
 DEFAULT_MAX_TOOL_CALLS_PER_STEP = 16
 DEFAULT_MAX_EXPLORER_CALLS_PER_STEP = 12
@@ -101,6 +110,12 @@ def generate_thread_id() -> str:
     """Return a new opaque identifier for one logical investigation thread."""
 
     return str(uuid4())
+
+
+def current_time_ms() -> int:
+    """Return the current Unix timestamp in integer milliseconds."""
+
+    return time_ns() // 1_000_000
 
 
 def _normalize_identifier(value: object, *, name: str) -> str:
@@ -411,10 +426,18 @@ class RunOutcome:
     no_progress_decision: NoProgressDecision | None = None
     consecutive_no_progress_rounds: int = 0
     usage_cost_report: AttemptUsageCostReport | None = None
+    episode_consolidation: EpisodeConsolidationResult | None = None
 
     def __post_init__(self) -> None:
         """Reject ambiguous combinations of terminal and interrupt fields."""
 
+        if self.episode_consolidation is not None:
+            from repocompass.memory.consolidation import EpisodeConsolidationResult
+
+            if not isinstance(self.episode_consolidation, EpisodeConsolidationResult):
+                raise TypeError(
+                    "episode_consolidation must be an EpisodeConsolidationResult"
+                )
         if self.execution_status is ExecutionStatus.COMPLETED:
             if self.final_result is None or self.termination_status is None:
                 raise ValueError(
@@ -436,6 +459,13 @@ class RunOutcome:
             if self.final_result is not None or self.termination_status is not None:
                 raise ValueError(
                     "Interrupted outcome must not contain terminal result fields"
+                )
+            if (
+                self.episode_consolidation is not None
+                and self.episode_consolidation.episode is not None
+            ):
+                raise ValueError(
+                    "Interrupted outcome cannot contain a consolidated episode"
                 )
             return
 
@@ -513,6 +543,7 @@ def _record_terminal_trace_event(
     *,
     execution_mode: ExecutionMode,
     usage_cost_report: AttemptUsageCostReport | None,
+    episode_consolidation: EpisodeConsolidationResult | None,
 ) -> None:
     """Append the lifecycle terminal only after optional ledger finalization."""
 
@@ -540,6 +571,17 @@ def _record_terminal_trace_event(
         }
     if usage_cost_report is not None:
         payload["usage_cost_report"] = _usage_cost_trace_metadata(usage_cost_report)
+    if episode_consolidation is not None:
+        payload["episode_consolidation"] = {
+            "schema_version": episode_consolidation.schema_version,
+            "disposition": episode_consolidation.disposition.value,
+            "reason": episode_consolidation.reason.value,
+            "episode_id": (
+                None
+                if episode_consolidation.episode is None
+                else episode_consolidation.episode.episode_id
+            ),
+        }
     outcome.trace.record(kind, payload=payload)
 
 
@@ -599,6 +641,8 @@ class AgentRunner:
         checkpointer: BaseCheckpointSaver,
         raw_run_store: RawRunStore | None = None,
         pricing_table: PricingTable | None = None,
+        memory_store: MemoryStore | None = None,
+        episode_clock_factory: EpisodeClockFactory = current_time_ms,
         run_id_factory: RunIdFactory = generate_run_id,
         thread_id_factory: ThreadIdFactory = generate_thread_id,
     ) -> None:
@@ -611,6 +655,10 @@ class AgentRunner:
                 and exact model I/O provenance.
             pricing_table: Optional immutable snapshot used for reports and
                 required when an attempt cost budget is configured.
+            memory_store: Optional local memory boundary that receives only
+                deterministic terminal episode consolidation.
+            episode_clock_factory: Local millisecond clock used only when a
+                memory store is configured.
             run_id_factory: Zero-argument factory for run IDs. Tests can inject
                 a deterministic factory; production uses UUID strings.
             thread_id_factory: Zero-argument factory for logical investigation
@@ -629,6 +677,15 @@ class AgentRunner:
         if pricing_table is not None and not isinstance(pricing_table, PricingTable):
             raise TypeError("pricing_table must be a PricingTable or None")
         self._pricing_table = pricing_table
+        if memory_store is not None:
+            from repocompass.memory.store import MemoryStore
+
+            if not isinstance(memory_store, MemoryStore):
+                raise TypeError("memory_store must be a MemoryStore or None")
+        if not callable(episode_clock_factory):
+            raise TypeError("episode_clock_factory must be callable")
+        self._memory_store = memory_store
+        self._episode_clock_factory = episode_clock_factory
         self._raw_run_recorder = (
             None
             if raw_run_store is None
@@ -922,6 +979,26 @@ class AgentRunner:
                 trace=trace,
                 config=config,
             )
+            episode_consolidation = None
+            if self._memory_store is not None:
+                from repocompass.memory.consolidation import (
+                    consolidate_terminal_episode,
+                )
+
+                repo_path = metadata_state.get("repo_path")
+                objective = metadata_state.get("objective")
+                if not isinstance(repo_path, Path):
+                    raise TypeError("Graph repo_path is not a Path")
+                if not isinstance(objective, str):
+                    raise TypeError("Graph objective is not a string")
+                episode_consolidation = consolidate_terminal_episode(
+                    self._memory_store,
+                    context=ToolExecutionContext(repo_path),
+                    outcome=outcome,
+                    objective=objective,
+                    turn_number=turn_number,
+                    created_at_ms=self._episode_clock_factory(),
+                )
         except BaseException:
             if recorder is not None:
                 recorder.finish_attempt(trace.run_id, status=AttemptStatus.FAILED)
@@ -943,8 +1020,13 @@ class AgentRunner:
             outcome,
             execution_mode=execution_mode,
             usage_cost_report=usage_cost_report,
+            episode_consolidation=episode_consolidation,
         )
-        return replace(outcome, usage_cost_report=usage_cost_report)
+        return replace(
+            outcome,
+            usage_cost_report=usage_cost_report,
+            episode_consolidation=episode_consolidation,
+        )
 
     @staticmethod
     def _stream_graph_attempt(

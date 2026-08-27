@@ -98,6 +98,7 @@ class MemoryAuditReason(StrEnum):
 
     WRITE_POLICY_ALLOWED = "write_policy_allowed"
     CURRENT_SNAPSHOT_HIT = "current_snapshot_hit"
+    EPISODIC_HISTORY_HIT = "episodic_history_hit"
     REVALIDATION_REQUIRED = "revalidation_required"
     SOURCE_STALE = "source_stale"
     USER_REQUEST = "user_request"
@@ -293,6 +294,7 @@ class EpisodicMemory(_MemoryContractModel):
     run_id: str = Field(pattern=IDENTIFIER_PATTERN)
     thread_id: str = Field(pattern=IDENTIFIER_PATTERN)
     turn_number: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+    termination_status: Literal["accepted", "exhausted", "cancelled"]
     objective_digest: Sha256Digest
     summary: str = Field(min_length=1, max_length=MAX_MEMORY_CONTENT_CHARACTERS)
     query_sequence: tuple[str, ...] = Field(
@@ -353,6 +355,7 @@ class EpisodicMemory(_MemoryContractModel):
             run_id=self.run_id,
             thread_id=self.thread_id,
             turn_number=self.turn_number,
+            termination_status=self.termination_status,
             objective_digest=self.objective_digest,
             summary=self.summary,
             query_sequence=self.query_sequence,
@@ -445,6 +448,7 @@ class MemoryAuditEvent(_MemoryContractModel):
             MemoryAuditAction.REVERIFIED: {MemoryAuditReason.WRITE_POLICY_ALLOWED},
             MemoryAuditAction.RETRIEVED: {
                 MemoryAuditReason.CURRENT_SNAPSHOT_HIT,
+                MemoryAuditReason.EPISODIC_HISTORY_HIT,
                 MemoryAuditReason.REVALIDATION_REQUIRED,
             },
             MemoryAuditAction.MARKED_STALE: {
@@ -576,6 +580,7 @@ def create_episodic_memory(
     run_id: str,
     thread_id: str,
     turn_number: int,
+    termination_status: Literal["accepted", "exhausted", "cancelled"],
     objective_digest: str,
     summary: str,
     query_sequence: tuple[str, ...],
@@ -593,6 +598,7 @@ def create_episodic_memory(
         run_id=run_id,
         thread_id=thread_id,
         turn_number=turn_number,
+        termination_status=termination_status,
         objective_digest=objective_digest,
         summary=summary,
         query_sequence=query_sequence,
@@ -609,6 +615,7 @@ def create_episodic_memory(
         run_id=run_id,
         thread_id=thread_id,
         turn_number=turn_number,
+        termination_status=termination_status,
         objective_digest=objective_digest,
         summary=summary,
         query_sequence=query_sequence,
@@ -775,6 +782,7 @@ def _episodic_memory_id(
     run_id: str,
     thread_id: str,
     turn_number: int,
+    termination_status: Literal["accepted", "exhausted", "cancelled"],
     objective_digest: str,
     summary: str,
     query_sequence: tuple[str, ...],
@@ -792,6 +800,7 @@ def _episodic_memory_id(
             "run_id": run_id,
             "thread_id": thread_id,
             "turn_number": turn_number,
+            "termination_status": termination_status,
             "objective_digest": objective_digest,
             "summary": summary,
             "query_sequence": query_sequence,
