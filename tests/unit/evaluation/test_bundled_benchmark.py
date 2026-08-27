@@ -34,14 +34,14 @@ def test_bundled_context_pressure_result_is_exactly_reproducible() -> None:
 
     assert reproduced == committed
     assert committed.report_id == (
-        "d64e740822df166dd568ce132508a0d2b320ddcc2a7b471ad13ae6ce022ae745"
+        "61d958a8c22ab41f40d875b7a850f5b79213a31bcfef48b2f827947b23a0d27f"
     )
     metrics = {item.variant: item for item in committed.variants}
     active = metrics[AblationVariant.ACTIVE_CONTEXT]
     baseline = metrics[AblationVariant.ALL_CONTEXT_BASELINE]
     assert active.selected_tokens == 2_330
-    assert baseline.selected_tokens == 17_615
-    assert committed.token_reduction == 15_285
+    assert baseline.selected_tokens == 18_272
+    assert committed.token_reduction == 15_942
     assert active.retained_required_evidence_count == 2
     assert active.required_evidence_retention_ppm == 1_000_000
     assert active.evidence_provenance_coverage_ppm == 1_000_000
@@ -50,5 +50,5 @@ def test_bundled_context_pressure_result_is_exactly_reproducible() -> None:
         item.cost_availability is CostAvailability.ESTIMATED
         for item in committed.variants
     )
-    assert Decimal(committed.estimated_input_cost_savings_usd) == Decimal("0.015285")
+    assert Decimal(committed.estimated_input_cost_savings_usd) == Decimal("0.015942")
     assert committed.observed_latency_delta_ms is None

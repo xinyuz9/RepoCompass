@@ -24,6 +24,7 @@ from repocompass.agent.lifecycle import (
 from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import RunOutcome
 from repocompass.agent.trace import RunTrace, TraceEventKind
+from repocompass.memory.store import MemoryStore
 
 
 def test_main_runs_investigation_and_writes_trace(
@@ -136,6 +137,77 @@ def test_main_reports_configuration_error(
     assert exit_code == 1
     assert captured.out == ""
     assert captured.err == "repocompass: error: missing model settings\n"
+
+
+def test_main_explicitly_enables_bounded_memory_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    outcome, _ = _completed_cli_outcome(
+        thread_id="memory-thread",
+        run_id="memory-run",
+        summary="Memory-enabled result.",
+    )
+    runner = MagicMock()
+    runner.run.return_value = outcome
+    runner_factory = MagicMock(return_value=runner)
+    monkeypatch.setattr(cli, "AgentRunner", runner_factory)
+    monkeypatch.setattr(cli, "create_workflow_models", MagicMock(return_value=object()))
+    memory_database = tmp_path / "memory.sqlite"
+
+    exit_code = cli.main(
+        [
+            str(tmp_path),
+            "--objective",
+            "Inspect authentication.",
+            "--memory",
+            "--memory-db",
+            str(memory_database),
+            "--max-repository-memory-results",
+            "3",
+            "--max-episodic-memory-results",
+            "2",
+            "--checkpoint-db",
+            str(tmp_path / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(tmp_path / "raw-runs.sqlite"),
+            "--trace-dir",
+            str(tmp_path / "traces"),
+        ]
+    )
+
+    request = runner.run.call_args.args[0]
+    runner_kwargs = runner_factory.call_args.kwargs
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert isinstance(runner_kwargs["memory_store"], MemoryStore)
+    assert request.memory_retrieval_enabled
+    assert request.max_repository_memory_results == 3
+    assert request.max_episodic_memory_results == 2
+    assert memory_database.is_file()
+    assert f"Memory store: {memory_database.resolve()}" in captured.err
+
+
+def test_main_rejects_memory_result_limit_above_ten(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.main(
+            [
+                str(tmp_path),
+                "--objective",
+                "Inspect authentication.",
+                "--memory",
+                "--max-repository-memory-results",
+                "11",
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert "must not exceed 10" in captured.err
 
 
 def test_main_routes_resume_without_rebuilding_start_request(

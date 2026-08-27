@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
@@ -9,6 +14,7 @@ from repocompass.agent.nodes import (
     create_evaluate_candidate_node,
     create_execute_tools_node,
     create_plan_investigation_node,
+    create_recall_memory_node,
     create_revise_plan_node,
     decide_next_action,
     finalize_candidate,
@@ -32,12 +38,26 @@ from repocompass.agent.routing import (
 from repocompass.agent.state import RepoCompassState
 from repocompass.models import WorkflowModels
 
+if TYPE_CHECKING:
+    from repocompass.memory.store import MemoryStore
+
+
+def _route_after_initial_plan(state: RepoCompassState) -> str:
+    """Recall only when enabled; disabled runs preserve the legacy graph path."""
+
+    route = route_explorer_invocation(state)
+    if route == "agent" and state.get("memory_retrieval_enabled", False):
+        return "recall_memory"
+    return route
+
 
 def create_agent_graph(
     models: WorkflowModels,
     *,
     checkpointer: BaseCheckpointSaver | None = None,
     raw_run_recorder: RawRunRecorder | None = None,
+    memory_store: MemoryStore | None = None,
+    memory_clock: Callable[[], int] = lambda: 0,
 ):
     """Compile the graph with optional checkpoint and Raw Run persistence."""
 
@@ -46,6 +66,10 @@ def create_agent_graph(
     builder.add_node(
         "plan_investigation",
         create_plan_investigation_node(models.planner, raw_run_recorder),
+    )
+    builder.add_node(
+        "recall_memory",
+        create_recall_memory_node(memory_store, memory_clock),
     )
     builder.add_node("agent", create_agent_node(models.explorer, raw_run_recorder))
     builder.add_node("tools", create_execute_tools_node())
@@ -91,9 +115,10 @@ def create_agent_graph(
     builder.add_edge(START, "plan_investigation")
     builder.add_conditional_edges(
         "plan_investigation",
-        route_explorer_invocation,
-        explorer_invocation_routes,
+        _route_after_initial_plan,
+        {**explorer_invocation_routes, "recall_memory": "recall_memory"},
     )
+    builder.add_edge("recall_memory", "agent")
     builder.add_conditional_edges(
         "agent",
         route_tool_calls,

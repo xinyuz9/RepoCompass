@@ -39,6 +39,14 @@ from repocompass.memory.revalidation import (
     classify_repository_memory_freshness,
     read_memory_source_digest,
 )
+from repocompass.memory.retrieval import (
+    DEFAULT_MAX_EPISODIC_MEMORY_RESULTS,
+    DEFAULT_MAX_REPOSITORY_MEMORY_RESULTS,
+    MAX_MEMORY_RECALL_RESULTS,
+    MemoryRecallResult,
+    build_memory_recall_query,
+    recall_memory_context,
+)
 from repocompass.memory.store import (
     MEMORY_STORE_SCHEMA_VERSION,
     MemoryStore,
@@ -57,6 +65,9 @@ __all__ = [
     "MEMORY_CONTRACT_SCHEMA_VERSION",
     "MEMORY_STORE_SCHEMA_VERSION",
     "MAX_MEMORY_SOURCE_BYTES",
+    "MAX_MEMORY_RECALL_RESULTS",
+    "DEFAULT_MAX_EPISODIC_MEMORY_RESULTS",
+    "DEFAULT_MAX_REPOSITORY_MEMORY_RESULTS",
     "EpisodeConsolidationDisposition",
     "EpisodeConsolidationError",
     "EpisodeConsolidationReason",
@@ -70,6 +81,7 @@ __all__ = [
     "MemoryRepositoryIdentity",
     "MemoryRepositoryIdentityKind",
     "MemoryRetrievalHit",
+    "MemoryRecallResult",
     "MemorySourceReadError",
     "MemorySourceReadReason",
     "MemoryStalenessReason",
@@ -86,6 +98,7 @@ __all__ = [
     "RepositoryMemorySearchResult",
     "RepositoryMemorySource",
     "classify_repository_memory_freshness",
+    "build_memory_recall_query",
     "consolidate_terminal_episode",
     "create_episodic_memory",
     "create_memory_audit_event",
@@ -95,5 +108,6 @@ __all__ = [
     "create_repository_memory_source",
     "open_memory_store",
     "read_memory_source_digest",
+    "recall_memory_context",
     "resolve_memory_repository_identity",
 ]

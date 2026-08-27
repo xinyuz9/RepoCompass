@@ -183,9 +183,11 @@ def gather_explorer_context(
     messages: tuple[AnyMessage, ...],
     evaluation_report: EvaluationReport | None,
     budget_tokens: int,
+    memory_items: tuple[ContextItem, ...] = (),
 ) -> GatheredContext:
     """Gather active-step instructions, successful tool evidence, and feedback."""
 
+    _validate_memory_items(memory_items)
     repository = ToolExecutionContext(repo_path)
     context_content = INVESTIGATION_CONTEXT_TEMPLATE.format(
         objective=objective,
@@ -209,7 +211,7 @@ def gather_explorer_context(
         repository=repository,
         messages=messages,
     )
-    items = [objective_item, *tool_items]
+    items = [objective_item, *memory_items, *tool_items]
     artifacts = [objective_artifact, *tool_artifacts]
     if evaluation_report is not None and not evaluation_report.passed:
         report_content = evaluation_report.model_dump_json(indent=2)
@@ -249,6 +251,7 @@ def gather_explorer_context(
         budget_tokens=budget_tokens,
         reserve_evidence=True,
         reserve_feedback=evaluation_report is not None,
+        reserve_memory=bool(memory_items),
     )
 
 
@@ -419,9 +422,11 @@ def gather_replanner_context(
     max_tool_calls_per_step: int,
     max_explorer_calls_per_step: int,
     budget_tokens: int,
+    memory_items: tuple[ContextItem, ...] = (),
 ) -> GatheredContext:
     """Gather the complete required replanning state without Explorer history."""
 
+    _validate_memory_items(memory_items)
     active_step = investigation_plan.active_step
     objective_content = (
         f"Original objective:\n{objective}\n\n"
@@ -508,12 +513,14 @@ def gather_replanner_context(
         )
         items.append(feedback_item)
         artifacts.append(feedback_artifact)
+    items.extend(memory_items)
     return _build_gathered_context(
         candidates=tuple(items),
         raw_artifacts=tuple(artifacts),
         budget_tokens=budget_tokens,
         reserve_evidence=False,
         reserve_feedback=True,
+        reserve_memory=bool(memory_items),
     )
 
 
@@ -1037,6 +1044,7 @@ def _build_gathered_context(
     budget_tokens: int,
     reserve_evidence: bool,
     reserve_feedback: bool,
+    reserve_memory: bool = False,
 ) -> GatheredContext:
     reservations: list[ContextSectionReservation] = []
     if reserve_evidence and budget_tokens // 2 >= 1:
@@ -1050,6 +1058,13 @@ def _build_gathered_context(
         reservations.append(
             ContextSectionReservation(
                 section=ContextSection.FEEDBACK,
+                reserved_tokens=budget_tokens // 8,
+            )
+        )
+    if reserve_memory and budget_tokens // 8 >= 1:
+        reservations.append(
+            ContextSectionReservation(
+                section=ContextSection.MEMORY,
                 reserved_tokens=budget_tokens // 8,
             )
         )
@@ -1072,6 +1087,20 @@ def _build_gathered_context(
         pack=pack,
         raw_artifacts=tuple(indexed[key] for key in sorted(indexed)),
     )
+
+
+def _validate_memory_items(items: tuple[ContextItem, ...]) -> None:
+    if not isinstance(items, tuple) or not all(
+        isinstance(item, ContextItem) for item in items
+    ):
+        raise TypeError("memory_items must contain ContextItem values")
+    if any(
+        item.source.kind is not ContextSourceKind.MEMORY
+        or item.section is not ContextSection.MEMORY
+        or item.source.raw_artifact_id is not None
+        for item in items
+    ):
+        raise ValueError("memory_items must be body-external memory context")
 
 
 def _objective_and_step_provenance(

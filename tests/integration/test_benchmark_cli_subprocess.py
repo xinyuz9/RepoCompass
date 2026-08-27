@@ -45,7 +45,7 @@ def test_installed_benchmark_entry_point_publishes_report(tmp_path: Path) -> Non
     )
     assert stdout_report == file_report
     assert json.loads(completed.stdout)["report_id"] == (
-        "d64e740822df166dd568ce132508a0d2b320ddcc2a7b471ad13ae6ce022ae745"
+        "61d958a8c22ab41f40d875b7a850f5b79213a31bcfef48b2f827947b23a0d27f"
     )
     assert "Context ablation context-pressure-v1" in completed.stderr
     assert f"Report: {output.resolve()}" in completed.stderr

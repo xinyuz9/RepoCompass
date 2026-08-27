@@ -94,6 +94,34 @@ class ContextSection(StrEnum):
     HISTORY = "history"
 
 
+class ContextMemoryScope(StrEnum):
+    """Whether recalled context is a repository fact or observed episode."""
+
+    REPOSITORY = "repository"
+    EPISODIC = "episodic"
+
+
+class ContextMemoryFreshness(StrEnum):
+    """Trust posture attached to a memory candidate in active context."""
+
+    CURRENT = "current"
+    REVALIDATION_REQUIRED = "revalidation_required"
+    STALE = "stale"
+    OBSERVED = "observed"
+
+
+class ContextMemoryStalenessReason(StrEnum):
+    """Closed, dependency-neutral mirror of memory freshness reasons."""
+
+    COMMIT_MISMATCH = "commit_mismatch"
+    SOURCE_REPOSITORY_MISMATCH = "source_repository_mismatch"
+    DIRTY_WORKTREE = "dirty_worktree"
+    UNVERSIONED_SNAPSHOT = "unversioned_snapshot"
+    SOURCE_CHANGED = "source_changed"
+    SOURCE_MISSING = "source_missing"
+    CORRUPT_RECORD = "corrupt_record"
+
+
 class ContextSelectionOutcome(StrEnum):
     """Whether one candidate item entered the active context pack."""
 
@@ -174,6 +202,125 @@ class RawArtifactMetadata(_ContextContractModel):
         return self
 
 
+class ContextMemoryMetadata(_ContextContractModel):
+    """Content-safe identity and freshness metadata for one recalled memory."""
+
+    schema_version: Literal[1] = CONTEXT_SCHEMA_VERSION
+    memory_id: Sha256Digest
+    retrieval_id: Sha256Digest
+    query_digest: Sha256Digest
+    repository_key: Sha256Digest
+    source_repository_id: Sha256Digest
+    source_commit_sha: CommitSha | None = None
+    scope: ContextMemoryScope
+    freshness: ContextMemoryFreshness
+    staleness_reason: ContextMemoryStalenessReason | None = None
+
+    @model_validator(mode="after")
+    def require_explicit_memory_trust(self) -> "ContextMemoryMetadata":
+        if self.scope is ContextMemoryScope.EPISODIC:
+            if (
+                self.freshness is not ContextMemoryFreshness.OBSERVED
+                or self.staleness_reason is not None
+            ):
+                raise ValueError("episodic context must remain observed history")
+            return self
+        if self.source_commit_sha is None:
+            raise ValueError("repository memory requires a source commit")
+        allowed_reasons = {
+            ContextMemoryFreshness.CURRENT: {None},
+            ContextMemoryFreshness.REVALIDATION_REQUIRED: {
+                ContextMemoryStalenessReason.COMMIT_MISMATCH,
+                ContextMemoryStalenessReason.SOURCE_REPOSITORY_MISMATCH,
+                ContextMemoryStalenessReason.DIRTY_WORKTREE,
+                ContextMemoryStalenessReason.UNVERSIONED_SNAPSHOT,
+            },
+            ContextMemoryFreshness.STALE: {
+                ContextMemoryStalenessReason.SOURCE_CHANGED,
+                ContextMemoryStalenessReason.SOURCE_MISSING,
+                ContextMemoryStalenessReason.CORRUPT_RECORD,
+            },
+        }
+        if self.freshness is ContextMemoryFreshness.OBSERVED:
+            raise ValueError("repository memory cannot be observed episode history")
+        if self.staleness_reason not in allowed_reasons[self.freshness]:
+            raise ValueError("memory freshness and staleness reason disagree")
+        return self
+
+
+class MemoryRecallDecision(_ContextContractModel):
+    """One body-free retrieval decision retained in checkpoints and traces."""
+
+    schema_version: Literal[1] = CONTEXT_SCHEMA_VERSION
+    retrieval_id: Sha256Digest
+    memory_id: Sha256Digest
+    scope: ContextMemoryScope
+    freshness: ContextMemoryFreshness
+    staleness_reason: ContextMemoryStalenessReason | None = None
+    context_item_id: Sha256Digest | None = None
+
+    @model_validator(mode="after")
+    def require_compatible_selection(self) -> "MemoryRecallDecision":
+        if self.scope is ContextMemoryScope.EPISODIC:
+            if (
+                self.freshness is not ContextMemoryFreshness.OBSERVED
+                or self.staleness_reason is not None
+                or self.context_item_id is None
+            ):
+                raise ValueError("episodic recall decision is inconsistent")
+        elif self.freshness is ContextMemoryFreshness.OBSERVED:
+            raise ValueError("repository recall cannot be observed")
+        if self.freshness is ContextMemoryFreshness.STALE:
+            if self.staleness_reason is None or self.context_item_id is not None:
+                raise ValueError("stale memory must be excluded from context")
+        elif self.context_item_id is None:
+            raise ValueError("usable memory recall requires a context item")
+        return self
+
+
+class MemoryRecallReport(_ContextContractModel):
+    """Body-free record proving one bounded recall ran for this turn."""
+
+    schema_version: Literal[1] = CONTEXT_SCHEMA_VERSION
+    recall_id: Sha256Digest
+    query_digest: Sha256Digest
+    repository_result_count: int = Field(ge=0, le=50)
+    episodic_result_count: int = Field(ge=0, le=50)
+    decisions: tuple[MemoryRecallDecision, ...] = Field(default=(), max_length=100)
+    context_item_ids: tuple[Sha256Digest, ...] = Field(default=(), max_length=100)
+
+    @model_validator(mode="after")
+    def require_reconciled_content_addressed_report(self) -> "MemoryRecallReport":
+        retrieval_ids = tuple(item.retrieval_id for item in self.decisions)
+        if len(retrieval_ids) != len(set(retrieval_ids)):
+            raise ValueError("memory recall retrieval IDs must be unique")
+        repository_count = sum(
+            item.scope is ContextMemoryScope.REPOSITORY for item in self.decisions
+        )
+        episodic_count = sum(
+            item.scope is ContextMemoryScope.EPISODIC for item in self.decisions
+        )
+        if (
+            repository_count != self.repository_result_count
+            or episodic_count != self.episodic_result_count
+        ):
+            raise ValueError("memory recall result counts do not reconcile")
+        expected_item_ids = tuple(
+            item.context_item_id
+            for item in self.decisions
+            if item.context_item_id is not None
+        )
+        if self.context_item_ids != expected_item_ids:
+            raise ValueError("memory recall context item IDs do not reconcile")
+        expected_id = _memory_recall_id(
+            query_digest=self.query_digest,
+            decisions=self.decisions,
+        )
+        if self.recall_id != expected_id:
+            raise ValueError("recall_id does not match memory decisions")
+        return self
+
+
 class RepositoryLocation(_ContextContractModel):
     """Normalized source location inside one immutable repository snapshot."""
 
@@ -230,6 +377,7 @@ class ContextSource(_ContextContractModel):
     raw_artifact_id: Sha256Digest | None = None
     location: RepositoryLocation | None = None
     provenance: tuple[ProvenanceLink, ...] = Field(min_length=1, max_length=64)
+    memory: ContextMemoryMetadata | None = None
 
     @model_validator(mode="after")
     def require_canonical_traceable_source(self) -> "ContextSource":
@@ -244,11 +392,17 @@ class ContextSource(_ContextContractModel):
             raise ValueError(f"{self.kind.value} requires raw_artifact_id")
         if self.kind is ContextSourceKind.SOURCE_EXCERPT and self.location is None:
             raise ValueError("source_excerpt requires a repository location")
+        if self.kind is ContextSourceKind.MEMORY:
+            if self.memory is None or self.raw_artifact_id is not None:
+                raise ValueError("memory source requires metadata and no raw artifact")
+        elif self.memory is not None:
+            raise ValueError("memory metadata requires a memory source")
         expected = _context_source_id(
             kind=self.kind,
             raw_artifact_id=self.raw_artifact_id,
             location=self.location,
             provenance=self.provenance,
+            memory=self.memory,
         )
         if self.source_id != expected:
             raise ValueError("source_id does not match canonical source metadata")
@@ -461,6 +615,7 @@ def create_context_source(
     provenance: tuple[ProvenanceLink, ...],
     raw_artifact_id: str | None = None,
     location: RepositoryLocation | None = None,
+    memory: ContextMemoryMetadata | None = None,
 ) -> ContextSource:
     """Create a source with canonical provenance order and deterministic ID."""
 
@@ -470,6 +625,7 @@ def create_context_source(
         raw_artifact_id=raw_artifact_id,
         location=location,
         provenance=canonical,
+        memory=memory,
     )
     return ContextSource(
         source_id=source_id,
@@ -477,6 +633,35 @@ def create_context_source(
         raw_artifact_id=raw_artifact_id,
         location=location,
         provenance=canonical,
+        memory=memory,
+    )
+
+
+def create_memory_recall_report(
+    *,
+    query_digest: str,
+    decisions: tuple[MemoryRecallDecision, ...],
+) -> MemoryRecallReport:
+    """Create one content-addressed, body-free recall report."""
+
+    return MemoryRecallReport(
+        recall_id=_memory_recall_id(
+            query_digest=query_digest,
+            decisions=decisions,
+        ),
+        query_digest=query_digest,
+        repository_result_count=sum(
+            item.scope is ContextMemoryScope.REPOSITORY for item in decisions
+        ),
+        episodic_result_count=sum(
+            item.scope is ContextMemoryScope.EPISODIC for item in decisions
+        ),
+        decisions=decisions,
+        context_item_ids=tuple(
+            item.context_item_id
+            for item in decisions
+            if item.context_item_id is not None
+        ),
     )
 
 
@@ -584,16 +769,29 @@ def _context_source_id(
     raw_artifact_id: str | None,
     location: RepositoryLocation | None,
     provenance: tuple[ProvenanceLink, ...],
+    memory: ContextMemoryMetadata | None,
+) -> str:
+    payload = {
+        "kind": kind.value,
+        "raw_artifact_id": raw_artifact_id,
+        "location": None if location is None else location.model_dump(mode="json"),
+        "provenance": [link.model_dump(mode="json") for link in provenance],
+    }
+    if memory is not None:
+        payload["memory"] = memory.model_dump(mode="json")
+    return _canonical_json_hash(b"repocompass:context-source:v1", payload)
+
+
+def _memory_recall_id(
+    *,
+    query_digest: str,
+    decisions: tuple[MemoryRecallDecision, ...],
 ) -> str:
     return _canonical_json_hash(
-        b"repocompass:context-source:v1",
+        b"repocompass:memory-recall:v1",
         {
-            "kind": kind.value,
-            "raw_artifact_id": raw_artifact_id,
-            "location": (
-                None if location is None else location.model_dump(mode="json")
-            ),
-            "provenance": [link.model_dump(mode="json") for link in provenance],
+            "query_digest": query_digest,
+            "decisions": [item.model_dump(mode="json") for item in decisions],
         },
     )
 

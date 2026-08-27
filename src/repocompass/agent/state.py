@@ -8,7 +8,11 @@ from langchain_core.messages import AnyMessage, HumanMessage
 from langgraph.graph import MessagesState
 
 from repocompass.agent.candidate import CandidateResult
-from repocompass.agent.context import ContextPack
+from repocompass.agent.context import (
+    ContextItem,
+    ContextPack,
+    MemoryRecallReport,
+)
 from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
 from repocompass.agent.cost import (
     AttemptCostBudgetSummary,
@@ -48,6 +52,11 @@ class RepoCompassState(MessagesState):
     human_decision_action: HumanDecisionActionValue | None
     human_feedback: str | None
     investigation_plan: InvestigationPlan | None
+    memory_retrieval_enabled: bool
+    max_repository_memory_results: int
+    max_episodic_memory_results: int
+    memory_recall_report: MemoryRecallReport | None
+    memory_context_items: list[ContextItem]
     tool_audit_records: Annotated[list[ToolAuditPayload], add]
     last_tool_batch_audits: list[ToolAuditPayload]
     step_tool_audit_sequence_floor: int | None
@@ -91,6 +100,11 @@ class ContinuationStateUpdate(TypedDict):
     human_decision_action: None
     human_feedback: None
     investigation_plan: None
+    memory_retrieval_enabled: bool
+    max_repository_memory_results: int
+    max_episodic_memory_results: int
+    memory_recall_report: None
+    memory_context_items: list[ContextItem]
     tool_audit_records: list[ToolAuditPayload]
     last_tool_batch_audits: list[ToolAuditPayload]
     step_tool_audit_sequence_floor: int
@@ -153,6 +167,9 @@ def create_initial_state(
     context_budget_tokens: int = DEFAULT_CONTEXT_BUDGET_TOKENS,
     max_attempt_cost_usd: str | None = None,
     cost_budget_pricing_table_id: str | None = None,
+    memory_retrieval_enabled: bool = False,
+    max_repository_memory_results: int = 5,
+    max_episodic_memory_results: int = 5,
 ) -> RepoCompassState:
     objective = objective.strip()
     if not objective:
@@ -185,6 +202,16 @@ def create_initial_state(
         raise TypeError("Context budget must be an integer")
     if context_budget_tokens < 1:
         raise ValueError("Context budget must be positive")
+    if type(memory_retrieval_enabled) is not bool:
+        raise TypeError("memory_retrieval_enabled must be a bool")
+    _validate_memory_result_limit(
+        max_repository_memory_results,
+        name="max_repository_memory_results",
+    )
+    _validate_memory_result_limit(
+        max_episodic_memory_results,
+        name="max_episodic_memory_results",
+    )
     if max_attempt_cost_usd is not None:
         max_attempt_cost_usd = validate_cost_budget_usd(max_attempt_cost_usd)
     cost_budget_pricing_table_id = _require_cost_budget_pricing_binding(
@@ -201,6 +228,11 @@ def create_initial_state(
         "human_decision_action": None,
         "human_feedback": None,
         "investigation_plan": None,
+        "memory_retrieval_enabled": memory_retrieval_enabled,
+        "max_repository_memory_results": max_repository_memory_results,
+        "max_episodic_memory_results": max_episodic_memory_results,
+        "memory_recall_report": None,
+        "memory_context_items": [],
         "tool_audit_records": [],
         "last_tool_batch_audits": [],
         "step_tool_audit_sequence_floor": 0,
@@ -259,6 +291,19 @@ def create_continuation_update(
     max_explorer_calls = state.get("max_explorer_calls_per_step")
     max_no_progress_rounds = state.get("max_no_progress_rounds")
     max_plan_revisions = state.get("max_plan_revisions")
+    memory_retrieval_enabled = state.get("memory_retrieval_enabled", False)
+    max_repository_memory_results = state.get("max_repository_memory_results", 5)
+    max_episodic_memory_results = state.get("max_episodic_memory_results", 5)
+    if type(memory_retrieval_enabled) is not bool:
+        raise TypeError("Graph memory_retrieval_enabled must be a bool")
+    _validate_memory_result_limit(
+        max_repository_memory_results,
+        name="max_repository_memory_results",
+    )
+    _validate_memory_result_limit(
+        max_episodic_memory_results,
+        name="max_episodic_memory_results",
+    )
     if not isinstance(turn_number, int) or isinstance(turn_number, bool):
         raise TypeError("Graph turn_number is not an integer")
     if turn_number < 1:
@@ -310,6 +355,11 @@ def create_continuation_update(
         "human_decision_action": None,
         "human_feedback": None,
         "investigation_plan": None,
+        "memory_retrieval_enabled": memory_retrieval_enabled,
+        "max_repository_memory_results": max_repository_memory_results,
+        "max_episodic_memory_results": max_episodic_memory_results,
+        "memory_recall_report": None,
+        "memory_context_items": [],
         "tool_audit_records": [],
         "last_tool_batch_audits": [],
         "step_tool_audit_sequence_floor": 0,
@@ -337,3 +387,8 @@ def create_continuation_update(
         "next_action": None,
         "final_result": None,
     }
+
+
+def _validate_memory_result_limit(value: object, *, name: str) -> None:
+    if type(value) is not int or not 1 <= value <= 10:
+        raise ValueError(f"{name} must be between 1 and 10")

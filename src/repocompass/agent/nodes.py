@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
@@ -22,7 +22,7 @@ from langgraph.types import interrupt
 from pydantic import ValidationError
 
 from repocompass.agent.candidate import CandidateResult
-from repocompass.agent.context import ContextPack
+from repocompass.agent.context import ContextItem, ContextPack, MemoryRecallReport
 from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
 from repocompass.agent.context_gathering import (
     GatheredContext,
@@ -92,6 +92,9 @@ from repocompass.tools.gateway import (
     ToolGateway,
     create_repository_tool_registry,
 )
+
+if TYPE_CHECKING:
+    from repocompass.memory.store import MemoryStore
 
 
 def _context_budget(state: Mapping[str, object]) -> int:
@@ -290,6 +293,80 @@ def create_plan_investigation_node(
     return planner_node
 
 
+class MemoryRecallNodeInput(TypedDict):
+    """Minimal state required for one optional new-turn recall."""
+
+    repo_path: Path
+    objective: str
+    investigation_plan: InvestigationPlan | None
+    memory_retrieval_enabled: bool
+    max_repository_memory_results: int
+    max_episodic_memory_results: int
+
+
+class MemoryRecallNodeUpdate(TypedDict):
+    memory_recall_report: MemoryRecallReport | None
+    memory_context_items: list[ContextItem]
+
+
+MemoryRecallNode = Callable[
+    [MemoryRecallNodeInput, RunnableConfig | None],
+    MemoryRecallNodeUpdate,
+]
+
+
+def create_recall_memory_node(
+    store: "MemoryStore | None",
+    clock: Callable[[], int],
+) -> MemoryRecallNode:
+    """Create one checkpointed recall node; disabled mode performs no query."""
+
+    if not callable(clock):
+        raise TypeError("memory recall clock must be callable")
+
+    def recall_node(
+        state: MemoryRecallNodeInput,
+        config: RunnableConfig | None = None,
+    ) -> MemoryRecallNodeUpdate:
+        if not state["memory_retrieval_enabled"]:
+            return {"memory_recall_report": None, "memory_context_items": []}
+        if store is None:
+            raise ValueError("memory retrieval is enabled without a memory store")
+        plan = state["investigation_plan"]
+        if plan is None:
+            raise ValueError("memory recall requires an InvestigationPlan")
+        from repocompass.memory.retrieval import recall_memory_context
+
+        result = recall_memory_context(
+            store,
+            repo_path=state["repo_path"],
+            objective=state["objective"],
+            active_step=plan.active_step,
+            max_repository_results=state["max_repository_memory_results"],
+            max_episodic_results=state["max_episodic_memory_results"],
+            audit_at_ms=clock(),
+            run_id=_memory_recall_run_id(config),
+        )
+        return {
+            "memory_recall_report": result.report,
+            "memory_context_items": list(result.context_items),
+        }
+
+    return recall_node
+
+
+def _memory_recall_run_id(config: RunnableConfig | None) -> str | None:
+    if config is None:
+        return None
+    configurable = config.get("configurable")
+    if not isinstance(configurable, Mapping):
+        return None
+    value = configurable.get("repocompass_run_id")
+    if isinstance(value, str) and re.fullmatch(IDENTIFIER_PATTERN, value):
+        return value
+    return None
+
+
 class AgentNodeInput(MessagesState):
     """State visible to one Explorer model invocation."""
 
@@ -304,6 +381,7 @@ class AgentNodeInput(MessagesState):
     context_budget_tokens: int
     context_build_count: int
     max_attempt_cost_usd: str | None
+    memory_context_items: list[ContextItem]
 
 
 class AgentNodeUpdate(TypedDict):
@@ -342,6 +420,7 @@ def build_agent_messages(
         messages=tuple(state["messages"]),
         evaluation_report=state["evaluation_report"],
         budget_tokens=_context_budget(state),
+        memory_items=tuple(state.get("memory_context_items", [])),
     )
     return [
         SystemMessage(content=INVESTIGATION_SYSTEM_PROMPT),
@@ -382,6 +461,7 @@ def create_agent_node(
             messages=tuple(state["messages"]),
             evaluation_report=state["evaluation_report"],
             budget_tokens=_context_budget(state),
+            memory_items=tuple(state.get("memory_context_items", [])),
         )
         messages = build_agent_messages(state, gathered_context=gathered)
         response = _invoke_model(
@@ -1054,6 +1134,7 @@ class ReplannerInput(TypedDict):
     context_budget_tokens: int
     context_build_count: int
     max_attempt_cost_usd: str | None
+    memory_context_items: list[ContextItem]
 
 
 class ReplannerNodeUpdate(TypedDict):
@@ -1107,6 +1188,7 @@ def build_replanner_messages(
         max_tool_calls_per_step=state["max_tool_calls_per_step"],
         max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
         budget_tokens=_context_budget(state),
+        memory_items=tuple(state.get("memory_context_items", [])),
     )
     return [
         SystemMessage(content=REPLANNING_SYSTEM_PROMPT),
@@ -1156,6 +1238,7 @@ def create_revise_plan_node(
             max_tool_calls_per_step=state["max_tool_calls_per_step"],
             max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
             budget_tokens=_context_budget(state),
+            memory_items=tuple(state.get("memory_context_items", [])),
         )
         messages = build_replanner_messages(state, gathered_context=gathered)
         response = _invoke_model(

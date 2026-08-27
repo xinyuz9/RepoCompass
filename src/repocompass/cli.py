@@ -5,6 +5,7 @@ import json
 import sqlite3
 import sys
 from collections.abc import Sequence
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Literal
 
@@ -35,12 +36,14 @@ from repocompass.agent.runner import (
 )
 from repocompass.agent.trace_sink import JsonlTraceSink
 from repocompass.models import create_workflow_models
+from repocompass.memory.store import MemoryStoreError, open_memory_store
 from repocompass.pricing import load_pricing_table_file
 from repocompass.storage.raw_store import RawStoreError, open_raw_run_store
 
 DEFAULT_TRACE_DIRECTORY = Path(".repocompass/traces")
 DEFAULT_CHECKPOINT_DATABASE = Path(".repocompass/checkpoints.sqlite")
 DEFAULT_RAW_STORE_DATABASE = Path(".repocompass/raw_runs.sqlite")
+DEFAULT_MEMORY_DATABASE = Path(".repocompass/memory.sqlite")
 LifecycleMode = Literal["start", "resume", "continue", "respond", "usage_report"]
 
 
@@ -65,6 +68,13 @@ def _positive_cost_budget(value: str) -> str:
         return validate_cost_budget_usd(value)
     except (TypeError, ValueError) as error:
         raise argparse.ArgumentTypeError(str(error)) from error
+
+
+def _memory_result_limit(value: str) -> int:
+    parsed = _positive_int(value)
+    if parsed > 10:
+        raise argparse.ArgumentTypeError("must not exceed 10")
+    return parsed
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -211,6 +221,33 @@ def create_parser() -> argparse.ArgumentParser:
             f"(default: {DEFAULT_RAW_STORE_DATABASE})"
         ),
     )
+    parser.add_argument(
+        "--memory",
+        action="store_true",
+        help=(
+            "enable commit-aware recall and terminal episode consolidation; "
+            "repeat this flag for resume, continue, and respond"
+        ),
+    )
+    parser.add_argument(
+        "--memory-db",
+        type=Path,
+        default=DEFAULT_MEMORY_DATABASE,
+        help=(
+            "local SQLite memory database used only with --memory "
+            f"(default: {DEFAULT_MEMORY_DATABASE})"
+        ),
+    )
+    parser.add_argument(
+        "--max-repository-memory-results",
+        type=_memory_result_limit,
+        help="repository memory candidates per new turn (default: 5, max: 10)",
+    )
+    parser.add_argument(
+        "--max-episodic-memory-results",
+        type=_memory_result_limit,
+        help="episode history candidates per new turn (default: 5, max: 10)",
+    )
     return parser
 
 
@@ -272,6 +309,8 @@ def _validate_lifecycle_arguments(
             arguments.max_no_progress_rounds,
             arguments.max_plan_revisions,
             arguments.context_budget_tokens,
+            arguments.max_repository_memory_results,
+            arguments.max_episodic_memory_results,
         )
     ):
         parser.error("budget options can only be supplied for a new investigation")
@@ -401,19 +440,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
 
+        memory_context = (
+            open_memory_store(arguments.memory_db)
+            if arguments.memory
+            else nullcontext(None)
+        )
         with (
             open_sqlite_checkpointer(arguments.checkpoint_db) as checkpointer,
             open_raw_run_store(arguments.raw_store_db) as raw_run_store,
+            memory_context as memory_store,
         ):
+            optional_runner_dependencies: dict[str, object] = {}
+            if pricing_table is not None:
+                optional_runner_dependencies["pricing_table"] = pricing_table
+            if memory_store is not None:
+                optional_runner_dependencies["memory_store"] = memory_store
             runner = AgentRunner(
                 create_workflow_models(),
                 checkpointer=checkpointer,
                 raw_run_store=raw_run_store,
-                **(
-                    {"pricing_table": pricing_table}
-                    if pricing_table is not None
-                    else {}
-                ),
+                **optional_runner_dependencies,
             )
             if lifecycle_mode == "start":
                 outcome = runner.run(
@@ -442,6 +488,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                         max_attempt_cost_usd=arguments.max_attempt_cost_usd,
                         human_review_policy=(
                             arguments.human_review_policy or HumanReviewPolicy.NEVER
+                        ),
+                        memory_retrieval_enabled=arguments.memory,
+                        max_repository_memory_results=(
+                            arguments.max_repository_memory_results or 5
+                        ),
+                        max_episodic_memory_results=(
+                            arguments.max_episodic_memory_results or 5
                         ),
                     )
                 )
@@ -479,6 +532,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         OSError,
         ValueError,
         sqlite3.Error,
+        MemoryStoreError,
         RawStoreError,
     ) as error:
         print(f"repocompass: error: {error}", file=sys.stderr)
@@ -499,6 +553,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if outcome.usage_cost_report is not None:
         print(_render_usage_cost_summary(outcome.usage_cost_report), file=sys.stderr)
     print(f"Raw store: {arguments.raw_store_db.resolve()}", file=sys.stderr)
+    if arguments.memory:
+        print(f"Memory store: {arguments.memory_db.resolve()}", file=sys.stderr)
     return 0
 
 

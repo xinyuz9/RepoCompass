@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "case_id": "7d1ed305ed070de5468d667b3222f928ffda6d039465859a3d0c03b705ca4e82",
+  "case_id": "7daaf14697ca6dcd599c2d29b6ab32049315968c99a368907de14637a9802426",
   "name": "context-pressure-v1",
   "budget_tokens": 2330,
   "candidates": [
@@ -19,7 +19,8 @@
             "kind": "objective",
             "id": "objective"
           }
-        ]
+        ],
+        "memory": null
       },
       "section": "objective",
       "verification_status": "human_approved",
@@ -28,6 +29,43 @@
       "estimated_tokens": 1,
       "priority": 100,
       "pinned": true
+    },
+    {
+      "schema_version": 1,
+      "item_id": "358ba784559ae180afe81ed49379011d22841e4078e4728ae77e75c57d2b9411",
+      "source": {
+        "schema_version": 1,
+        "source_id": "d4b19fba2580bea4d58d2cc56f064212b5b8cc5edced0845d1d0d68a54970214",
+        "kind": "memory",
+        "raw_artifact_id": null,
+        "location": null,
+        "provenance": [
+          {
+            "schema_version": 1,
+            "kind": "memory",
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "memory": {
+          "schema_version": 1,
+          "memory_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "retrieval_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "query_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "repository_key": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "source_repository_id": "bb8f9a93f50a7ff700564baa3fcea78af39e87d1f6ecf4331c86469ad10eea8b",
+          "source_commit_sha": "1111111111111111111111111111111111111111",
+          "scope": "repository",
+          "freshness": "revalidation_required",
+          "staleness_reason": "commit_mismatch"
+        }
+      },
+      "section": "memory",
+      "verification_status": "inferred",
+      "content": "A prior run guessed that authentication may live under src/security/.",
+      "content_digest": "95f02eed410ec245c87f0528f4140b5f2d51988381d589f0489c9e9ba0904c4c",
+      "estimated_tokens": 1,
+      "priority": 20,
+      "pinned": false
     },
     {
       "schema_version": 1,
@@ -44,7 +82,8 @@
             "kind": "tool_call",
             "id": "search-generated-client"
           }
-        ]
+        ],
+        "memory": null
       },
       "section": "evidence",
       "verification_status": "unverified",
@@ -82,7 +121,8 @@
             "kind": "tool_call",
             "id": "read-login_route"
           }
-        ]
+        ],
+        "memory": null
       },
       "section": "evidence",
       "verification_status": "verified",
@@ -107,7 +147,8 @@
             "kind": "plan_step",
             "id": "inspect-generated-code"
           }
-        ]
+        ],
+        "memory": null
       },
       "section": "history",
       "verification_status": "rejected",
@@ -145,7 +186,8 @@
             "kind": "tool_call",
             "id": "read-authenticate"
           }
-        ]
+        ],
+        "memory": null
       },
       "section": "evidence",
       "verification_status": "verified",
@@ -153,31 +195,6 @@
       "content_digest": "0d599fbb4cfe09f1182f24e792c90867a23ba19a351a4dc160cbd2a493f696f9",
       "estimated_tokens": 1,
       "priority": 99,
-      "pinned": false
-    },
-    {
-      "schema_version": 1,
-      "item_id": "869f7c38b58772798982e030f983872e2f3fc22f78ef6d05d5a4f1929f427850",
-      "source": {
-        "schema_version": 1,
-        "source_id": "b6204b3f710696f01509fcf3c830cc26615739a907f4a062c066338eb3e18bfd",
-        "kind": "memory",
-        "raw_artifact_id": null,
-        "location": null,
-        "provenance": [
-          {
-            "schema_version": 1,
-            "kind": "memory",
-            "id": "memory-auth"
-          }
-        ]
-      },
-      "section": "memory",
-      "verification_status": "inferred",
-      "content": "A prior run guessed that authentication may live under src/security/.",
-      "content_digest": "95f02eed410ec245c87f0528f4140b5f2d51988381d589f0489c9e9ba0904c4c",
-      "estimated_tokens": 1,
-      "priority": 20,
       "pinned": false
     }
   ],

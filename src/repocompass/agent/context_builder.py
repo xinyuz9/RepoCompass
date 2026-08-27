@@ -285,15 +285,18 @@ def build_active_context(
 
 
 def _render_context_item(item: ContextItem) -> str:
+    source = item.source.model_dump(
+        mode="json",
+        exclude_computed_fields=True,
+    )
+    if source.get("memory") is None:
+        source.pop("memory", None)
     payload = {
         "content": item.content,
         "item_id": item.item_id,
         "pinned": item.pinned,
         "section": item.section.value,
-        "source": item.source.model_dump(
-            mode="json",
-            exclude_computed_fields=True,
-        ),
+        "source": source,
         "verification_status": item.verification_status.value,
     }
     return (

@@ -20,7 +20,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command, StateSnapshot
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
-from repocompass.agent.context import ContextPack
+from repocompass.agent.context import ContextItem, ContextPack
 from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
 from repocompass.agent.cost import (
     AttemptUsageCostReport,
@@ -74,6 +74,8 @@ DEFAULT_MAX_TOOL_CALLS_PER_STEP = 16
 DEFAULT_MAX_EXPLORER_CALLS_PER_STEP = 12
 DEFAULT_MAX_PLAN_REVISIONS = 2
 DEFAULT_MAX_NO_PROGRESS_ROUNDS = 3
+DEFAULT_MAX_REPOSITORY_MEMORY_RESULTS = 5
+DEFAULT_MAX_EPISODIC_MEMORY_RESULTS = 5
 
 _SENSITIVE_TRACE_KEYS = frozenset(
     {
@@ -224,6 +226,11 @@ def _context_pack_trace_metadata(pack: ContextPack) -> dict[str, JsonValue]:
                     if item.source.location is None
                     else item.source.location.model_dump(mode="json")
                 ),
+                "memory": (
+                    None
+                    if item.source.memory is None
+                    else item.source.memory.model_dump(mode="json")
+                ),
             }
             for item in pack.items
         ],
@@ -285,6 +292,24 @@ def _normalize_update(update: Mapping[str, object]) -> dict[str, JsonValue]:
 
     normalized: dict[str, JsonValue] = {}
     for key, value in update.items():
+        if key == "memory_context_items":
+            if not isinstance(value, (list, tuple)) or not all(
+                isinstance(item, ContextItem) for item in value
+            ):
+                raise TypeError("Graph memory_context_items are invalid")
+            normalized[key] = [
+                {
+                    "item_id": item.item_id,
+                    "source_id": item.source.source_id,
+                    "memory": (
+                        None
+                        if item.source.memory is None
+                        else item.source.memory.model_dump(mode="json")
+                    ),
+                }
+                for item in value
+            ]
+            continue
         if key == "human_feedback":
             normalized["human_feedback_provided"] = value is not None
             continue
@@ -372,6 +397,17 @@ class RunRequest(BaseModel):
     context_budget_tokens: int = Field(default=DEFAULT_CONTEXT_BUDGET_TOKENS, gt=0)
     max_attempt_cost_usd: str | None = None
     human_review_policy: HumanReviewPolicy = HumanReviewPolicy.NEVER
+    memory_retrieval_enabled: bool = False
+    max_repository_memory_results: int = Field(
+        default=DEFAULT_MAX_REPOSITORY_MEMORY_RESULTS,
+        ge=1,
+        le=10,
+    )
+    max_episodic_memory_results: int = Field(
+        default=DEFAULT_MAX_EPISODIC_MEMORY_RESULTS,
+        ge=1,
+        le=10,
+    )
 
     @field_validator("max_attempt_cost_usd", mode="before")
     @classmethod
@@ -722,6 +758,8 @@ class AgentRunner:
             raise ValueError(
                 "attempt cost budget requires a raw store and pricing table"
             )
+        if request.memory_retrieval_enabled and self._memory_store is None:
+            raise ValueError("memory retrieval requires a memory store")
         repo_path = resolve_repository_path(request.repo_path)
         thread_id = _normalize_identifier(
             self._thread_id_factory(),
@@ -743,11 +781,16 @@ class AgentRunner:
                 and self._pricing_table is not None
                 else None
             ),
+            memory_retrieval_enabled=request.memory_retrieval_enabled,
+            max_repository_memory_results=request.max_repository_memory_results,
+            max_episodic_memory_results=request.max_episodic_memory_results,
         )
         graph = create_agent_graph(
             self._models,
             checkpointer=self._checkpointer,
             raw_run_recorder=self._raw_run_recorder,
+            memory_store=self._memory_store,
+            memory_clock=self._episode_clock_factory,
         )
         config = _thread_config(thread_id)
         if graph.get_state(config).values:
@@ -772,6 +815,8 @@ class AgentRunner:
             self._models,
             checkpointer=self._checkpointer,
             raw_run_recorder=self._raw_run_recorder,
+            memory_store=self._memory_store,
+            memory_clock=self._episode_clock_factory,
         )
 
         config = _thread_config(thread_id)
@@ -795,6 +840,8 @@ class AgentRunner:
             self._models,
             checkpointer=self._checkpointer,
             raw_run_recorder=self._raw_run_recorder,
+            memory_store=self._memory_store,
+            memory_clock=self._episode_clock_factory,
         )
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)
@@ -847,6 +894,8 @@ class AgentRunner:
             self._models,
             checkpointer=self._checkpointer,
             raw_run_recorder=self._raw_run_recorder,
+            memory_store=self._memory_store,
+            memory_clock=self._episode_clock_factory,
         )
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)
@@ -893,6 +942,11 @@ class AgentRunner:
 
         configured_cost_budget = metadata_state.get("max_attempt_cost_usd")
         configured_pricing_table_id = metadata_state.get("cost_budget_pricing_table_id")
+        if (
+            metadata_state.get("memory_retrieval_enabled", False)
+            and self._memory_store is None
+        ):
+            raise ValueError("memory retrieval requires a memory store")
         if configured_cost_budget is not None:
             configured_cost_budget = validate_cost_budget_usd(configured_cost_budget)
             if self._raw_run_recorder is None or self._pricing_table is None:
@@ -948,6 +1002,20 @@ class AgentRunner:
                 )
             ),
         }
+        if metadata_state.get("memory_retrieval_enabled", False):
+            started_payload["memory_retrieval_enabled"] = True
+            started_payload["max_repository_memory_results"] = _to_json_value(
+                metadata_state.get(
+                    "max_repository_memory_results",
+                    DEFAULT_MAX_REPOSITORY_MEMORY_RESULTS,
+                )
+            )
+            started_payload["max_episodic_memory_results"] = _to_json_value(
+                metadata_state.get(
+                    "max_episodic_memory_results",
+                    DEFAULT_MAX_EPISODIC_MEMORY_RESULTS,
+                )
+            )
         if self._pricing_table is not None:
             started_payload["pricing_table_id"] = self._pricing_table.table_id
         if configured_cost_budget is not None:
