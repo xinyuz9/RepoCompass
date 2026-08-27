@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 repocompass = "repocompass.cli:main"
 repocompass-benchmark = "repocompass.evaluation.cli:main"
+repocompass-live-smoke = "repocompass.evaluation.live_smoke:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]
@@ -27,4 +28,9 @@ dev = [
     "langgraph-cli[inmem]>=0.4.31",
     "pytest>=9.1.1",
     "ruff>=0.15.21",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "live_api: explicitly enabled tests that spend real provider credits",
 ]

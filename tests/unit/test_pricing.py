@@ -60,6 +60,24 @@ def test_bundled_pricing_example_is_loadable_but_clearly_non_provider_data() -> 
     assert {entry.provider for entry in pricing.entries} == {"deepseek", "openai"}
 
 
+def test_bundled_deepseek_v4_snapshot_has_reviewed_exact_rates() -> None:
+    pricing = load_pricing_table_file(
+        PROJECT_ROOT / "examples/pricing.deepseek-2026-08-27.json"
+    )
+
+    pro = pricing.lookup("deepseek", "deepseek-v4-pro")
+    flash = pricing.lookup("deepseek", "deepseek-v4-flash")
+    assert pricing.version == "deepseek-v4-observed-2026-08-27"
+    assert pro is not None
+    assert pro.input_usd_per_million_tokens == "0.435"
+    assert pro.cached_input_usd_per_million_tokens == "0.003625"
+    assert pro.output_usd_per_million_tokens == "0.87"
+    assert flash is not None
+    assert flash.input_usd_per_million_tokens == "0.14"
+    assert flash.cached_input_usd_per_million_tokens == "0.0028"
+    assert flash.output_usd_per_million_tokens == "0.28"
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
