@@ -38,6 +38,21 @@ from repocompass.structure.evidence_graph import (
     merge_evidence_graphs,
 )
 from repocompass.structure.graph_builder import build_evidence_graph
+from repocompass.structure.graph_slice import (
+    GRAPH_SLICE_SCHEMA_VERSION,
+    MAX_GRAPH_SLICE_DEPTH,
+    MAX_GRAPH_SLICE_EDGES,
+    MAX_GRAPH_SLICE_NODES,
+    MAX_GRAPH_SLICE_SEEDS,
+    EvidenceGraphSlice,
+    GraphNodeDepth,
+    GraphSliceTruncationReason,
+    GraphTraversalDirection,
+    ReadingPathError,
+    ReadingPathErrorReason,
+    resolve_seed_entity_ids,
+    slice_evidence_graph,
+)
 from repocompass.structure.python_index import (
     MAX_PYTHON_AST_DEPTH,
     MAX_PYTHON_AST_NODES,
@@ -56,6 +71,17 @@ from repocompass.structure.queries import (
     find_python_symbol_definitions,
     inspect_python_imports,
     list_python_symbols,
+)
+from repocompass.structure.reading_path import (
+    READING_PATH_SCHEMA_VERSION,
+    ClaimLineage,
+    ReadingStep,
+    ReadingStepKind,
+    ReadingStepReason,
+    TraceableClaim,
+    TraceableReadingPath,
+    build_traceable_reading_path,
+    create_traceable_claim,
 )
 
 __all__ = [
@@ -107,5 +133,27 @@ __all__ = [
     "find_python_symbol_definitions",
     "inspect_python_imports",
     "merge_evidence_graphs",
+    "ClaimLineage",
+    "EvidenceGraphSlice",
+    "GRAPH_SLICE_SCHEMA_VERSION",
+    "GraphNodeDepth",
+    "GraphSliceTruncationReason",
+    "GraphTraversalDirection",
+    "MAX_GRAPH_SLICE_DEPTH",
+    "MAX_GRAPH_SLICE_EDGES",
+    "MAX_GRAPH_SLICE_NODES",
+    "MAX_GRAPH_SLICE_SEEDS",
+    "READING_PATH_SCHEMA_VERSION",
+    "ReadingPathError",
+    "ReadingPathErrorReason",
+    "ReadingStep",
+    "ReadingStepKind",
+    "ReadingStepReason",
+    "TraceableClaim",
+    "TraceableReadingPath",
+    "build_traceable_reading_path",
+    "create_traceable_claim",
+    "resolve_seed_entity_ids",
+    "slice_evidence_graph",
     "list_python_symbols",
 ]

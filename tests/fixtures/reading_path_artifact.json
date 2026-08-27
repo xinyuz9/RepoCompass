@@ -1,0 +1,1705 @@
+{
+  "claim_lineages": [
+    {
+      "claim_id": "ff2685ca46c134665139767d334ab78675416326390024acb7abb48a8d083792",
+      "evidence": [
+        {
+          "evidence_id": "587fe664f8293d98268a6278244e482f3929d0d8f55123b396a8021ec5c7566d",
+          "kind": "python_import",
+          "location": {
+            "column_end": 25,
+            "column_start": 18,
+            "commit_sha": "1111111111111111111111111111111111111111",
+            "line_end": 1,
+            "line_start": 1,
+            "location_id": "d2b6a633a2df9733996061559bc87bcbe00967a32a943da518899ae9b6a13479",
+            "path": "pkg/api.py",
+            "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+            "schema_version": 1,
+            "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+          },
+          "record": {
+            "alias": null,
+            "bound_name": "Service",
+            "import_id": "2e43912806786eaca83082e1aef947af70859263678a1e1df90d9a03dc5789fe",
+            "imported_name": "Service",
+            "kind": "from_import",
+            "level": 1,
+            "location": {
+              "column_end": 25,
+              "column_start": 18,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 1,
+              "line_start": 1,
+              "location_id": "d2b6a633a2df9733996061559bc87bcbe00967a32a943da518899ae9b6a13479",
+              "path": "pkg/api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+            },
+            "module": "core",
+            "schema_version": 1,
+            "scope_symbol_id": "3d870676092b844a16620059064f759c8141d81fb0cb693221d5d23a1ec4cbe6",
+            "verification_status": "verified"
+          },
+          "record_id": "2e43912806786eaca83082e1aef947af70859263678a1e1df90d9a03dc5789fe",
+          "schema_version": 1
+        }
+      ],
+      "explanation": null,
+      "lineage_id": "1673e6bf049c99f7e6b7e8763db97693868e042879aa91b100feb9f24635e60e",
+      "provenance_complete": true,
+      "schema_version": 1,
+      "source_locations": [
+        {
+          "column_end": 25,
+          "column_start": 18,
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "line_end": 1,
+          "line_start": 1,
+          "location_id": "d2b6a633a2df9733996061559bc87bcbe00967a32a943da518899ae9b6a13479",
+          "path": "pkg/api.py",
+          "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+          "schema_version": 1,
+          "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+        }
+      ],
+      "supporting_assertion_ids": [
+        "5315aaedc81a9ff63d67bd1351d9e920565c7aad31843706d2c9d58a42eef9c8"
+      ],
+      "text": "The API module imports the core implementation.",
+      "verification_status": "verified"
+    }
+  ],
+  "graph_slice": {
+    "commit_sha": "1111111111111111111111111111111111111111",
+    "edges": [
+      {
+        "assertion_id": "037fa277d076af4d9c7109f44854333eef78f748ce3ecaa979a1d5cad6d82845",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "c3ed8ce914ecd7bb9867a58852986ac81d6474fcbf6148593e5c7e0654ef5446",
+        "evidence": [
+          {
+            "evidence_id": "18281cd7de7d8fa632500b8d9400c06bb63272c45824cbf65e1cd47e76277fb9",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 18,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 5,
+              "line_start": 4,
+              "location_id": "4c549d5067c47cc4add7e5e3df0cadde2117521a3ba855633daa159ad10570ef",
+              "path": "tests/check_api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+            },
+            "record": {
+              "body": {
+                "column_end": 18,
+                "column_start": 4,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 5,
+                "location_id": "1d5bfe1f3556b234603c3c994f3e80aad0402f4c225385a47d1d407ae627116c",
+                "path": "tests/check_api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 18,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 4,
+                "location_id": "4c549d5067c47cc4add7e5e3df0cadde2117521a3ba855633daa159ad10570ef",
+                "path": "tests/check_api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+              },
+              "is_test": true,
+              "kind": "function",
+              "name": "test_build",
+              "parent_symbol_id": "d41b56f288c9bb19d76748a604f2efaefa66c4871b5a28d0d6896bcd08741488",
+              "qualified_name": "tests.check_api.test_build",
+              "schema_version": 1,
+              "symbol_id": "20a0b653041212150e3d366625eaf718790a7c4a1fa33b0c90521bbd5a7c16cc",
+              "verification_status": "verified"
+            },
+            "record_id": "20a0b653041212150e3d366625eaf718790a7c4a1fa33b0c90521bbd5a7c16cc",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "contains",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "2e9ed63309563a008efa5c3e753fbaf869e979344f93a5994f8a6a2901cba696",
+        "target_entity_id": "ad3c998a3b1b4a22f33e586d5f207e70e562a03d6d5204cf921fd9e1fec40efb",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "2b8fabedbab2eb95197a152873f5b7b2fad2d034d9914402f6a57cc4df67dbe0",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "95db49604dca255a8e4af2d8f17f75bae65e099807a0c393a252e82d6c4c8a75",
+        "evidence": [
+          {
+            "evidence_id": "39665857c19b4c7b7ccf44ea1f60254f81082d6de59bb6f8863b75fff69e7c1a",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 26,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 5,
+              "line_start": 4,
+              "location_id": "d7bc488b8603cb343b225ec9fb6b16a59ddab1e861a23e75102d10fb035b3c15",
+              "path": "pkg/api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+            },
+            "record": {
+              "body": {
+                "column_end": 26,
+                "column_start": 4,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 5,
+                "location_id": "cc23139a1fbc28277a13fb1eb8e978224138a08cb6860083c37d7d73ae471d7b",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 26,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 4,
+                "location_id": "d7bc488b8603cb343b225ec9fb6b16a59ddab1e861a23e75102d10fb035b3c15",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "is_test": false,
+              "kind": "function",
+              "name": "build",
+              "parent_symbol_id": "3d870676092b844a16620059064f759c8141d81fb0cb693221d5d23a1ec4cbe6",
+              "qualified_name": "pkg.api.build",
+              "schema_version": 1,
+              "symbol_id": "fd4feef5db8480b411f7e37d96ec15166563d0f29bb1aface8428b4c14279301",
+              "verification_status": "verified"
+            },
+            "record_id": "fd4feef5db8480b411f7e37d96ec15166563d0f29bb1aface8428b4c14279301",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "contains",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "e551473ff36a2fbf7f00d1237dc7f146e9f39d978c8b1d2bf627e164dc572e3b",
+        "target_entity_id": "a7b8b08a8847eb79ccdb596347a63ffc2c6a95647f3cc9f7b6a36380ab9fdb6d",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "bfda026663f7a83203a99bc21e8bbe44cec4fef26b3868fb8c51e53341a0269c",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "cfc626cb281e3cb9a0a0812ddf873186c23fe1350dc5065dc9ec7be34d93de22",
+        "evidence": [
+          {
+            "evidence_id": "642d4c1fc4c0024be5d40a7ae01cdeec208cf9e581a423b93cccdc9124bbc874",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 15,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 2,
+              "line_start": 1,
+              "location_id": "5a03cd47b668639bd882b40be32e4ce2b9a33dd5a9dad1caaeef91c3f79feccb",
+              "path": "pkg/core.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+            },
+            "record": {
+              "body": {
+                "column_end": 15,
+                "column_start": 4,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 2,
+                "line_start": 2,
+                "location_id": "9939e0bc18a508295612de33dd0ad9d2fd048fedb1ee0017dbee3120e1227d77",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 15,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 2,
+                "line_start": 1,
+                "location_id": "5a03cd47b668639bd882b40be32e4ce2b9a33dd5a9dad1caaeef91c3f79feccb",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "is_test": false,
+              "kind": "function",
+              "name": "helper",
+              "parent_symbol_id": "d0b97f1f559a49e6ae5558f153479e3af29ebefd23838638a0126dcfb3f63b91",
+              "qualified_name": "pkg.core.helper",
+              "schema_version": 1,
+              "symbol_id": "2dd5c7995c026eca9d75b223b4b090e079bcc9cb4d95fbb4cbe5c687c3767f82",
+              "verification_status": "verified"
+            },
+            "record_id": "2dd5c7995c026eca9d75b223b4b090e079bcc9cb4d95fbb4cbe5c687c3767f82",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "contains",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "f76d3b6d03e8d15bf9a4cb79687889c56227b346e7236c00846d8f080feccc22",
+        "target_entity_id": "0cada1927d825bda1193735d41d14b2d2607054e2654448e57cd6b5697477d0c",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "3a084c10a750ff9fd2c0083c8dba30baeff4074d66f7dc924f4ed6ef3506bb62",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "0dc90d4ecc7bb7d07d81031278fd705fd0370f43d435422b2660bbe0a212cbec",
+        "evidence": [
+          {
+            "evidence_id": "d377eedd202ad55622b72a22047d2de1479507df1988992d4dbadcfca5ebf882",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 23,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 7,
+              "line_start": 5,
+              "location_id": "f84ebd3931f3b49e7119fbdc6d87ee3b0bb6f13d46d23ef08591e1614371b525",
+              "path": "pkg/core.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+            },
+            "record": {
+              "body": {
+                "column_end": 23,
+                "column_start": 4,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 7,
+                "line_start": 6,
+                "location_id": "f98c0620323671e0fb3f3940b7ed4a1807a5db96d4865ace54e325695dc7b623",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 23,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 7,
+                "line_start": 5,
+                "location_id": "f84ebd3931f3b49e7119fbdc6d87ee3b0bb6f13d46d23ef08591e1614371b525",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "is_test": false,
+              "kind": "class",
+              "name": "Service",
+              "parent_symbol_id": "d0b97f1f559a49e6ae5558f153479e3af29ebefd23838638a0126dcfb3f63b91",
+              "qualified_name": "pkg.core.Service",
+              "schema_version": 1,
+              "symbol_id": "4029733ff9bf1356f2ab59e08e9272878e9af4e2fcc82e2311f1eeadd26fa861",
+              "verification_status": "verified"
+            },
+            "record_id": "4029733ff9bf1356f2ab59e08e9272878e9af4e2fcc82e2311f1eeadd26fa861",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "contains",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "f76d3b6d03e8d15bf9a4cb79687889c56227b346e7236c00846d8f080feccc22",
+        "target_entity_id": "dfda54d2cde189043274657fc3ec2c01e39167d4d4df3ab78b9743cbdd96483a",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "71c1b056da4f1f56b6ab55919ecf74c36713b8e5061bc75ba63f9a3bc3f8f3dd",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "e9f795eb8febbffab65641c2a97b5200a49ebec50fb2e35b5f2651d3eb3ad572",
+        "evidence": [
+          {
+            "evidence_id": "5ebb5b066863e877bf47b80a3722765d5fdad2db6ae98cfe5ab106cd30b9b6a1",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 0,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 6,
+              "line_start": 1,
+              "location_id": "9b97c79f395d1f60b12496326c8cb8dfaca474fba4bcf9c12005f34b796e7879",
+              "path": "tests/check_api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+            },
+            "record": {
+              "body": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 6,
+                "line_start": 1,
+                "location_id": "9b97c79f395d1f60b12496326c8cb8dfaca474fba4bcf9c12005f34b796e7879",
+                "path": "tests/check_api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 6,
+                "line_start": 1,
+                "location_id": "9b97c79f395d1f60b12496326c8cb8dfaca474fba4bcf9c12005f34b796e7879",
+                "path": "tests/check_api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+              },
+              "is_test": true,
+              "kind": "module",
+              "name": "check_api",
+              "parent_symbol_id": null,
+              "qualified_name": "tests.check_api",
+              "schema_version": 1,
+              "symbol_id": "d41b56f288c9bb19d76748a604f2efaefa66c4871b5a28d0d6896bcd08741488",
+              "verification_status": "verified"
+            },
+            "record_id": "d41b56f288c9bb19d76748a604f2efaefa66c4871b5a28d0d6896bcd08741488",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "contains",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "fbd23172bcc916f4d7e9f7d03280536fcf87164fb78221e566e630a3fdb29383",
+        "target_entity_id": "2e9ed63309563a008efa5c3e753fbaf869e979344f93a5994f8a6a2901cba696",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "3e971f341bffecbfa8f4b9b9b013f2fa12039cdc2c56002c33690a79614af8e9",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "ae8e25e56ff28afe0b87b4c672e1f62a2c7fa9c1e2f487af59326e22283eb982",
+        "evidence": [
+          {
+            "evidence_id": "f9fc902e215cc9e32a0cc11131a3f53735ee296fb2d499606d2eb8668c4cfc98",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 0,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 6,
+              "line_start": 1,
+              "location_id": "7138f19be328484eb8dafd3402977a4018403e7ec10aec81bc762e55219075ea",
+              "path": "pkg/api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+            },
+            "record": {
+              "body": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 6,
+                "line_start": 1,
+                "location_id": "7138f19be328484eb8dafd3402977a4018403e7ec10aec81bc762e55219075ea",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 6,
+                "line_start": 1,
+                "location_id": "7138f19be328484eb8dafd3402977a4018403e7ec10aec81bc762e55219075ea",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "is_test": false,
+              "kind": "module",
+              "name": "api",
+              "parent_symbol_id": null,
+              "qualified_name": "pkg.api",
+              "schema_version": 1,
+              "symbol_id": "3d870676092b844a16620059064f759c8141d81fb0cb693221d5d23a1ec4cbe6",
+              "verification_status": "verified"
+            },
+            "record_id": "3d870676092b844a16620059064f759c8141d81fb0cb693221d5d23a1ec4cbe6",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "contains",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "fbd23172bcc916f4d7e9f7d03280536fcf87164fb78221e566e630a3fdb29383",
+        "target_entity_id": "e551473ff36a2fbf7f00d1237dc7f146e9f39d978c8b1d2bf627e164dc572e3b",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "02e827281c6cf62b4f90d748c30f5170c6b4596dcc4a66c1dd0dadaecdf263ed",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "fa098eba14139eb2561b88729418bf1994286850c0ae7b48d32ca366f4f6ca6a",
+        "evidence": [
+          {
+            "evidence_id": "c6c93b7f54a1b5abf769edcfd5a9332ee71a25c16f1c2543261a911726fce4f0",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 0,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 8,
+              "line_start": 1,
+              "location_id": "2d7cd80e14bb4ad98e542d802c3cd0698d10ef7f3337579c362e811158203c9b",
+              "path": "pkg/core.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+            },
+            "record": {
+              "body": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 8,
+                "line_start": 1,
+                "location_id": "2d7cd80e14bb4ad98e542d802c3cd0698d10ef7f3337579c362e811158203c9b",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 8,
+                "line_start": 1,
+                "location_id": "2d7cd80e14bb4ad98e542d802c3cd0698d10ef7f3337579c362e811158203c9b",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "is_test": false,
+              "kind": "module",
+              "name": "core",
+              "parent_symbol_id": null,
+              "qualified_name": "pkg.core",
+              "schema_version": 1,
+              "symbol_id": "d0b97f1f559a49e6ae5558f153479e3af29ebefd23838638a0126dcfb3f63b91",
+              "verification_status": "verified"
+            },
+            "record_id": "d0b97f1f559a49e6ae5558f153479e3af29ebefd23838638a0126dcfb3f63b91",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "contains",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "fbd23172bcc916f4d7e9f7d03280536fcf87164fb78221e566e630a3fdb29383",
+        "target_entity_id": "f76d3b6d03e8d15bf9a4cb79687889c56227b346e7236c00846d8f080feccc22",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "2c2b5c24a3b22882d505dddcea7f02d98cc62b255b7956c72598510da810d9e3",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "8d7a9afe851dfdb2d81335734f23358bf1059acfcbb66ae7c28dcae498eb8b90",
+        "evidence": [
+          {
+            "evidence_id": "8501d3303f6f128f470074b2882de5f435357e4a494bd6ed31613fbee326af63",
+            "kind": "python_import",
+            "location": {
+              "column_end": 25,
+              "column_start": 20,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 1,
+              "line_start": 1,
+              "location_id": "3fbd84eafe4cc1a7c1baf93f541e325e273b825687786297cbd9bdba203d04ff",
+              "path": "tests/check_api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+            },
+            "record": {
+              "alias": null,
+              "bound_name": "build",
+              "import_id": "e272ce67cacef574542d968880983ce1e9e885b2c09168bbda17bfd3cd3cfb81",
+              "imported_name": "build",
+              "kind": "from_import",
+              "level": 0,
+              "location": {
+                "column_end": 25,
+                "column_start": 20,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 1,
+                "line_start": 1,
+                "location_id": "3fbd84eafe4cc1a7c1baf93f541e325e273b825687786297cbd9bdba203d04ff",
+                "path": "tests/check_api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+              },
+              "module": "pkg.api",
+              "schema_version": 1,
+              "scope_symbol_id": "d41b56f288c9bb19d76748a604f2efaefa66c4871b5a28d0d6896bcd08741488",
+              "verification_status": "verified"
+            },
+            "record_id": "e272ce67cacef574542d968880983ce1e9e885b2c09168bbda17bfd3cd3cfb81",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "imports",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "2e9ed63309563a008efa5c3e753fbaf869e979344f93a5994f8a6a2901cba696",
+        "target_entity_id": "e551473ff36a2fbf7f00d1237dc7f146e9f39d978c8b1d2bf627e164dc572e3b",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "5315aaedc81a9ff63d67bd1351d9e920565c7aad31843706d2c9d58a42eef9c8",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "79e7ac9a6fe19c5cb79ac06d171853d353482bf27243122c05ecab0670d5de42",
+        "evidence": [
+          {
+            "evidence_id": "587fe664f8293d98268a6278244e482f3929d0d8f55123b396a8021ec5c7566d",
+            "kind": "python_import",
+            "location": {
+              "column_end": 25,
+              "column_start": 18,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 1,
+              "line_start": 1,
+              "location_id": "d2b6a633a2df9733996061559bc87bcbe00967a32a943da518899ae9b6a13479",
+              "path": "pkg/api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+            },
+            "record": {
+              "alias": null,
+              "bound_name": "Service",
+              "import_id": "2e43912806786eaca83082e1aef947af70859263678a1e1df90d9a03dc5789fe",
+              "imported_name": "Service",
+              "kind": "from_import",
+              "level": 1,
+              "location": {
+                "column_end": 25,
+                "column_start": 18,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 1,
+                "line_start": 1,
+                "location_id": "d2b6a633a2df9733996061559bc87bcbe00967a32a943da518899ae9b6a13479",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "module": "core",
+              "schema_version": 1,
+              "scope_symbol_id": "3d870676092b844a16620059064f759c8141d81fb0cb693221d5d23a1ec4cbe6",
+              "verification_status": "verified"
+            },
+            "record_id": "2e43912806786eaca83082e1aef947af70859263678a1e1df90d9a03dc5789fe",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "imports",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "e551473ff36a2fbf7f00d1237dc7f146e9f39d978c8b1d2bf627e164dc572e3b",
+        "target_entity_id": "f76d3b6d03e8d15bf9a4cb79687889c56227b346e7236c00846d8f080feccc22",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "f8e3f348289857eebe9680f65b99ebb3a6693aa828834e3f9b405c19893a5036",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "763e5155c4ad50040be72ae8c66ecd398ce431f6f843c196bb417bdaf09f5807",
+        "evidence": [
+          {
+            "evidence_id": "642751e8c41749f300c49c0e824f2a39c83dcb114c26c0def725e65af7a8c295",
+            "kind": "python_reference",
+            "location": {
+              "column_end": 18,
+              "column_start": 11,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 5,
+              "line_start": 5,
+              "location_id": "45ddf1609ff4cbcee55f743d236913a5218f3cd0acaf5ab86dadabd6211bbb6b",
+              "path": "pkg/api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+            },
+            "record": {
+              "kind": "call",
+              "location": {
+                "column_end": 18,
+                "column_start": 11,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 5,
+                "location_id": "45ddf1609ff4cbcee55f743d236913a5218f3cd0acaf5ab86dadabd6211bbb6b",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "name": "Service",
+              "reference_id": "69b640252cbef2b6a911f1a8b4116f73be73f2e10f27ed40ee34d9c8205ec651",
+              "schema_version": 1,
+              "scope_symbol_id": "fd4feef5db8480b411f7e37d96ec15166563d0f29bb1aface8428b4c14279301",
+              "verification_status": "verified"
+            },
+            "record_id": "69b640252cbef2b6a911f1a8b4116f73be73f2e10f27ed40ee34d9c8205ec651",
+            "schema_version": 1
+          },
+          {
+            "evidence_id": "e4459596bc6555fefef1435aa6d9c6f0cb6109ee417390e4b45c0ab3eb02f91a",
+            "kind": "python_reference",
+            "location": {
+              "column_end": 18,
+              "column_start": 11,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 5,
+              "line_start": 5,
+              "location_id": "45ddf1609ff4cbcee55f743d236913a5218f3cd0acaf5ab86dadabd6211bbb6b",
+              "path": "pkg/api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+            },
+            "record": {
+              "kind": "name_load",
+              "location": {
+                "column_end": 18,
+                "column_start": 11,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 5,
+                "location_id": "45ddf1609ff4cbcee55f743d236913a5218f3cd0acaf5ab86dadabd6211bbb6b",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "name": "Service",
+              "reference_id": "51b4db6e1612a7afbff2d173b926d16a83b68ff0a877e7463cecd910370d6a6f",
+              "schema_version": 1,
+              "scope_symbol_id": "fd4feef5db8480b411f7e37d96ec15166563d0f29bb1aface8428b4c14279301",
+              "verification_status": "verified"
+            },
+            "record_id": "51b4db6e1612a7afbff2d173b926d16a83b68ff0a877e7463cecd910370d6a6f",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "references",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "a7b8b08a8847eb79ccdb596347a63ffc2c6a95647f3cc9f7b6a36380ab9fdb6d",
+        "target_entity_id": "578bdc3420a14a51bd36eb310def7939a214e54f4168364e74633baf58c1f7da",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "5ee31e0407e836b58d1dfb4c2e190dcfcfbef4618484c15f2bb3d43a05ce0d84",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "d1891128cb4a3554a9b2052e820c46143b1e098e6907b1fb2e1a70b8c3efceee",
+        "evidence": [
+          {
+            "evidence_id": "5bf1ab07d70306442ac5a066953edf3647fea39db08403f09e987462bda67c0d",
+            "kind": "python_reference",
+            "location": {
+              "column_end": 25,
+              "column_start": 21,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 6,
+              "line_start": 6,
+              "location_id": "945ee6c2dbf457211d1fe77ccfbc0847b184fea0fcefeef824bd3329ba8e58bb",
+              "path": "pkg/core.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+            },
+            "record": {
+              "kind": "name_load",
+              "location": {
+                "column_end": 25,
+                "column_start": 21,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 6,
+                "line_start": 6,
+                "location_id": "945ee6c2dbf457211d1fe77ccfbc0847b184fea0fcefeef824bd3329ba8e58bb",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "name": "bool",
+              "reference_id": "137a82dd02eac0e4f48281d7ba962fccf35b46b8f76912d3f2929b84d97dbe3c",
+              "schema_version": 1,
+              "scope_symbol_id": "4029733ff9bf1356f2ab59e08e9272878e9af4e2fcc82e2311f1eeadd26fa861",
+              "verification_status": "verified"
+            },
+            "record_id": "137a82dd02eac0e4f48281d7ba962fccf35b46b8f76912d3f2929b84d97dbe3c",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "references",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "dfda54d2cde189043274657fc3ec2c01e39167d4d4df3ab78b9743cbdd96483a",
+        "target_entity_id": "eb3d15b4da260dd3aa071249ae5d595a71da0ff621b70c6723f31a8ac775289a",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "a35770ce0a925e7f9e6adf8023edd062381638c84c4e7e70eb822c25fd9c289a",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "78a46a2726eea01003ff86fe09c9a7e6d8c09d1e04c625c8a19f1b5a04263e43",
+        "evidence": [
+          {
+            "evidence_id": "bf787f2ce492a15ac7460639a31fe210fb34c84d7dd0e34b121e095e03023b74",
+            "kind": "python_reference",
+            "location": {
+              "column_end": 19,
+              "column_start": 15,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 4,
+              "line_start": 4,
+              "location_id": "109b51f32627c440b386d9a95375fec87a920fed3b49e5128d4c64e0ca927fcd",
+              "path": "pkg/api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+            },
+            "record": {
+              "kind": "name_load",
+              "location": {
+                "column_end": 19,
+                "column_start": 15,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 4,
+                "line_start": 4,
+                "location_id": "109b51f32627c440b386d9a95375fec87a920fed3b49e5128d4c64e0ca927fcd",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "name": "bool",
+              "reference_id": "6dda3ae3f4831db808a55662c50b8673041004a2da98eb34d57d941dc2c54d4d",
+              "schema_version": 1,
+              "scope_symbol_id": "3d870676092b844a16620059064f759c8141d81fb0cb693221d5d23a1ec4cbe6",
+              "verification_status": "verified"
+            },
+            "record_id": "6dda3ae3f4831db808a55662c50b8673041004a2da98eb34d57d941dc2c54d4d",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "references",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "e551473ff36a2fbf7f00d1237dc7f146e9f39d978c8b1d2bf627e164dc572e3b",
+        "target_entity_id": "eb3d15b4da260dd3aa071249ae5d595a71da0ff621b70c6723f31a8ac775289a",
+        "verification_status": "verified"
+      },
+      {
+        "assertion_id": "70fac786eaef1ef800e8e65e55cc3c0a6d5424b9712a63d277f7c367b75fe2fc",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "edge_id": "998b75c190dfaebbf392f8dc7da641416f66d27483e1d76a1a7c08f6c1d7142c",
+        "evidence": [
+          {
+            "evidence_id": "2b01d92ac4bfdd6c9133c85a82307daae979e235ff41b3196db2b6e2436c54d6",
+            "kind": "python_reference",
+            "location": {
+              "column_end": 20,
+              "column_start": 16,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 1,
+              "line_start": 1,
+              "location_id": "2913785e341f2cb64d585e8bb516b864b23a87533ac9c92902a1bd51cb3e333b",
+              "path": "pkg/core.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+            },
+            "record": {
+              "kind": "name_load",
+              "location": {
+                "column_end": 20,
+                "column_start": 16,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 1,
+                "line_start": 1,
+                "location_id": "2913785e341f2cb64d585e8bb516b864b23a87533ac9c92902a1bd51cb3e333b",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "name": "bool",
+              "reference_id": "393ab1820a2269f135ad5cd3cf2a26bcc67d2d08a55c998875e6b3e61424036a",
+              "schema_version": 1,
+              "scope_symbol_id": "d0b97f1f559a49e6ae5558f153479e3af29ebefd23838638a0126dcfb3f63b91",
+              "verification_status": "verified"
+            },
+            "record_id": "393ab1820a2269f135ad5cd3cf2a26bcc67d2d08a55c998875e6b3e61424036a",
+            "schema_version": 1
+          }
+        ],
+        "explanation": null,
+        "relation": "references",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "source_entity_id": "f76d3b6d03e8d15bf9a4cb79687889c56227b346e7236c00846d8f080feccc22",
+        "target_entity_id": "eb3d15b4da260dd3aa071249ae5d595a71da0ff621b70c6723f31a8ac775289a",
+        "verification_status": "verified"
+      }
+    ],
+    "graph_id": "bfa41a52f5cfdc7deada69e4bb258c7a153c01aa5550cc555fd8a33a304c6d54",
+    "include_inferred": false,
+    "max_depth": 3,
+    "max_edges": 128,
+    "max_nodes": 64,
+    "node_depths": [
+      {
+        "depth": 3,
+        "entity_id": "0cada1927d825bda1193735d41d14b2d2607054e2654448e57cd6b5697477d0c",
+        "is_seed": false,
+        "schema_version": 1
+      },
+      {
+        "depth": 2,
+        "entity_id": "2e9ed63309563a008efa5c3e753fbaf869e979344f93a5994f8a6a2901cba696",
+        "is_seed": false,
+        "schema_version": 1
+      },
+      {
+        "depth": 1,
+        "entity_id": "578bdc3420a14a51bd36eb310def7939a214e54f4168364e74633baf58c1f7da",
+        "is_seed": false,
+        "schema_version": 1
+      },
+      {
+        "depth": 0,
+        "entity_id": "a7b8b08a8847eb79ccdb596347a63ffc2c6a95647f3cc9f7b6a36380ab9fdb6d",
+        "is_seed": true,
+        "schema_version": 1
+      },
+      {
+        "depth": 3,
+        "entity_id": "ad3c998a3b1b4a22f33e586d5f207e70e562a03d6d5204cf921fd9e1fec40efb",
+        "is_seed": false,
+        "schema_version": 1
+      },
+      {
+        "depth": 3,
+        "entity_id": "dfda54d2cde189043274657fc3ec2c01e39167d4d4df3ab78b9743cbdd96483a",
+        "is_seed": false,
+        "schema_version": 1
+      },
+      {
+        "depth": 1,
+        "entity_id": "e551473ff36a2fbf7f00d1237dc7f146e9f39d978c8b1d2bf627e164dc572e3b",
+        "is_seed": false,
+        "schema_version": 1
+      },
+      {
+        "depth": 2,
+        "entity_id": "eb3d15b4da260dd3aa071249ae5d595a71da0ff621b70c6723f31a8ac775289a",
+        "is_seed": false,
+        "schema_version": 1
+      },
+      {
+        "depth": 2,
+        "entity_id": "f76d3b6d03e8d15bf9a4cb79687889c56227b346e7236c00846d8f080feccc22",
+        "is_seed": false,
+        "schema_version": 1
+      },
+      {
+        "depth": 2,
+        "entity_id": "fbd23172bcc916f4d7e9f7d03280536fcf87164fb78221e566e630a3fdb29383",
+        "is_seed": false,
+        "schema_version": 1
+      }
+    ],
+    "nodes": [
+      {
+        "canonical_name": "pkg.core.Service",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "entity_id": "dfda54d2cde189043274657fc3ec2c01e39167d4d4df3ab78b9743cbdd96483a",
+        "evidence": [
+          {
+            "evidence_id": "d377eedd202ad55622b72a22047d2de1479507df1988992d4dbadcfca5ebf882",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 23,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 7,
+              "line_start": 5,
+              "location_id": "f84ebd3931f3b49e7119fbdc6d87ee3b0bb6f13d46d23ef08591e1614371b525",
+              "path": "pkg/core.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+            },
+            "record": {
+              "body": {
+                "column_end": 23,
+                "column_start": 4,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 7,
+                "line_start": 6,
+                "location_id": "f98c0620323671e0fb3f3940b7ed4a1807a5db96d4865ace54e325695dc7b623",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 23,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 7,
+                "line_start": 5,
+                "location_id": "f84ebd3931f3b49e7119fbdc6d87ee3b0bb6f13d46d23ef08591e1614371b525",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "is_test": false,
+              "kind": "class",
+              "name": "Service",
+              "parent_symbol_id": "d0b97f1f559a49e6ae5558f153479e3af29ebefd23838638a0126dcfb3f63b91",
+              "qualified_name": "pkg.core.Service",
+              "schema_version": 1,
+              "symbol_id": "4029733ff9bf1356f2ab59e08e9272878e9af4e2fcc82e2311f1eeadd26fa861",
+              "verification_status": "verified"
+            },
+            "record_id": "4029733ff9bf1356f2ab59e08e9272878e9af4e2fcc82e2311f1eeadd26fa861",
+            "schema_version": 1
+          }
+        ],
+        "is_test": false,
+        "kind": "class",
+        "node_id": "680392bb58a9720ebbbc8e9a17b23f6760571f9d3e0d5aa9cb6a73bca1d5f2d1",
+        "path": "pkg/core.py",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "symbol_id": "4029733ff9bf1356f2ab59e08e9272878e9af4e2fcc82e2311f1eeadd26fa861",
+        "symbol_kind": "class"
+      },
+      {
+        "canonical_name": "pkg.api",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "entity_id": "e551473ff36a2fbf7f00d1237dc7f146e9f39d978c8b1d2bf627e164dc572e3b",
+        "evidence": [
+          {
+            "evidence_id": "f9fc902e215cc9e32a0cc11131a3f53735ee296fb2d499606d2eb8668c4cfc98",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 0,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 6,
+              "line_start": 1,
+              "location_id": "7138f19be328484eb8dafd3402977a4018403e7ec10aec81bc762e55219075ea",
+              "path": "pkg/api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+            },
+            "record": {
+              "body": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 6,
+                "line_start": 1,
+                "location_id": "7138f19be328484eb8dafd3402977a4018403e7ec10aec81bc762e55219075ea",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 6,
+                "line_start": 1,
+                "location_id": "7138f19be328484eb8dafd3402977a4018403e7ec10aec81bc762e55219075ea",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "is_test": false,
+              "kind": "module",
+              "name": "api",
+              "parent_symbol_id": null,
+              "qualified_name": "pkg.api",
+              "schema_version": 1,
+              "symbol_id": "3d870676092b844a16620059064f759c8141d81fb0cb693221d5d23a1ec4cbe6",
+              "verification_status": "verified"
+            },
+            "record_id": "3d870676092b844a16620059064f759c8141d81fb0cb693221d5d23a1ec4cbe6",
+            "schema_version": 1
+          }
+        ],
+        "is_test": false,
+        "kind": "file",
+        "node_id": "a7cd63bfe6fb0f63a1f7d82c64d6691d0afa90f9448f30d7bf6df42261beb34f",
+        "path": "pkg/api.py",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "symbol_id": "3d870676092b844a16620059064f759c8141d81fb0cb693221d5d23a1ec4cbe6",
+        "symbol_kind": "module"
+      },
+      {
+        "canonical_name": "pkg.core",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "entity_id": "f76d3b6d03e8d15bf9a4cb79687889c56227b346e7236c00846d8f080feccc22",
+        "evidence": [
+          {
+            "evidence_id": "c6c93b7f54a1b5abf769edcfd5a9332ee71a25c16f1c2543261a911726fce4f0",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 0,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 8,
+              "line_start": 1,
+              "location_id": "2d7cd80e14bb4ad98e542d802c3cd0698d10ef7f3337579c362e811158203c9b",
+              "path": "pkg/core.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+            },
+            "record": {
+              "body": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 8,
+                "line_start": 1,
+                "location_id": "2d7cd80e14bb4ad98e542d802c3cd0698d10ef7f3337579c362e811158203c9b",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 8,
+                "line_start": 1,
+                "location_id": "2d7cd80e14bb4ad98e542d802c3cd0698d10ef7f3337579c362e811158203c9b",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "is_test": false,
+              "kind": "module",
+              "name": "core",
+              "parent_symbol_id": null,
+              "qualified_name": "pkg.core",
+              "schema_version": 1,
+              "symbol_id": "d0b97f1f559a49e6ae5558f153479e3af29ebefd23838638a0126dcfb3f63b91",
+              "verification_status": "verified"
+            },
+            "record_id": "d0b97f1f559a49e6ae5558f153479e3af29ebefd23838638a0126dcfb3f63b91",
+            "schema_version": 1
+          }
+        ],
+        "is_test": false,
+        "kind": "file",
+        "node_id": "1ad0fd8bc214cf104d308a8ed1b4182f7b7f623eaae4c28fc7f004179294ab55",
+        "path": "pkg/core.py",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "symbol_id": "d0b97f1f559a49e6ae5558f153479e3af29ebefd23838638a0126dcfb3f63b91",
+        "symbol_kind": "module"
+      },
+      {
+        "canonical_name": "tests.check_api",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "entity_id": "2e9ed63309563a008efa5c3e753fbaf869e979344f93a5994f8a6a2901cba696",
+        "evidence": [
+          {
+            "evidence_id": "5ebb5b066863e877bf47b80a3722765d5fdad2db6ae98cfe5ab106cd30b9b6a1",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 0,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 6,
+              "line_start": 1,
+              "location_id": "9b97c79f395d1f60b12496326c8cb8dfaca474fba4bcf9c12005f34b796e7879",
+              "path": "tests/check_api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+            },
+            "record": {
+              "body": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 6,
+                "line_start": 1,
+                "location_id": "9b97c79f395d1f60b12496326c8cb8dfaca474fba4bcf9c12005f34b796e7879",
+                "path": "tests/check_api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 0,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 6,
+                "line_start": 1,
+                "location_id": "9b97c79f395d1f60b12496326c8cb8dfaca474fba4bcf9c12005f34b796e7879",
+                "path": "tests/check_api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+              },
+              "is_test": true,
+              "kind": "module",
+              "name": "check_api",
+              "parent_symbol_id": null,
+              "qualified_name": "tests.check_api",
+              "schema_version": 1,
+              "symbol_id": "d41b56f288c9bb19d76748a604f2efaefa66c4871b5a28d0d6896bcd08741488",
+              "verification_status": "verified"
+            },
+            "record_id": "d41b56f288c9bb19d76748a604f2efaefa66c4871b5a28d0d6896bcd08741488",
+            "schema_version": 1
+          }
+        ],
+        "is_test": false,
+        "kind": "file",
+        "node_id": "da1d5ae75e99b3e9623205634848efdd55f68a431fa0c9a9e6f29cf5819e91e1",
+        "path": "tests/check_api.py",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "symbol_id": "d41b56f288c9bb19d76748a604f2efaefa66c4871b5a28d0d6896bcd08741488",
+        "symbol_kind": "module"
+      },
+      {
+        "canonical_name": "pkg.api.build",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "entity_id": "a7b8b08a8847eb79ccdb596347a63ffc2c6a95647f3cc9f7b6a36380ab9fdb6d",
+        "evidence": [
+          {
+            "evidence_id": "39665857c19b4c7b7ccf44ea1f60254f81082d6de59bb6f8863b75fff69e7c1a",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 26,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 5,
+              "line_start": 4,
+              "location_id": "d7bc488b8603cb343b225ec9fb6b16a59ddab1e861a23e75102d10fb035b3c15",
+              "path": "pkg/api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+            },
+            "record": {
+              "body": {
+                "column_end": 26,
+                "column_start": 4,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 5,
+                "location_id": "cc23139a1fbc28277a13fb1eb8e978224138a08cb6860083c37d7d73ae471d7b",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 26,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 4,
+                "location_id": "d7bc488b8603cb343b225ec9fb6b16a59ddab1e861a23e75102d10fb035b3c15",
+                "path": "pkg/api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+              },
+              "is_test": false,
+              "kind": "function",
+              "name": "build",
+              "parent_symbol_id": "3d870676092b844a16620059064f759c8141d81fb0cb693221d5d23a1ec4cbe6",
+              "qualified_name": "pkg.api.build",
+              "schema_version": 1,
+              "symbol_id": "fd4feef5db8480b411f7e37d96ec15166563d0f29bb1aface8428b4c14279301",
+              "verification_status": "verified"
+            },
+            "record_id": "fd4feef5db8480b411f7e37d96ec15166563d0f29bb1aface8428b4c14279301",
+            "schema_version": 1
+          }
+        ],
+        "is_test": false,
+        "kind": "function",
+        "node_id": "f100355d8683526cea031908b8f06fb1dc6b6045cf1eb16e5cb251195fb352a6",
+        "path": "pkg/api.py",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "symbol_id": "fd4feef5db8480b411f7e37d96ec15166563d0f29bb1aface8428b4c14279301",
+        "symbol_kind": "function"
+      },
+      {
+        "canonical_name": "pkg.core.helper",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "entity_id": "0cada1927d825bda1193735d41d14b2d2607054e2654448e57cd6b5697477d0c",
+        "evidence": [
+          {
+            "evidence_id": "642d4c1fc4c0024be5d40a7ae01cdeec208cf9e581a423b93cccdc9124bbc874",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 15,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 2,
+              "line_start": 1,
+              "location_id": "5a03cd47b668639bd882b40be32e4ce2b9a33dd5a9dad1caaeef91c3f79feccb",
+              "path": "pkg/core.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+            },
+            "record": {
+              "body": {
+                "column_end": 15,
+                "column_start": 4,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 2,
+                "line_start": 2,
+                "location_id": "9939e0bc18a508295612de33dd0ad9d2fd048fedb1ee0017dbee3120e1227d77",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 15,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 2,
+                "line_start": 1,
+                "location_id": "5a03cd47b668639bd882b40be32e4ce2b9a33dd5a9dad1caaeef91c3f79feccb",
+                "path": "pkg/core.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+              },
+              "is_test": false,
+              "kind": "function",
+              "name": "helper",
+              "parent_symbol_id": "d0b97f1f559a49e6ae5558f153479e3af29ebefd23838638a0126dcfb3f63b91",
+              "qualified_name": "pkg.core.helper",
+              "schema_version": 1,
+              "symbol_id": "2dd5c7995c026eca9d75b223b4b090e079bcc9cb4d95fbb4cbe5c687c3767f82",
+              "verification_status": "verified"
+            },
+            "record_id": "2dd5c7995c026eca9d75b223b4b090e079bcc9cb4d95fbb4cbe5c687c3767f82",
+            "schema_version": 1
+          }
+        ],
+        "is_test": false,
+        "kind": "function",
+        "node_id": "165e1ba62ca400cb0411150b805727f9b7a9d6a042a1f2a035cafd64c5ba12b8",
+        "path": "pkg/core.py",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "symbol_id": "2dd5c7995c026eca9d75b223b4b090e079bcc9cb4d95fbb4cbe5c687c3767f82",
+        "symbol_kind": "function"
+      },
+      {
+        "canonical_name": "repository",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "entity_id": "fbd23172bcc916f4d7e9f7d03280536fcf87164fb78221e566e630a3fdb29383",
+        "evidence": [],
+        "is_test": false,
+        "kind": "repository",
+        "node_id": "72a3fd3329296ade7e63c74e9ce62e19937f25691547d6ff19e6c306f22764ad",
+        "path": null,
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "symbol_id": null,
+        "symbol_kind": null
+      },
+      {
+        "canonical_name": "tests.check_api.test_build",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "entity_id": "ad3c998a3b1b4a22f33e586d5f207e70e562a03d6d5204cf921fd9e1fec40efb",
+        "evidence": [
+          {
+            "evidence_id": "18281cd7de7d8fa632500b8d9400c06bb63272c45824cbf65e1cd47e76277fb9",
+            "kind": "python_symbol",
+            "location": {
+              "column_end": 18,
+              "column_start": 0,
+              "commit_sha": "1111111111111111111111111111111111111111",
+              "line_end": 5,
+              "line_start": 4,
+              "location_id": "4c549d5067c47cc4add7e5e3df0cadde2117521a3ba855633daa159ad10570ef",
+              "path": "tests/check_api.py",
+              "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+              "schema_version": 1,
+              "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+            },
+            "record": {
+              "body": {
+                "column_end": 18,
+                "column_start": 4,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 5,
+                "location_id": "1d5bfe1f3556b234603c3c994f3e80aad0402f4c225385a47d1d407ae627116c",
+                "path": "tests/check_api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+              },
+              "decorators": [],
+              "definition": {
+                "column_end": 18,
+                "column_start": 0,
+                "commit_sha": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 4,
+                "location_id": "4c549d5067c47cc4add7e5e3df0cadde2117521a3ba855633daa159ad10570ef",
+                "path": "tests/check_api.py",
+                "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+                "schema_version": 1,
+                "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+              },
+              "is_test": true,
+              "kind": "function",
+              "name": "test_build",
+              "parent_symbol_id": "d41b56f288c9bb19d76748a604f2efaefa66c4871b5a28d0d6896bcd08741488",
+              "qualified_name": "tests.check_api.test_build",
+              "schema_version": 1,
+              "symbol_id": "20a0b653041212150e3d366625eaf718790a7c4a1fa33b0c90521bbd5a7c16cc",
+              "verification_status": "verified"
+            },
+            "record_id": "20a0b653041212150e3d366625eaf718790a7c4a1fa33b0c90521bbd5a7c16cc",
+            "schema_version": 1
+          }
+        ],
+        "is_test": true,
+        "kind": "test",
+        "node_id": "e80c58ef9085042bdc4a014abb0acf6853adade0dcf9eef9d75625e77eef6b59",
+        "path": "tests/check_api.py",
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "symbol_id": "20a0b653041212150e3d366625eaf718790a7c4a1fa33b0c90521bbd5a7c16cc",
+        "symbol_kind": "function"
+      },
+      {
+        "canonical_name": "Service",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "entity_id": "578bdc3420a14a51bd36eb310def7939a214e54f4168364e74633baf58c1f7da",
+        "evidence": [],
+        "is_test": false,
+        "kind": "unresolved_symbol",
+        "node_id": "e3aebb4289a332bc37de20cc739e81ed407c76cf3eee3f55bfc4d1444582d9f8",
+        "path": null,
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "symbol_id": null,
+        "symbol_kind": null
+      },
+      {
+        "canonical_name": "bool",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "entity_id": "eb3d15b4da260dd3aa071249ae5d595a71da0ff621b70c6723f31a8ac775289a",
+        "evidence": [],
+        "is_test": false,
+        "kind": "unresolved_symbol",
+        "node_id": "8e66b4ff9b30807c53928d5ec0e561a1680c5a5c2ed0b58bc20861ead232e230",
+        "path": null,
+        "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+        "schema_version": 1,
+        "symbol_id": null,
+        "symbol_kind": null
+      }
+    ],
+    "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+    "schema_version": 1,
+    "seed_entity_ids": [
+      "a7b8b08a8847eb79ccdb596347a63ffc2c6a95647f3cc9f7b6a36380ab9fdb6d"
+    ],
+    "slice_id": "9f429c6c30c2fd400ed4f9055cb6c327cf077c4fedc2f0da9a905844cd6c67e4",
+    "traversal": "both",
+    "truncated": true,
+    "truncation_reasons": [
+      "depth_limit"
+    ]
+  },
+  "objective": "Trace how the public builder reaches the core service.",
+  "reading_path_id": "f73f4d2d723d2c7de93df6a208eaf8f741004a5fc72c68c2bdcc99e1c087cf21",
+  "schema_version": 1,
+  "steps": [
+    {
+      "canonical_name": "pkg.api",
+      "depth": 1,
+      "entity_id": "e551473ff36a2fbf7f00d1237dc7f146e9f39d978c8b1d2bf627e164dc572e3b",
+      "kind": "file",
+      "node_id": "a7cd63bfe6fb0f63a1f7d82c64d6691d0afa90f9448f30d7bf6df42261beb34f",
+      "ordinal": 1,
+      "path": "pkg/api.py",
+      "path_verification_status": "verified",
+      "reading_step_id": "8798997bcb828473802311d78e731533973a2eaa2aaf3093646597c5ffa7d60b",
+      "reason": "structural_context",
+      "schema_version": 1,
+      "source_locations": [
+        {
+          "column_end": 0,
+          "column_start": 0,
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "line_end": 6,
+          "line_start": 1,
+          "location_id": "7138f19be328484eb8dafd3402977a4018403e7ec10aec81bc762e55219075ea",
+          "path": "pkg/api.py",
+          "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+          "schema_version": 1,
+          "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+        }
+      ],
+      "via_assertion_id": "2b8fabedbab2eb95197a152873f5b7b2fad2d034d9914402f6a57cc4df67dbe0"
+    },
+    {
+      "canonical_name": "pkg.core",
+      "depth": 2,
+      "entity_id": "f76d3b6d03e8d15bf9a4cb79687889c56227b346e7236c00846d8f080feccc22",
+      "kind": "file",
+      "node_id": "1ad0fd8bc214cf104d308a8ed1b4182f7b7f623eaae4c28fc7f004179294ab55",
+      "ordinal": 2,
+      "path": "pkg/core.py",
+      "path_verification_status": "verified",
+      "reading_step_id": "1a8e74da69d34870166ad5f15d2dff9ef40c0e0dbeaed67a11dedcccd160a7e5",
+      "reason": "import_dependency",
+      "schema_version": 1,
+      "source_locations": [
+        {
+          "column_end": 0,
+          "column_start": 0,
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "line_end": 8,
+          "line_start": 1,
+          "location_id": "2d7cd80e14bb4ad98e542d802c3cd0698d10ef7f3337579c362e811158203c9b",
+          "path": "pkg/core.py",
+          "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+          "schema_version": 1,
+          "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+        }
+      ],
+      "via_assertion_id": "5315aaedc81a9ff63d67bd1351d9e920565c7aad31843706d2c9d58a42eef9c8"
+    },
+    {
+      "canonical_name": "tests.check_api",
+      "depth": 2,
+      "entity_id": "2e9ed63309563a008efa5c3e753fbaf869e979344f93a5994f8a6a2901cba696",
+      "kind": "file",
+      "node_id": "da1d5ae75e99b3e9623205634848efdd55f68a431fa0c9a9e6f29cf5819e91e1",
+      "ordinal": 3,
+      "path": "tests/check_api.py",
+      "path_verification_status": "verified",
+      "reading_step_id": "c834851facefe3c96e2b0984dbc5b076fb37dd938c6b95ed71ae8a10bb2c3bc2",
+      "reason": "import_dependency",
+      "schema_version": 1,
+      "source_locations": [
+        {
+          "column_end": 0,
+          "column_start": 0,
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "line_end": 6,
+          "line_start": 1,
+          "location_id": "9b97c79f395d1f60b12496326c8cb8dfaca474fba4bcf9c12005f34b796e7879",
+          "path": "tests/check_api.py",
+          "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+          "schema_version": 1,
+          "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+        }
+      ],
+      "via_assertion_id": "2c2b5c24a3b22882d505dddcea7f02d98cc62b255b7956c72598510da810d9e3"
+    },
+    {
+      "canonical_name": "pkg.api.build",
+      "depth": 0,
+      "entity_id": "a7b8b08a8847eb79ccdb596347a63ffc2c6a95647f3cc9f7b6a36380ab9fdb6d",
+      "kind": "symbol",
+      "node_id": "f100355d8683526cea031908b8f06fb1dc6b6045cf1eb16e5cb251195fb352a6",
+      "ordinal": 4,
+      "path": "pkg/api.py",
+      "path_verification_status": "verified",
+      "reading_step_id": "6d4bd9d72fe6933a0ff985d37a0ea4c03aa68acac1a8235a64896dd3a7aeeb7d",
+      "reason": "seed",
+      "schema_version": 1,
+      "source_locations": [
+        {
+          "column_end": 26,
+          "column_start": 0,
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "line_end": 5,
+          "line_start": 4,
+          "location_id": "d7bc488b8603cb343b225ec9fb6b16a59ddab1e861a23e75102d10fb035b3c15",
+          "path": "pkg/api.py",
+          "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+          "schema_version": 1,
+          "source_digest": "6bc398f21f6736cc2609582c3751f080da33b11d059343198369508732241d2e"
+        }
+      ],
+      "via_assertion_id": null
+    },
+    {
+      "canonical_name": "pkg.core.helper",
+      "depth": 3,
+      "entity_id": "0cada1927d825bda1193735d41d14b2d2607054e2654448e57cd6b5697477d0c",
+      "kind": "symbol",
+      "node_id": "165e1ba62ca400cb0411150b805727f9b7a9d6a042a1f2a035cafd64c5ba12b8",
+      "ordinal": 5,
+      "path": "pkg/core.py",
+      "path_verification_status": "verified",
+      "reading_step_id": "40c01ce820a4541e3273aa9e6127efe84e2dbc8571f87c250d13e956f30e4357",
+      "reason": "structural_context",
+      "schema_version": 1,
+      "source_locations": [
+        {
+          "column_end": 15,
+          "column_start": 0,
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "line_end": 2,
+          "line_start": 1,
+          "location_id": "5a03cd47b668639bd882b40be32e4ce2b9a33dd5a9dad1caaeef91c3f79feccb",
+          "path": "pkg/core.py",
+          "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+          "schema_version": 1,
+          "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+        }
+      ],
+      "via_assertion_id": "bfda026663f7a83203a99bc21e8bbe44cec4fef26b3868fb8c51e53341a0269c"
+    },
+    {
+      "canonical_name": "pkg.core.Service",
+      "depth": 3,
+      "entity_id": "dfda54d2cde189043274657fc3ec2c01e39167d4d4df3ab78b9743cbdd96483a",
+      "kind": "symbol",
+      "node_id": "680392bb58a9720ebbbc8e9a17b23f6760571f9d3e0d5aa9cb6a73bca1d5f2d1",
+      "ordinal": 6,
+      "path": "pkg/core.py",
+      "path_verification_status": "verified",
+      "reading_step_id": "c90ff82d36789b3b0cd06de1d5aa341fcff5e9bcc0db9f57c1ecb90bc9cc29b4",
+      "reason": "structural_context",
+      "schema_version": 1,
+      "source_locations": [
+        {
+          "column_end": 23,
+          "column_start": 0,
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "line_end": 7,
+          "line_start": 5,
+          "location_id": "f84ebd3931f3b49e7119fbdc6d87ee3b0bb6f13d46d23ef08591e1614371b525",
+          "path": "pkg/core.py",
+          "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+          "schema_version": 1,
+          "source_digest": "9318dba508b2100b6fe32f09031d56d8054fb6660b2936126b1a93298b865072"
+        }
+      ],
+      "via_assertion_id": "3a084c10a750ff9fd2c0083c8dba30baeff4074d66f7dc924f4ed6ef3506bb62"
+    },
+    {
+      "canonical_name": "tests.check_api.test_build",
+      "depth": 3,
+      "entity_id": "ad3c998a3b1b4a22f33e586d5f207e70e562a03d6d5204cf921fd9e1fec40efb",
+      "kind": "test",
+      "node_id": "e80c58ef9085042bdc4a014abb0acf6853adade0dcf9eef9d75625e77eef6b59",
+      "ordinal": 7,
+      "path": "tests/check_api.py",
+      "path_verification_status": "verified",
+      "reading_step_id": "9570a15bcdcc5e11ce3b4bb2598ccd18ba937da84832ddb096b7e250bd02df7a",
+      "reason": "related_test",
+      "schema_version": 1,
+      "source_locations": [
+        {
+          "column_end": 18,
+          "column_start": 0,
+          "commit_sha": "1111111111111111111111111111111111111111",
+          "line_end": 5,
+          "line_start": 4,
+          "location_id": "4c549d5067c47cc4add7e5e3df0cadde2117521a3ba855633daa159ad10570ef",
+          "path": "tests/check_api.py",
+          "repository_id": "716bfd36096d4faefff51d34f4217ca6514c9e0918c29beeb644aa72c4fcc60a",
+          "schema_version": 1,
+          "source_digest": "187ad0d85da5aeeb4ea17a76df787e046a9b567232fb837e38595f94aa21b42a"
+        }
+      ],
+      "via_assertion_id": "037fa277d076af4d9c7109f44854333eef78f748ce3ecaa979a1d5cad6d82845"
+    }
+  ]
+}
