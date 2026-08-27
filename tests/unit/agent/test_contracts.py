@@ -20,6 +20,7 @@ def test_internal_contract_fields_are_minimal() -> None:
     assert set(InvestigationPlan.model_fields) == {"steps"}
     assert set(CandidateResult.model_fields) == {
         "evidence",
+        "relations",
         "summary",
         "unresolved_questions",
     }

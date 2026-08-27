@@ -13,7 +13,11 @@ from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, ResumeRequest, RunRequest
 from repocompass.agent.trace import TraceEventKind
 from repocompass.tools.contracts import NoProgressReason, ToolDecisionReason
-from tests.model_doubles import candidate_from_final_result, with_scripted_planner
+from tests.model_doubles import (
+    assert_final_result_core,
+    candidate_from_final_result,
+    with_scripted_planner,
+)
 
 
 def test_runner_resumes_unfinished_thread_after_reopening_sqlite(
@@ -79,7 +83,7 @@ def test_runner_resumes_unfinished_thread_after_reopening_sqlite(
         for event in outcome.trace.events
         if event.kind is TraceEventKind.NODE_COMPLETED
     ]
-    assert outcome.final_result == final_result
+    assert_final_result_core(outcome.final_result, final_result)
     assert outcome.thread_id == "recoverable-thread"
     assert node_events[0].node == "agent"
     assert all(event.node != "plan_investigation" for event in node_events)
@@ -182,7 +186,7 @@ def test_runner_resume_preserves_no_progress_counter_across_sqlite_reopen(
         )
         outcome = runner.resume(ResumeRequest(thread_id="no-progress-thread"))
 
-    assert outcome.final_result == final_result
+    assert_final_result_core(outcome.final_result, final_result)
     assert outcome.step_stop_reason == "step_no_progress"
     assert outcome.consecutive_no_progress_rounds == 2
     assert outcome.no_progress_decision is not None

@@ -65,7 +65,14 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
     outcome = runner.run(request)
     events = outcome.trace.events
 
-    assert outcome.final_result == final_result
+    assert outcome.final_result is not None
+    assert (
+        outcome.final_result.model_copy(
+            update={"relevant_symbols": [], "structure": None}
+        )
+        == final_result
+    )
+    assert outcome.final_result.structure is not None
     assert outcome.termination_status == "accepted"
     assert outcome.step_stop_reason is None
     assert outcome.thread_id == "fixed-thread"
@@ -118,6 +125,12 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
     ).model_dump(mode="json")
     assert events[4].payload["evaluation_report"]["passed"] is True
     assert events[4].payload["evaluation_report"]["deterministic_issues"] == []
+    structure_trace = events[4].payload["investigation_structure"]
+    assert structure_trace["indexed_paths"] == ["example.py"]
+    assert structure_trace["graph_node_count"] >= 2
+    assert structure_trace["reading_step_count"] >= 1
+    assert "nodes" not in structure_trace
+    assert "edges" not in structure_trace
     assert events[5].payload == {"next_action": "accepted"}
     assert events[6].payload == {
         "human_review_payload": None,
@@ -130,7 +143,12 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
         "human_feedback_provided": False,
     }
     assert events[8].payload == {"termination_status": "accepted"}
-    assert events[9].payload["final_result"] == final_result.model_dump(mode="json")
+    final_trace = events[9].payload["final_result"]
+    assert final_trace["relevant_files"] == final_result.relevant_files
+    assert final_trace["evidence"] == final_result.evidence
+    assert final_trace["summary"] == final_result.summary
+    assert final_trace["unresolved_questions"] == []
+    assert final_trace["structure"] == structure_trace
     assert events[-1].payload == {
         "thread_id": "fixed-thread",
         "execution_mode": "start",
@@ -382,7 +400,14 @@ def test_runner_reads_completed_result_when_resuming_finished_thread(
 
     assert resumed_outcome.thread_id == "persisted-thread"
     assert resumed_outcome.trace.run_id == "resume-attempt"
-    assert resumed_outcome.final_result == final_result
+    assert resumed_outcome.final_result is not None
+    assert (
+        resumed_outcome.final_result.model_copy(
+            update={"relevant_symbols": [], "structure": None}
+        )
+        == final_result
+    )
+    assert resumed_outcome.final_result.structure is not None
     assert resumed_outcome.termination_status == "accepted"
     assert [event.kind for event in resumed_outcome.trace.events] == [
         TraceEventKind.RUN_STARTED,

@@ -14,7 +14,11 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.checkpoint.sqlite import SqliteSaver
 from pydantic import BaseModel
 
-from repocompass.agent.candidate import CandidateResult, EvidenceItem
+from repocompass.agent.candidate import (
+    CandidateRelation,
+    CandidateResult,
+    EvidenceItem,
+)
 from repocompass.agent.context import (
     ContextBuildReport,
     ContextItem,
@@ -45,12 +49,48 @@ from repocompass.agent.evaluation import (
 from repocompass.agent.lifecycle import HumanReviewPolicy, TurnRecord
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.result import FinalResult
+from repocompass.agent.structural_artifacts import (
+    InvestigationStructure,
+    RelevantSymbol,
+)
 from repocompass.agent.usage import (
     ModelInvocationRecord,
     ModelInvocationStatus,
     ModelRole,
     UsageAvailability,
     UsageRecord,
+)
+from repocompass.structure.contracts import (
+    PythonImportKind,
+    PythonImportRecord,
+    PythonReferenceKind,
+    PythonReferenceRecord,
+    PythonSymbolKind,
+    PythonSymbolRecord,
+    SourceLocation,
+    StructuralVerificationStatus,
+)
+from repocompass.structure.evidence_graph import (
+    EvidenceGraph,
+    EvidenceGraphEdge,
+    EvidenceGraphNode,
+    EvidenceNodeKind,
+    EvidenceRelationKind,
+    GraphEvidence,
+    GraphEvidenceKind,
+)
+from repocompass.structure.graph_slice import (
+    EvidenceGraphSlice,
+    GraphNodeDepth,
+    GraphSliceTruncationReason,
+    GraphTraversalDirection,
+)
+from repocompass.structure.reading_path import (
+    ClaimLineage,
+    ReadingStep,
+    ReadingStepKind,
+    ReadingStepReason,
+    TraceableReadingPath,
 )
 from repocompass.tools.contracts import (
     NoProgressAction,
@@ -72,7 +112,23 @@ from repocompass.tools.contracts import (
 
 _CHECKPOINT_MODEL_TYPES: tuple[type[BaseModel], ...] = (
     CandidateResult,
+    CandidateRelation,
     EvidenceItem,
+    InvestigationStructure,
+    RelevantSymbol,
+    EvidenceGraph,
+    EvidenceGraphNode,
+    EvidenceGraphEdge,
+    GraphEvidence,
+    EvidenceGraphSlice,
+    GraphNodeDepth,
+    TraceableReadingPath,
+    ReadingStep,
+    ClaimLineage,
+    SourceLocation,
+    PythonSymbolRecord,
+    PythonImportRecord,
+    PythonReferenceRecord,
     EvaluationReport,
     ValidationIssue,
     SemanticAssessment,
@@ -121,6 +177,17 @@ _CHECKPOINT_ALLOWED_TYPES: tuple[type[object], ...] = (
     UsageAvailability,
     CostBudgetStatus,
     CostBudgetReason,
+    StructuralVerificationStatus,
+    PythonSymbolKind,
+    PythonImportKind,
+    PythonReferenceKind,
+    EvidenceNodeKind,
+    EvidenceRelationKind,
+    GraphEvidenceKind,
+    GraphTraversalDirection,
+    GraphSliceTruncationReason,
+    ReadingStepKind,
+    ReadingStepReason,
 )
 
 

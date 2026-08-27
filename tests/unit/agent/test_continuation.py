@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.lifecycle import ContinueRequest, TurnRecord
-from repocompass.agent.result import FinalResult
+from repocompass.agent.result import FinalResult, revalidate_final_result
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.state import (
     create_continuation_update,
@@ -197,7 +197,15 @@ def test_runner_continues_completed_thread_from_planner_without_state_leakage(
     )
 
     assert second_outcome.thread_id == first_outcome.thread_id
-    assert second_outcome.final_result == second_result
+    assert second_outcome.final_result is not None
+    assert (
+        second_outcome.final_result.model_copy(
+            update={"relevant_symbols": [], "structure": None}
+        )
+        == second_result
+    )
+    assert second_outcome.final_result.structure is not None
+    assert second_outcome.final_result.structure.indexed_paths == ("second.py",)
     assert second_outcome.trace.run_id == "second-run"
     assert second_outcome.trace.events[0].payload["execution_mode"] == "continue"
     node_events = [
@@ -213,14 +221,15 @@ def test_runner_continues_completed_thread_from_planner_without_state_leakage(
     assert snapshot.values["repo_path"] == tmp_path.resolve()
     assert snapshot.values["objective"] == "Second objective"
     assert snapshot.values["turn_number"] == 2
-    assert snapshot.values["turn_history"] == [
-        TurnRecord(
-            turn_number=1,
-            objective="First objective",
-            final_result=first_result,
-            termination_status="accepted",
-        )
-    ]
+    history = snapshot.values["turn_history"]
+    assert len(history) == 1
+    assert isinstance(history[0], TurnRecord)
+    assert history[0].turn_number == 1
+    assert history[0].objective == "First objective"
+    assert history[0].termination_status == "accepted"
+    assert (
+        revalidate_final_result(history[0].final_result) == first_outcome.final_result
+    )
     assert snapshot.values["step_tool_call_count"] == 0
     assert snapshot.values["step_explorer_call_count"] == 1
     assert snapshot.values["plan_revision_count"] == 0
@@ -229,7 +238,11 @@ def test_runner_continues_completed_thread_from_planner_without_state_leakage(
         second_result
     )
     assert snapshot.values["evaluation_report"] is not None
-    assert snapshot.values["final_result"] == second_result
+    assert (
+        revalidate_final_result(snapshot.values["final_result"])
+        == second_outcome.final_result
+    )
+    assert snapshot.values["investigation_structure"] is not None
     human_messages = [
         message.content
         for message in snapshot.values["messages"]
@@ -291,7 +304,10 @@ def test_continuation_does_not_modify_another_thread(tmp_path: Path) -> None:
     assert isolated_snapshot.values["objective"] == "Thread two objective"
     assert isolated_snapshot.values["turn_number"] == 1
     assert isolated_snapshot.values["turn_history"] == []
-    assert isolated_snapshot.values["final_result"] == isolated_result
+    assert (
+        revalidate_final_result(isolated_snapshot.values["final_result"])
+        == isolated.final_result
+    )
 
 
 def _run_request(repo_path: Path, objective: str) -> RunRequest:

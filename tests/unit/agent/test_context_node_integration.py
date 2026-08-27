@@ -222,6 +222,16 @@ def test_evaluator_node_publishes_isolated_context_pack(tmp_path: Path) -> None:
     assert update["evaluation_report"] == _report()
     assert isinstance(update["active_context_pack"], ContextPack)
     assert update["context_build_count"] == 8
+    structure = update["investigation_structure"]
+    assert structure is not None
+    assert structure.indexed_paths == ("auth.py",)
+    assert {item.canonical_name for item in structure.relevant_symbols} == {
+        "auth.authenticate"
+    }
+    assert any(
+        structure.artifact_id in item.content
+        for item in update["active_context_pack"].items
+    )
 
 
 def test_replanner_node_publishes_required_context_pack() -> None:

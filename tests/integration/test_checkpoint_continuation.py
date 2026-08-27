@@ -9,12 +9,16 @@ from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.checkpoint import open_sqlite_checkpointer
 from repocompass.agent.graph import create_agent_graph
-from repocompass.agent.lifecycle import ContinueRequest, TurnRecord
+from repocompass.agent.lifecycle import ContinueRequest
 from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.trace import TraceEventKind
 from repocompass.models import WorkflowModels
-from tests.model_doubles import candidate_from_final_result, with_scripted_planner
+from tests.model_doubles import (
+    assert_final_result_core,
+    candidate_from_final_result,
+    with_scripted_planner,
+)
 
 
 def _models_for(result: FinalResult) -> WorkflowModels:
@@ -76,7 +80,7 @@ def test_runner_continues_completed_thread_after_reopening_sqlite(
 
     assert second_outcome.thread_id == "sqlite-thread"
     assert second_outcome.trace.run_id == "continued-run"
-    assert second_outcome.final_result == second_result
+    assert_final_result_core(second_outcome.final_result, second_result)
     assert second_outcome.trace.events[0].kind is TraceEventKind.RUN_STARTED
     assert second_outcome.trace.events[0].payload["thread_id"] == "sqlite-thread"
     assert second_outcome.trace.events[0].payload["execution_mode"] == "continue"
@@ -98,11 +102,10 @@ def test_runner_continues_completed_thread_after_reopening_sqlite(
 
     assert snapshot.values["objective"] == "Second objective"
     assert snapshot.values["turn_number"] == 2
-    assert snapshot.values["turn_history"] == [
-        TurnRecord(
-            turn_number=1,
-            objective="First objective",
-            final_result=first_result,
-            termination_status="accepted",
-        )
-    ]
+    history = snapshot.values["turn_history"]
+    assert len(history) == 1
+    archived_turn = history[0]
+    assert archived_turn.turn_number == 1
+    assert archived_turn.objective == "First objective"
+    assert archived_turn.termination_status == "accepted"
+    assert_final_result_core(archived_turn.final_result, first_result)

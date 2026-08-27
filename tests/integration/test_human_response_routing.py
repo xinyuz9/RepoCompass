@@ -23,7 +23,11 @@ from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.trace import TraceEventKind
 from repocompass.models import WorkflowModels
-from tests.model_doubles import candidate_from_final_result, with_scripted_planner
+from tests.model_doubles import (
+    assert_final_result_core,
+    candidate_from_final_result,
+    with_scripted_planner,
+)
 
 
 def _result(path: str, summary: str) -> FinalResult:
@@ -127,7 +131,7 @@ def test_approve_finalizes_without_model_calls_and_rejects_replay(
 
     assert outcome.execution_status is ExecutionStatus.COMPLETED
     assert outcome.termination_status == "accepted"
-    assert outcome.final_result == result
+    assert_final_result_core(outcome.final_result, result)
     assert outcome.interrupt_id is None
     assert outcome.trace.events[0].payload["execution_mode"] == "respond"
     assert outcome.trace.events[0].payload["human_decision"] == {
@@ -182,7 +186,7 @@ def test_cancel_publishes_best_effort_result_without_model_calls(
 
     assert outcome.execution_status is ExecutionStatus.COMPLETED
     assert outcome.termination_status == "cancelled"
-    assert outcome.final_result == result
+    assert_final_result_core(outcome.final_result, result)
     node_names = [
         event.node
         for event in outcome.trace.events

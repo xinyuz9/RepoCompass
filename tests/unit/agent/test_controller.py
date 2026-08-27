@@ -198,6 +198,7 @@ def test_advance_plan_step_completes_active_and_resets_step_state() -> None:
         "step_stop_reason": None,
         "candidate_result": None,
         "evaluation_report": None,
+        "investigation_structure": None,
         "next_action": None,
     }
 
@@ -299,6 +300,7 @@ def test_replanner_preserves_completed_steps_and_resets_execution_state() -> Non
         "step_stop_reason": None,
         "candidate_result": None,
         "evaluation_report": None,
+        "investigation_structure": None,
         "next_action": None,
         "human_review_payload": None,
         "human_decision_action": None,

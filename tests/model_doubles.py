@@ -27,6 +27,26 @@ def default_investigation_plan() -> InvestigationPlan:
     )
 
 
+def assert_final_result_core(
+    actual: FinalResult | None,
+    expected: FinalResult,
+) -> FinalResult:
+    """Assert the stable answer fields while allowing deterministic enrichment."""
+
+    assert actual is not None
+    assert actual.relevant_files == expected.relevant_files
+    assert actual.evidence == expected.evidence
+    assert actual.summary == expected.summary
+    assert actual.unresolved_questions == expected.unresolved_questions
+    if actual.structure is not None:
+        assert actual.relevant_symbols == [
+            item.canonical_name for item in actual.structure.relevant_symbols
+        ]
+    else:
+        assert actual.relevant_symbols == []
+    return actual
+
+
 def candidate_from_final_result(final_result: FinalResult) -> CandidateResult:
     """Build a structured candidate that preserves an expected public result."""
 

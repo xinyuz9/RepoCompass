@@ -36,8 +36,9 @@ from repocompass.agent.lifecycle import (
     decode_human_review_interrupt,
     encode_human_decision,
 )
-from repocompass.agent.result import FinalResult
+from repocompass.agent.result import FinalResult, revalidate_final_result
 from repocompass.agent.routing import TerminationStatus
+from repocompass.agent.structural_artifacts import InvestigationStructure
 from repocompass.agent.state import (
     RepoCompassState,
     create_continuation_update,
@@ -224,6 +225,46 @@ def _context_pack_trace_metadata(pack: ContextPack) -> dict[str, JsonValue]:
     }
 
 
+def _structure_trace_metadata(
+    artifact: InvestigationStructure,
+) -> dict[str, JsonValue]:
+    edges = {edge.assertion_id: edge for edge in artifact.graph.edges}
+    return {
+        "artifact_id": artifact.artifact_id,
+        "repository_id": artifact.repository_id,
+        "commit_sha": artifact.commit_sha,
+        "indexed_paths": list(artifact.indexed_paths),
+        "graph_id": artifact.graph.graph_id,
+        "graph_node_count": len(artifact.graph.nodes),
+        "graph_edge_count": len(artifact.graph.edges),
+        "reading_path_id": artifact.reading_path.reading_path_id,
+        "reading_step_count": len(artifact.reading_path.steps),
+        "claim_lineage_count": len(artifact.reading_path.claim_lineages),
+        "slice_truncated": artifact.reading_path.graph_slice.truncated,
+        "slice_truncation_reasons": [
+            reason.value
+            for reason in artifact.reading_path.graph_slice.truncation_reasons
+        ],
+        "relevant_symbols": [
+            {
+                "binding_id": item.binding_id,
+                "canonical_name": item.canonical_name,
+                "entity_id": item.entity_id,
+                "path": item.path,
+            }
+            for item in artifact.relevant_symbols
+        ],
+        "candidate_relations": [
+            {
+                "assertion_id": assertion_id,
+                "relation": edges[assertion_id].relation.value,
+                "verification_status": edges[assertion_id].verification_status.value,
+            }
+            for assertion_id in artifact.candidate_relation_assertion_ids
+        ],
+    }
+
+
 def _normalize_update(update: Mapping[str, object]) -> dict[str, JsonValue]:
     """Return a JSON-compatible copy of one node's partial state update."""
 
@@ -241,6 +282,37 @@ def _normalize_update(update: Mapping[str, object]) -> dict[str, JsonValue]:
                 raise TypeError(
                     "Graph active_context_pack is not a ContextPack or None"
                 )
+            continue
+        if key == "investigation_structure":
+            if value is None:
+                normalized[key] = None
+            elif isinstance(value, InvestigationStructure):
+                normalized[key] = _structure_trace_metadata(value)
+            else:
+                raise TypeError(
+                    "Graph investigation_structure is not an "
+                    "InvestigationStructure or None"
+                )
+            continue
+        if key == "final_result":
+            if value is None:
+                normalized[key] = None
+            elif isinstance(value, FinalResult):
+                public_fields = value.model_dump(
+                    mode="json",
+                    exclude={"structure"},
+                )
+                normalized_result = _to_json_value(public_fields)
+                if not isinstance(normalized_result, dict):
+                    raise TypeError("Graph final_result did not serialize to an object")
+                normalized_result["structure"] = (
+                    None
+                    if value.structure is None
+                    else _structure_trace_metadata(value.structure)
+                )
+                normalized[key] = normalized_result
+            else:
+                raise TypeError("Graph final_result is not a FinalResult or None")
             continue
         if _is_sensitive_trace_key(key):
             continue
@@ -936,6 +1008,7 @@ class AgentRunner:
         final_result = final_state.get("final_result")
         if not isinstance(final_result, FinalResult):
             raise ValueError("Graph finished without a FinalResult")
+        final_result = revalidate_final_result(final_result)
 
         termination_status = final_state.get("termination_status")
         if termination_status not in ("accepted", "exhausted", "cancelled"):

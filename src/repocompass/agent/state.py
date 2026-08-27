@@ -21,12 +21,13 @@ from repocompass.agent.lifecycle import (
     TurnRecord,
 )
 from repocompass.agent.planning import InvestigationPlan
-from repocompass.agent.result import FinalResult
+from repocompass.agent.result import FinalResult, revalidate_final_result
 from repocompass.agent.routing import (
     ControllerAction,
     HumanDecisionActionValue,
     TerminationStatus,
 )
+from repocompass.agent.structural_artifacts import InvestigationStructure
 from repocompass.tools.contracts import (
     SHA256_PATTERN,
     NoProgressDecisionPayload,
@@ -72,6 +73,7 @@ class RepoCompassState(MessagesState):
     termination_status: TerminationStatus | None
     candidate_result: CandidateResult | None
     evaluation_report: EvaluationReport | None
+    investigation_structure: InvestigationStructure | None
     next_action: ControllerAction | None
     final_result: FinalResult | None
 
@@ -112,6 +114,7 @@ class ContinuationStateUpdate(TypedDict):
     termination_status: None
     candidate_result: None
     evaluation_report: None
+    investigation_structure: None
     next_action: None
     final_result: None
 
@@ -221,6 +224,7 @@ def create_initial_state(
         "cost_budget_pricing_table_id": cost_budget_pricing_table_id,
         "cost_budget": None,
         "evaluation_report": None,
+        "investigation_structure": None,
         "next_action": None,
         "final_result": None,
     }
@@ -244,6 +248,7 @@ def create_continuation_update(
         "cancelled",
     ):
         raise ValueError("Continuation requires a completed turn")
+    final_result = revalidate_final_result(final_result)
 
     turn_number = state.get("turn_number")
     previous_objective = state.get("objective")
@@ -322,6 +327,7 @@ def create_continuation_update(
         "termination_status": None,
         "candidate_result": None,
         "evaluation_report": None,
+        "investigation_structure": None,
         "context_budget_tokens": context_budget_tokens,
         "context_build_count": 0,
         "active_context_pack": None,

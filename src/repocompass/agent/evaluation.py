@@ -24,6 +24,7 @@ class ValidationIssue(BaseModel):
     message: str = Field(min_length=1)
     path: str | None = Field(default=None, min_length=1)
     evidence_index: int | None = Field(default=None, ge=0)
+    relation_index: int | None = Field(default=None, ge=0)
 
 
 class EvidenceExcerpt(BaseModel):

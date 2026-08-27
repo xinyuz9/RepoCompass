@@ -26,7 +26,11 @@ from repocompass.agent.runner import (
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
 )
 from repocompass.agent.result import FinalResult
-from tests.model_doubles import candidate_from_final_result, with_scripted_planner
+from tests.model_doubles import (
+    assert_final_result_core,
+    candidate_from_final_result,
+    with_scripted_planner,
+)
 
 
 def _create_scripted_model(final_result: FinalResult) -> MagicMock:
@@ -76,7 +80,7 @@ def test_studio_graph_accepts_public_input_and_applies_defaults(
     assert final_state["step_tool_call_count"] == 0
     assert final_state["step_explorer_call_count"] == 1
     assert final_state["evaluation_report"] is not None
-    assert final_state["final_result"] == final_result
+    assert_final_result_core(final_state["final_result"], final_result)
     first_message = final_state["messages"][0]
     assert isinstance(first_message, HumanMessage)
     assert first_message.content == "Inspect the source package."
@@ -180,7 +184,7 @@ def test_studio_graph_surfaces_and_resumes_native_human_review(
 
     assert resumed.interrupts == ()
     assert resumed.value["termination_status"] == "accepted"
-    assert resumed.value["final_result"] == final_result
+    assert_final_result_core(resumed.value["final_result"], final_result)
 
 
 def test_studio_graph_rejects_file_as_repository_path(tmp_path: Path) -> None:

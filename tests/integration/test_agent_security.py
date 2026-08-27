@@ -22,7 +22,11 @@ from repocompass.tools.contracts import (
     ToolDecisionReason,
     decode_tool_audit_record,
 )
-from tests.model_doubles import candidate_from_final_result, with_scripted_planner
+from tests.model_doubles import (
+    assert_final_result_core,
+    candidate_from_final_result,
+    with_scripted_planner,
+)
 
 
 def test_agent_rejects_tool_call_that_spoofs_repository_root(
@@ -91,7 +95,7 @@ def test_agent_rejects_tool_call_that_spoofs_repository_root(
     assert len(final_state["tool_audit_records"]) == 1
     audit = decode_tool_audit_record(final_state["tool_audit_records"][0])
     assert audit.decision.reason is ToolDecisionReason.INVALID_ARGUMENTS
-    assert final_state["final_result"] == expected_result
+    assert_final_result_core(final_state["final_result"], expected_result)
 
 
 def test_repository_instruction_text_remains_selected_context_data() -> None:

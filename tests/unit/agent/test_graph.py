@@ -29,7 +29,11 @@ from repocompass.tools.contracts import (
     decode_no_progress_decision,
     decode_tool_audit_record,
 )
-from tests.model_doubles import candidate_from_final_result, with_scripted_planner
+from tests.model_doubles import (
+    assert_final_result_core,
+    candidate_from_final_result,
+    with_scripted_planner,
+)
 
 
 def _create_scripted_model(
@@ -96,7 +100,7 @@ def test_graph_finalizes_when_agent_returns_no_tool_calls(tmp_path: Path) -> Non
 
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
 
-    assert final_state["final_result"] == expected_result
+    assert_final_result_core(final_state["final_result"], expected_result)
     assert final_state["candidate_result"] == candidate_from_final_result(
         expected_result
     )
@@ -167,7 +171,7 @@ def test_graph_finalizes_when_agent_returns_tool_calls(tmp_path: Path) -> None:
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
-    assert final_state["final_result"] == expected_result
+    assert_final_result_core(final_state["final_result"], expected_result)
     assert final_state["evaluation_report"].passed is True
     assert final_state["step_stop_reason"] is None
     assert final_state["step_tool_call_count"] == 1
@@ -230,7 +234,7 @@ def test_graph_rejects_batch_exceeding_budget_then_exhausts_revisions(
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
-    assert final_state["final_result"] == expected_result
+    assert_final_result_core(final_state["final_result"], expected_result)
     assert final_state["step_stop_reason"] is None
     assert final_state["termination_status"] == "exhausted"
     assert final_state["plan_revision_count"] == 2
@@ -313,7 +317,7 @@ def test_graph_handles_mixed_invalid_batch_without_executing_valid_calls(
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
-    assert final_state["final_result"] == expected_result
+    assert_final_result_core(final_state["final_result"], expected_result)
     assert final_state["step_stop_reason"] is None
     assert final_state["termination_status"] == "accepted"
     assert final_state["step_tool_call_count"] == 0
@@ -386,7 +390,7 @@ def test_graph_returns_recoverable_tool_invocation_error_to_agent(
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
-    assert final_state["final_result"] == expected_result
+    assert_final_result_core(final_state["final_result"], expected_result)
     assert final_state["step_stop_reason"] is None
     assert final_state["termination_status"] == "accepted"
     assert final_state["step_tool_call_count"] == 0
@@ -458,7 +462,7 @@ def test_graph_finalizes_without_extra_agent_invocation_at_iteration_limit(
     assert final_state["step_tool_call_count"] == 1
     assert final_state["step_stop_reason"] == "step_explorer_budget_exhausted"
     assert final_state["termination_status"] == "accepted"
-    assert final_state["final_result"] == expected_result
+    assert_final_result_core(final_state["final_result"], expected_result)
     assert isinstance(final_state["messages"][-1], ToolMessage)
 
 

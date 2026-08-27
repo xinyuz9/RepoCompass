@@ -23,7 +23,11 @@ from repocompass.tools.contracts import (
     ToolDecisionReason,
     decode_tool_audit_record,
 )
-from tests.model_doubles import candidate_from_final_result, with_scripted_planner
+from tests.model_doubles import (
+    assert_final_result_core,
+    candidate_from_final_result,
+    with_scripted_planner,
+)
 
 AUTH_PROJECT = Path(__file__).parents[1] / "fixtures" / "auth_project"
 
@@ -101,7 +105,7 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
     final_state = create_agent_graph(with_scripted_planner(model)).invoke(initial_state)
     messages = final_state["messages"]
 
-    assert final_state["final_result"] == expected_result
+    assert_final_result_core(final_state["final_result"], expected_result)
     assert final_state["evaluation_report"].passed is True
     assert final_state["step_stop_reason"] is None
     assert final_state["termination_status"] == "accepted"

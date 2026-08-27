@@ -70,6 +70,11 @@ from repocompass.agent.routing import (
     HumanDecisionActionValue,
     TerminationStatus,
 )
+from repocompass.agent.structural_artifacts import (
+    InvestigationStructure,
+    build_investigation_structure,
+    revalidate_investigation_structure,
+)
 from repocompass.agent.usage import ModelRole
 from repocompass.agent.tool_adapters import REPOSITORY_TOOLS
 from repocompass.tools.contracts import (
@@ -669,6 +674,7 @@ class CandidateBuilderUpdate(TypedDict):
     candidate_result: CandidateResult
     active_context_pack: ContextPack
     context_build_count: int
+    investigation_structure: None
 
 
 CandidateBuilderNode = Callable[[CandidateBuilderInput], CandidateBuilderUpdate]
@@ -756,6 +762,7 @@ def create_build_candidate_node(
             "candidate_result": response,
             "active_context_pack": gathered.pack,
             "context_build_count": _next_context_build_count(state),
+            "investigation_structure": None,
         }
 
     return build_candidate_node
@@ -771,6 +778,7 @@ class EvaluatorInput(TypedDict):
     context_budget_tokens: int
     context_build_count: int
     max_attempt_cost_usd: str | None
+    investigation_structure: InvestigationStructure | None
 
 
 class EvaluationPromptInput(TypedDict):
@@ -784,12 +792,14 @@ class EvaluationPromptInput(TypedDict):
     evidence_pack: tuple[EvidenceExcerpt, ...]
     context_budget_tokens: int
     context_build_count: int
+    investigation_structure: InvestigationStructure | None
 
 
 class EvaluatorNodeUpdate(TypedDict):
     evaluation_report: EvaluationReport
     active_context_pack: ContextPack
     context_build_count: int
+    investigation_structure: InvestigationStructure | None
 
 
 EvaluatorNode = Callable[[EvaluatorInput], EvaluatorNodeUpdate]
@@ -810,6 +820,7 @@ def build_evaluator_messages(
         deterministic_issues=state["deterministic_issues"],
         evidence_pack=state["evidence_pack"],
         budget_tokens=_context_budget(state),
+        investigation_structure=state.get("investigation_structure"),
     )
     return [
         SystemMessage(content=EVALUATION_SYSTEM_PROMPT),
@@ -843,15 +854,35 @@ def create_evaluate_candidate_node(
             raise ValueError("Cannot evaluate without an InvestigationPlan")
 
         validation = validate_candidate(state["repo_path"], candidate)
+        structure_result = build_investigation_structure(
+            repo_path=state["repo_path"],
+            objective=state["objective"],
+            candidate=candidate,
+            valid_evidence_indices=frozenset(
+                excerpt.evidence_index for excerpt in validation.evidence_pack
+            ),
+        )
+        structure_issues = tuple(
+            ValidationIssue(
+                code=issue.code,
+                message=issue.message,
+                path=issue.path,
+                evidence_index=issue.evidence_index,
+                relation_index=issue.relation_index,
+            )
+            for issue in structure_result.issues
+        )
+        deterministic_issues = (*validation.issues, *structure_issues)
         prompt_input: EvaluationPromptInput = {
             "repo_path": state["repo_path"],
             "objective": state["objective"],
             "active_step": investigation_plan.active_step,
             "candidate_result": candidate,
-            "deterministic_issues": validation.issues,
+            "deterministic_issues": deterministic_issues,
             "evidence_pack": validation.evidence_pack,
             "context_budget_tokens": _context_budget(state),
             "context_build_count": state.get("context_build_count", 0),
+            "investigation_structure": structure_result.artifact,
         }
         gathered = gather_evaluator_context(
             repo_path=prompt_input["repo_path"],
@@ -861,6 +892,7 @@ def create_evaluate_candidate_node(
             deterministic_issues=prompt_input["deterministic_issues"],
             evidence_pack=prompt_input["evidence_pack"],
             budget_tokens=_context_budget(prompt_input),
+            investigation_structure=prompt_input["investigation_structure"],
         )
         messages = build_evaluator_messages(prompt_input, gathered_context=gathered)
         response = _invoke_model(
@@ -886,11 +918,12 @@ def create_evaluate_candidate_node(
 
         return {
             "evaluation_report": EvaluationReport(
-                deterministic_issues=list(validation.issues),
+                deterministic_issues=list(deterministic_issues),
                 semantic_assessment=response,
             ),
             "active_context_pack": gathered.pack,
             "context_build_count": _next_context_build_count(state),
+            "investigation_structure": structure_result.artifact,
         }
 
     return evaluate_candidate_node
@@ -964,6 +997,7 @@ class PlanAdvanceUpdate(TypedDict):
     step_stop_reason: None
     candidate_result: None
     evaluation_report: None
+    investigation_structure: None
     next_action: None
 
 
@@ -1000,6 +1034,7 @@ def advance_plan_step(state: PlanAdvanceInput) -> PlanAdvanceUpdate:
         "step_stop_reason": None,
         "candidate_result": None,
         "evaluation_report": None,
+        "investigation_structure": None,
         "next_action": None,
     }
 
@@ -1033,6 +1068,7 @@ class ReplannerNodeUpdate(TypedDict):
     step_stop_reason: None
     candidate_result: None
     evaluation_report: None
+    investigation_structure: None
     next_action: None
     human_review_payload: None
     human_decision_action: None
@@ -1162,6 +1198,7 @@ def create_revise_plan_node(
             "step_stop_reason": None,
             "candidate_result": None,
             "evaluation_report": None,
+            "investigation_structure": None,
             "next_action": None,
             "human_review_payload": None,
             "human_decision_action": None,
@@ -1179,6 +1216,7 @@ class CostBudgetFinalizerInput(TypedDict):
     objective: str
     candidate_result: CandidateResult | None
     cost_budget: AttemptCostBudgetSummary | None
+    investigation_structure: InvestigationStructure | None
 
 
 class CostBudgetFinalizerUpdate(TypedDict):
@@ -1202,6 +1240,11 @@ def finalize_cost_budget_exhausted(
         "Investigation stopped before another model invocation because the "
         f"attempt cost budget denied it ({budget.reason.value})."
     )
+    structure = state.get("investigation_structure")
+    if structure is not None and not isinstance(structure, InvestigationStructure):
+        raise TypeError("investigation_structure is invalid")
+    if structure is not None:
+        structure = revalidate_investigation_structure(structure)
     candidate = state["candidate_result"]
     if candidate is None:
         result = FinalResult(
@@ -1220,6 +1263,12 @@ def finalize_cost_budget_exhausted(
             unresolved_questions=list(
                 dict.fromkeys([*candidate.unresolved_questions, budget_message])
             ),
+            relevant_symbols=(
+                [item.canonical_name for item in structure.relevant_symbols]
+                if structure is not None
+                else []
+            ),
+            structure=structure,
         )
     return {
         "termination_status": "exhausted",
@@ -1358,6 +1407,7 @@ class FinalizerInput(TypedDict):
     """Minimal input for deterministic candidate publication."""
 
     candidate_result: CandidateResult | None
+    investigation_structure: InvestigationStructure | None
 
 
 class FinalizeNodeUpdate(TypedDict):
@@ -1370,6 +1420,11 @@ def finalize_candidate(state: FinalizerInput) -> FinalizeNodeUpdate:
     candidate = state["candidate_result"]
     if candidate is None:
         raise ValueError("Cannot finalize without a CandidateResult")
+    structure = state.get("investigation_structure")
+    if structure is not None and not isinstance(structure, InvestigationStructure):
+        raise TypeError("investigation_structure is invalid")
+    if structure is not None:
+        structure = revalidate_investigation_structure(structure)
 
     return {
         "final_result": FinalResult(
@@ -1379,5 +1434,11 @@ def finalize_candidate(state: FinalizerInput) -> FinalizeNodeUpdate:
             evidence=[item.claim for item in candidate.evidence],
             summary=candidate.summary,
             unresolved_questions=candidate.unresolved_questions,
+            relevant_symbols=(
+                [item.canonical_name for item in structure.relevant_symbols]
+                if structure is not None
+                else []
+            ),
+            structure=structure,
         )
     }

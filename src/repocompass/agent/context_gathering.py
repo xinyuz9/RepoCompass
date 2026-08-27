@@ -42,8 +42,27 @@ from repocompass.agent.prompts import (
     INVESTIGATION_FEEDBACK_TEMPLATE,
     PLANNING_REQUEST_TEMPLATE,
 )
+from repocompass.agent.structural_artifacts import InvestigationStructure
 from repocompass.agent.usage import ModelRole
+from repocompass.structure.contracts import (
+    PythonFileIndex,
+    PythonImportRecord,
+    PythonReferenceRecord,
+    PythonSymbolRecord,
+)
+from repocompass.structure.python_index import build_python_file_index
 from repocompass.tools.gateway import ToolExecutionContext
+from repocompass.tools.repository_tools import (
+    ReadCodeArguments,
+    execute_read_code,
+)
+
+_STRUCTURAL_RESULT_KEYS = {
+    "find_references": "references",
+    "find_symbol_definition": "definitions",
+    "inspect_imports": "imports",
+    "list_symbols": "symbols",
+}
 
 _READ_CODE_HEADER = re.compile(
     r"\AFile: (?P<path>[^\r\n]+)\r?\n"
@@ -287,6 +306,7 @@ def gather_evaluator_context(
     deterministic_issues: tuple[ValidationIssue, ...],
     evidence_pack: tuple[EvidenceExcerpt, ...],
     budget_tokens: int,
+    investigation_structure: InvestigationStructure | None = None,
 ) -> GatheredContext:
     """Gather only validated candidate/evidence inputs for the evaluator."""
 
@@ -373,6 +393,12 @@ def gather_evaluator_context(
         )
         items.append(item)
         artifacts.append(artifact)
+    if investigation_structure is not None:
+        structure_item, structure_artifact = _structure_context_item(
+            repository, investigation_structure
+        )
+        items.append(structure_item)
+        artifacts.append(structure_artifact)
     return _build_gathered_context(
         candidates=tuple(items),
         raw_artifacts=tuple(artifacts),
@@ -498,6 +524,7 @@ def _gather_tool_results(
 ) -> tuple[tuple[ContextItem, ...], tuple[RawArtifactPayload, ...]]:
     items: list[ContextItem] = []
     artifacts: list[RawArtifactPayload] = []
+    index_cache: dict[str, PythonFileIndex] = {}
     for message in messages:
         if (
             not isinstance(message, ToolMessage)
@@ -507,6 +534,18 @@ def _gather_tool_results(
             continue
         tool_name = message.name or "unknown_tool"
         call_id = _canonical_identifier("tool-call", message.tool_call_id)
+        structural = _verified_structural_context(
+            repository=repository,
+            tool_name=tool_name,
+            content=message.content,
+            call_id=call_id,
+            index_cache=index_cache,
+        )
+        if structural is not None and structural[0]:
+            structural_items, structural_artifacts = structural
+            items.extend(structural_items)
+            artifacts.extend(structural_artifacts)
+            continue
         location = _read_code_location(repository, tool_name, message.content)
         is_source_excerpt = location is not None
         raw_kind = (
@@ -560,6 +599,9 @@ def _read_code_location(
 ) -> RepositoryLocation | None:
     if tool_name != "read_code":
         return None
+    normalized = _normalized_read_code_location(repository, content)
+    if normalized is not None:
+        return normalized
     match = _READ_CODE_HEADER.match(content)
     if match is None:
         return None
@@ -573,6 +615,382 @@ def _read_code_location(
         )
     except (TypeError, ValueError):
         return None
+
+
+def _normalized_read_code_location(
+    repository: ToolExecutionContext,
+    content: str,
+) -> RepositoryLocation | None:
+    try:
+        payload = json.loads(content)
+        if not isinstance(payload, dict) or set(payload) != {
+            "content",
+            "end_line",
+            "path",
+            "start_line",
+        }:
+            return None
+        path = payload["path"]
+        start_line = payload["start_line"]
+        end_line = payload["end_line"]
+        source = payload["content"]
+        if (
+            not isinstance(path, str)
+            or type(start_line) is not int
+            or type(end_line) is not int
+            or not isinstance(source, str)
+        ):
+            return None
+        arguments = ReadCodeArguments.model_validate(
+            {
+                "relative_path": path,
+                "start_line": start_line,
+                "end_line": end_line,
+            }
+        )
+        expected = json.loads(execute_read_code(repository.repository_root, arguments))
+        if payload != expected:
+            return None
+        return RepositoryLocation(
+            repository_id=repository.repository_id,
+            commit_sha=repository.commit_sha,
+            path=path,
+            line_start=start_line,
+            line_end=end_line,
+        )
+    except (json.JSONDecodeError, OSError, TypeError, UnicodeError, ValueError):
+        return None
+
+
+def _verified_structural_context(
+    *,
+    repository: ToolExecutionContext,
+    tool_name: str,
+    content: str,
+    call_id: str,
+    index_cache: dict[str, PythonFileIndex],
+) -> tuple[list[ContextItem], list[RawArtifactPayload]] | None:
+    result_key = _STRUCTURAL_RESULT_KEYS.get(tool_name)
+    if result_key is None:
+        return None
+    try:
+        payload = json.loads(content)
+        if not isinstance(payload, dict):
+            return None
+        _validate_structural_envelope(
+            repository=repository,
+            tool_name=tool_name,
+            result_key=result_key,
+            payload=payload,
+        )
+        raw_records = payload[result_key]
+        if not isinstance(raw_records, list):
+            return None
+        records = tuple(
+            _parse_structural_record(tool_name, raw_record)
+            for raw_record in raw_records
+        )
+        if not all(
+            _record_exists_in_snapshot(
+                repository=repository,
+                record=record,
+                index_cache=index_cache,
+            )
+            for record in records
+        ):
+            return None
+        if tool_name in {"list_symbols", "inspect_imports"}:
+            path = payload["path"]
+            if not isinstance(path, str):
+                return None
+            index = _current_index(repository, path, index_cache)
+            if not _file_envelope_matches_index(payload, index):
+                return None
+            expected_records = (
+                index.symbols if tool_name == "list_symbols" else index.imports
+            )
+            if records != expected_records[: len(records)]:
+                return None
+        items: list[ContextItem] = []
+        artifacts: list[RawArtifactPayload] = []
+        for record in records:
+            location = _structural_record_location(repository, record)
+            context_content = json.dumps(
+                {
+                    "record": record.model_dump(mode="json"),
+                    "tool": tool_name,
+                    "tool_call_id": call_id,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+            )
+            item, artifact = _make_item(
+                content=context_content,
+                raw_content=content,
+                raw_kind=RawArtifactKind.SOURCE_EXCERPT,
+                source_kind=ContextSourceKind.SOURCE_EXCERPT,
+                section=ContextSection.EVIDENCE,
+                verification_status=VerificationStatus.VERIFIED,
+                priority=92,
+                pinned=False,
+                provenance=(ProvenanceLink(kind=ProvenanceKind.TOOL_CALL, id=call_id),),
+                location=location,
+            )
+            items.append(item)
+            artifacts.append(artifact)
+        return items, artifacts
+    except (json.JSONDecodeError, OSError, TypeError, UnicodeError, ValueError):
+        return None
+
+
+def _validate_structural_envelope(
+    *,
+    repository: ToolExecutionContext,
+    tool_name: str,
+    result_key: str,
+    payload: dict[str, object],
+) -> None:
+    if (
+        payload.get("schema_version") != 1
+        or payload.get("repository_id") != repository.repository_id
+        or payload.get("commit_sha") != repository.commit_sha
+    ):
+        raise ValueError("structural output has a mismatched snapshot identity")
+    records = payload.get(result_key)
+    returned = payload.get("returned_results")
+    total = payload.get("total_results")
+    truncated = payload.get("results_truncated")
+    if (
+        not isinstance(records, list)
+        or type(returned) is not int
+        or type(total) is not int
+        or type(truncated) is not bool
+        or returned != len(records)
+        or returned < 0
+        or total < returned
+        or truncated != (returned < total)
+    ):
+        raise ValueError("structural output has inconsistent result bounds")
+    if tool_name in {"list_symbols", "inspect_imports"}:
+        required = {
+            "commit_sha",
+            "index_id",
+            "module_name",
+            "path",
+            "repository_id",
+            "returned_results",
+            "results_truncated",
+            result_key,
+            "schema_version",
+            "source_digest",
+            "total_results",
+        }
+    else:
+        required = {
+            "candidate_files",
+            "commit_sha",
+            "file_scan_truncated",
+            "indexed_files",
+            "match_semantics",
+            "query",
+            "repository_id",
+            result_key,
+            "returned_results",
+            "results_truncated",
+            "schema_version",
+            "skipped_by_reason",
+            "total_results",
+        }
+    if set(payload) != required:
+        raise ValueError("structural output has an unexpected envelope")
+
+
+def _parse_structural_record(
+    tool_name: str,
+    raw_record: object,
+) -> PythonSymbolRecord | PythonImportRecord | PythonReferenceRecord:
+    encoded = json.dumps(
+        raw_record,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    if tool_name in {"list_symbols", "find_symbol_definition"}:
+        return PythonSymbolRecord.model_validate_json(encoded)
+    if tool_name == "inspect_imports":
+        return PythonImportRecord.model_validate_json(encoded)
+    if tool_name == "find_references":
+        return PythonReferenceRecord.model_validate_json(encoded)
+    raise ValueError("unsupported structural tool")
+
+
+def _record_exists_in_snapshot(
+    *,
+    repository: ToolExecutionContext,
+    record: PythonSymbolRecord | PythonImportRecord | PythonReferenceRecord,
+    index_cache: dict[str, PythonFileIndex],
+) -> bool:
+    location = (
+        record.definition if isinstance(record, PythonSymbolRecord) else record.location
+    )
+    index = _current_index(repository, location.path, index_cache)
+    if isinstance(record, PythonSymbolRecord):
+        return record in index.symbols
+    if isinstance(record, PythonImportRecord):
+        return record in index.imports
+    return record in index.references
+
+
+def _current_index(
+    repository: ToolExecutionContext,
+    path: str,
+    index_cache: dict[str, PythonFileIndex],
+) -> PythonFileIndex:
+    cached = index_cache.get(path)
+    if cached is not None:
+        return cached
+    index = build_python_file_index(
+        repository.repository_root,
+        Path(path),
+        repository_id=repository.repository_id,
+        commit_sha=repository.commit_sha,
+    )
+    index_cache[path] = index
+    return index
+
+
+def _file_envelope_matches_index(
+    payload: dict[str, object],
+    index: PythonFileIndex,
+) -> bool:
+    return (
+        payload.get("index_id") == index.index_id
+        and payload.get("module_name") == index.module_name
+        and payload.get("path") == index.path
+        and payload.get("source_digest") == index.source_digest
+    )
+
+
+def _structural_record_location(
+    repository: ToolExecutionContext,
+    record: PythonSymbolRecord | PythonImportRecord | PythonReferenceRecord,
+) -> RepositoryLocation:
+    location = (
+        record.definition if isinstance(record, PythonSymbolRecord) else record.location
+    )
+    if isinstance(record, PythonSymbolRecord):
+        symbol = record.qualified_name
+    elif isinstance(record, PythonImportRecord):
+        symbol = record.bound_name
+    else:
+        symbol = record.name
+    return RepositoryLocation(
+        repository_id=repository.repository_id,
+        commit_sha=repository.commit_sha,
+        path=location.path,
+        line_start=location.line_start,
+        line_end=location.line_end,
+        symbol=symbol,
+    )
+
+
+def _structure_context_item(
+    repository: ToolExecutionContext,
+    artifact: InvestigationStructure,
+) -> tuple[ContextItem, RawArtifactPayload]:
+    if (
+        artifact.repository_id != repository.repository_id
+        or artifact.commit_sha != repository.commit_sha
+    ):
+        raise ValueError("investigation structure belongs to another snapshot")
+    nodes = {node.entity_id: node for node in artifact.graph.nodes}
+    edges = {edge.assertion_id: edge for edge in artifact.graph.edges}
+    relations = []
+    for assertion_id in artifact.candidate_relation_assertion_ids:
+        edge = edges[assertion_id]
+        relations.append(
+            {
+                "assertion_id": assertion_id,
+                "relation": edge.relation.value,
+                "source": nodes[edge.source_entity_id].canonical_name,
+                "target": nodes[edge.target_entity_id].canonical_name,
+                "verification_status": edge.verification_status.value,
+                "evidence_ids": [item.evidence_id for item in edge.evidence],
+                "explanation": edge.explanation,
+            }
+        )
+    payload = {
+        "artifact_id": artifact.artifact_id,
+        "graph": {
+            "edge_count": len(artifact.graph.edges),
+            "graph_id": artifact.graph.graph_id,
+            "node_count": len(artifact.graph.nodes),
+        },
+        "indexed_paths": list(artifact.indexed_paths),
+        "reading_path": {
+            "claim_lineages": [
+                {
+                    "claim_id": lineage.claim_id,
+                    "provenance_complete": lineage.provenance_complete,
+                    "supporting_assertion_ids": list(lineage.supporting_assertion_ids),
+                    "verification_status": lineage.verification_status.value,
+                }
+                for lineage in artifact.reading_path.claim_lineages
+            ],
+            "reading_path_id": artifact.reading_path.reading_path_id,
+            "steps": [
+                {
+                    "canonical_name": step.canonical_name,
+                    "depth": step.depth,
+                    "kind": step.kind.value,
+                    "ordinal": step.ordinal,
+                    "path": step.path,
+                    "reason": step.reason.value,
+                    "verification_status": step.path_verification_status.value,
+                    "via_assertion_id": step.via_assertion_id,
+                }
+                for step in artifact.reading_path.steps
+            ],
+            "truncated": artifact.reading_path.graph_slice.truncated,
+            "truncation_reasons": [
+                reason.value
+                for reason in artifact.reading_path.graph_slice.truncation_reasons
+            ],
+        },
+        "relations": relations,
+        "relevant_symbols": [
+            {
+                "binding_id": binding.binding_id,
+                "canonical_name": binding.canonical_name,
+                "entity_id": binding.entity_id,
+                "evidence_indices": list(binding.evidence_indices),
+                "path": binding.path,
+                "verification_status": binding.verification_status.value,
+            }
+            for binding in artifact.relevant_symbols
+        ],
+    }
+    content = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        indent=2,
+    )
+    return _make_item(
+        content=f"Deterministic structural artifact:\n{content}",
+        raw_content=content,
+        raw_kind=RawArtifactKind.TOOL_OUTPUT,
+        source_kind=ContextSourceKind.TOOL_RESULT,
+        section=ContextSection.EVIDENCE,
+        verification_status=VerificationStatus.UNVERIFIED,
+        priority=93,
+        pinned=False,
+        provenance=(
+            ProvenanceLink(kind=ProvenanceKind.EVALUATION, id=artifact.artifact_id),
+        ),
+    )
 
 
 def _make_item(

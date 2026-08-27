@@ -66,12 +66,30 @@ def test_cli_interrupts_then_approves_from_a_new_process(tmp_path: Path) -> None
     )
 
     assert approved.returncode == 0, approved.stderr
-    assert json.loads(approved.stdout) == {
+    approved_payload = json.loads(approved.stdout)
+    assert {
+        key: approved_payload[key]
+        for key in (
+            "relevant_files",
+            "evidence",
+            "summary",
+            "unresolved_questions",
+        )
+    } == {
         "relevant_files": ["example.py"],
         "evidence": ["example.py:1 contains the relevant implementation."],
         "summary": "The relevant implementation is in example.py.",
         "unresolved_questions": [],
     }
+    assert approved_payload["relevant_symbols"] == []
+    structure = approved_payload["structure"]
+    assert structure["schema_version"] == 1
+    assert structure["indexed_paths"] == ["example.py"]
+    assert structure["graph"]["repository_id"] == structure["repository_id"]
+    assert (
+        structure["reading_path"]["graph_slice"]["graph_id"]
+        == structure["graph"]["graph_id"]
+    )
     assert f"Thread ID: {interrupted_payload['thread_id']}" in approved.stderr
     assert "Status: accepted" in approved.stderr
 
