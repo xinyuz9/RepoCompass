@@ -563,6 +563,12 @@ class AgentRunner:
             max_no_progress_rounds=request.max_no_progress_rounds,
             context_budget_tokens=request.context_budget_tokens,
             max_attempt_cost_usd=request.max_attempt_cost_usd,
+            cost_budget_pricing_table_id=(
+                self._pricing_table.table_id
+                if request.max_attempt_cost_usd is not None
+                and self._pricing_table is not None
+                else None
+            ),
         )
         graph = create_agent_graph(
             self._models,
@@ -712,12 +718,22 @@ class AgentRunner:
             metadata_state = existing_snapshot.values
 
         configured_cost_budget = metadata_state.get("max_attempt_cost_usd")
+        configured_pricing_table_id = metadata_state.get("cost_budget_pricing_table_id")
         if configured_cost_budget is not None:
             configured_cost_budget = validate_cost_budget_usd(configured_cost_budget)
             if self._raw_run_recorder is None or self._pricing_table is None:
                 raise ValueError(
                     "attempt cost budget requires a raw store and pricing table"
                 )
+            if configured_pricing_table_id != self._pricing_table.table_id:
+                raise ValueError(
+                    "attempt cost budget pricing snapshot does not match the "
+                    "configured pricing table"
+                )
+        elif configured_pricing_table_id is not None:
+            raise ValueError(
+                "cost budget pricing snapshot exists without an attempt cost budget"
+            )
         trace = RunTrace(
             _normalize_identifier(
                 self._run_id_factory(),
@@ -760,8 +776,8 @@ class AgentRunner:
         }
         if configured_cost_budget is not None:
             started_payload["max_attempt_cost_usd"] = configured_cost_budget
-            if self._pricing_table is not None:
-                started_payload["pricing_table_id"] = self._pricing_table.table_id
+            assert isinstance(configured_pricing_table_id, str)
+            started_payload["pricing_table_id"] = configured_pricing_table_id
         if human_decision is not None:
             started_payload["human_decision"] = {
                 "action": human_decision.action.value,

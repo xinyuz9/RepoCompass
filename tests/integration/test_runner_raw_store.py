@@ -17,7 +17,7 @@ from repocompass.agent.cost import (
 )
 from repocompass.agent.lifecycle import ExecutionStatus, HumanReviewPolicy
 from repocompass.agent.result import FinalResult
-from repocompass.agent.runner import AgentRunner, RunRequest
+from repocompass.agent.runner import AgentRunner, ResumeRequest, RunRequest
 from repocompass.agent.usage import ModelInvocationStatus, ModelRole
 from repocompass.models import WorkflowModels
 from repocompass.storage.raw_store import (
@@ -282,3 +282,64 @@ def test_graph_closes_deterministically_after_planner_cost_overshoot(
             "agent",
             "finalize_cost_budget_exhausted",
         ]
+
+
+def test_resume_rejects_a_different_cost_budget_pricing_snapshot(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "example.py").write_text("value = True\n", encoding="utf-8")
+    original_pricing = create_pricing_table(
+        version="original-v1",
+        effective_from="2026-08-24",
+        entries=(
+            ModelPrice(
+                provider="openai",
+                model="gpt-integration",
+                input_usd_per_million_tokens="10",
+                output_usd_per_million_tokens="10",
+            ),
+        ),
+    )
+    replacement_pricing = create_pricing_table(
+        version="replacement-v1",
+        effective_from="2026-08-24",
+        entries=(
+            ModelPrice(
+                provider="openai",
+                model="gpt-integration",
+                input_usd_per_million_tokens="20",
+                output_usd_per_million_tokens="20",
+            ),
+        ),
+    )
+    checkpointer = InMemorySaver()
+
+    with open_raw_run_store(tmp_path / "raw.sqlite") as store:
+        initial = AgentRunner(
+            _models(_result()),
+            checkpointer=checkpointer,
+            raw_run_store=store,
+            pricing_table=original_pricing,
+            run_id_factory=lambda: "priced-start",
+            thread_id_factory=lambda: "priced-thread",
+        ).run(
+            RunRequest(
+                repo_path=tmp_path,
+                objective="Inspect the repository.",
+                max_tool_calls_per_step=2,
+                max_explorer_calls_per_step=2,
+                max_attempt_cost_usd="1",
+            )
+        )
+
+        resumed_runner = AgentRunner(
+            _models(_result()),
+            checkpointer=checkpointer,
+            raw_run_store=store,
+            pricing_table=replacement_pricing,
+            run_id_factory=lambda: "priced-resume",
+        )
+        with pytest.raises(ValueError, match="pricing snapshot"):
+            resumed_runner.resume(ResumeRequest(thread_id=initial.thread_id))
+
+        assert store.get_attempt("priced-resume") is None

@@ -1,3 +1,4 @@
+import re
 from collections.abc import Mapping
 from operator import add
 from pathlib import Path
@@ -27,6 +28,7 @@ from repocompass.agent.routing import (
     TerminationStatus,
 )
 from repocompass.tools.contracts import (
+    SHA256_PATTERN,
     NoProgressDecisionPayload,
     ProgressSnapshotPayload,
     ToolAuditPayload,
@@ -63,6 +65,7 @@ class RepoCompassState(MessagesState):
     context_build_count: int
     active_context_pack: ContextPack | None
     max_attempt_cost_usd: str | None
+    cost_budget_pricing_table_id: str | None
     cost_budget: AttemptCostBudgetSummary | None
 
     step_stop_reason: str | None
@@ -104,12 +107,36 @@ class ContinuationStateUpdate(TypedDict):
     context_build_count: int
     active_context_pack: None
     max_attempt_cost_usd: str | None
+    cost_budget_pricing_table_id: str | None
     cost_budget: None
     termination_status: None
     candidate_result: None
     evaluation_report: None
     next_action: None
     final_result: None
+
+
+def _validate_cost_budget_pricing_table_id(value: object) -> str:
+    if not isinstance(value, str):
+        raise TypeError("cost budget pricing table ID must be a string")
+    if re.fullmatch(SHA256_PATTERN, value) is None:
+        raise ValueError("cost budget pricing table ID must be a SHA-256 digest")
+    return value
+
+
+def _require_cost_budget_pricing_binding(
+    max_cost_usd: str | None,
+    pricing_table_id: object,
+) -> str | None:
+    if (max_cost_usd is None) != (pricing_table_id is None):
+        raise ValueError(
+            "attempt cost budget and pricing table ID must be configured together"
+        )
+    return (
+        None
+        if pricing_table_id is None
+        else _validate_cost_budget_pricing_table_id(pricing_table_id)
+    )
 
 
 def create_initial_state(
@@ -122,6 +149,7 @@ def create_initial_state(
     max_no_progress_rounds: int = 3,
     context_budget_tokens: int = DEFAULT_CONTEXT_BUDGET_TOKENS,
     max_attempt_cost_usd: str | None = None,
+    cost_budget_pricing_table_id: str | None = None,
 ) -> RepoCompassState:
     objective = objective.strip()
     if not objective:
@@ -156,6 +184,9 @@ def create_initial_state(
         raise ValueError("Context budget must be positive")
     if max_attempt_cost_usd is not None:
         max_attempt_cost_usd = validate_cost_budget_usd(max_attempt_cost_usd)
+    cost_budget_pricing_table_id = _require_cost_budget_pricing_binding(
+        max_attempt_cost_usd, cost_budget_pricing_table_id
+    )
     return {
         "messages": [HumanMessage(content=objective)],
         "repo_path": repo_path.resolve(),
@@ -187,6 +218,7 @@ def create_initial_state(
         "context_build_count": 0,
         "active_context_pack": None,
         "max_attempt_cost_usd": max_attempt_cost_usd,
+        "cost_budget_pricing_table_id": cost_budget_pricing_table_id,
         "cost_budget": None,
         "evaluation_report": None,
         "next_action": None,
@@ -230,8 +262,12 @@ def create_continuation_update(
         "context_budget_tokens", DEFAULT_CONTEXT_BUDGET_TOKENS
     )
     max_attempt_cost_usd = state.get("max_attempt_cost_usd")
+    cost_budget_pricing_table_id = state.get("cost_budget_pricing_table_id")
     if max_attempt_cost_usd is not None:
         max_attempt_cost_usd = validate_cost_budget_usd(max_attempt_cost_usd)
+    cost_budget_pricing_table_id = _require_cost_budget_pricing_binding(
+        max_attempt_cost_usd, cost_budget_pricing_table_id
+    )
     if not isinstance(previous_objective, str) or not previous_objective.strip():
         raise ValueError("Completed turn objective is missing")
     if not isinstance(turn_history, list) or not all(
@@ -290,6 +326,7 @@ def create_continuation_update(
         "context_build_count": 0,
         "active_context_pack": None,
         "max_attempt_cost_usd": max_attempt_cost_usd,
+        "cost_budget_pricing_table_id": cost_budget_pricing_table_id,
         "cost_budget": None,
         "next_action": None,
         "final_result": None,
