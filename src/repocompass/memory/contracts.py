@@ -36,6 +36,13 @@ class MemoryRepositoryIdentityKind(StrEnum):
     LOCAL_PATH = "local_path"
 
 
+class MemoryScope(StrEnum):
+    """Closed storage scope used by lifecycle management APIs."""
+
+    REPOSITORY = "repository"
+    EPISODIC = "episodic"
+
+
 class MemoryFactKind(StrEnum):
     """Closed repository-fact vocabulary exposed to retrieval and the UI."""
 
@@ -476,6 +483,135 @@ class MemoryAuditEvent(_MemoryContractModel):
         return self
 
 
+class MemoryEntryMetadata(_MemoryContractModel):
+    """Payload-free projection for repository-scoped memory inspection."""
+
+    schema_version: Literal[1] = MEMORY_CONTRACT_SCHEMA_VERSION
+    memory_id: Sha256Digest
+    repository_key: Sha256Digest
+    source_repository_id: Sha256Digest
+    memory_scope: MemoryScope
+    commit_sha: CommitSha | None = None
+    verification_status: MemoryVerificationStatus
+    write_authority: MemoryWriteAuthority
+    created_at_ms: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
+    source_count: int = Field(ge=0, le=MAX_MEMORY_SOURCES)
+    audit_event_count: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+
+    @model_validator(mode="after")
+    def require_scope_consistent_metadata(self) -> "MemoryEntryMetadata":
+        if self.memory_scope is MemoryScope.REPOSITORY:
+            if (
+                self.commit_sha is None
+                or self.verification_status is MemoryVerificationStatus.OBSERVED
+                or self.write_authority is MemoryWriteAuthority.TERMINAL_CONSOLIDATION
+                or self.source_count < 1
+            ):
+                raise ValueError("repository metadata is inconsistent")
+        elif (
+            self.verification_status is not MemoryVerificationStatus.OBSERVED
+            or self.write_authority is not MemoryWriteAuthority.TERMINAL_CONSOLIDATION
+            or self.source_count != 0
+        ):
+            raise ValueError("episodic metadata is inconsistent")
+        return self
+
+
+class MemoryTombstone(_MemoryContractModel):
+    """Payload-free, content-addressed proof that a memory was deleted."""
+
+    schema_version: Literal[1] = MEMORY_CONTRACT_SCHEMA_VERSION
+    tombstone_id: Sha256Digest
+    memory_id: Sha256Digest
+    repository_key: Sha256Digest
+    memory_scope: MemoryScope
+    deletion_event_id: Sha256Digest
+    reason: MemoryAuditReason
+    deleted_at_ms: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
+
+    @model_validator(mode="after")
+    def require_content_addressed_deletion(self) -> "MemoryTombstone":
+        if self.reason not in {
+            MemoryAuditReason.USER_REQUEST,
+            MemoryAuditReason.RETENTION_POLICY,
+        }:
+            raise ValueError("tombstone reason must describe deletion")
+        expected = _memory_tombstone_id(
+            memory_id=self.memory_id,
+            repository_key=self.repository_key,
+            memory_scope=self.memory_scope,
+            deletion_event_id=self.deletion_event_id,
+            reason=self.reason,
+            deleted_at_ms=self.deleted_at_ms,
+        )
+        if self.tombstone_id != expected:
+            raise ValueError("tombstone_id does not match deletion contents")
+        return self
+
+
+class MemoryRetentionPolicy(_MemoryContractModel):
+    """Bounded episodic-only retention policy; repository facts are excluded."""
+
+    schema_version: Literal[1] = MEMORY_CONTRACT_SCHEMA_VERSION
+    policy_id: Sha256Digest
+    max_episodic_entries: int = Field(ge=0, le=10_000)
+    max_age_ms: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_SAFE_JSON_INTEGER,
+    )
+    max_deletions_per_run: int = Field(ge=1, le=1_000)
+
+    @model_validator(mode="after")
+    def require_content_addressed_policy(self) -> "MemoryRetentionPolicy":
+        expected = _memory_retention_policy_id(
+            max_episodic_entries=self.max_episodic_entries,
+            max_age_ms=self.max_age_ms,
+            max_deletions_per_run=self.max_deletions_per_run,
+        )
+        if self.policy_id != expected:
+            raise ValueError("policy_id does not match retention policy")
+        return self
+
+
+class MemoryRetentionReport(_MemoryContractModel):
+    """Deterministic summary of one bounded retention transaction."""
+
+    schema_version: Literal[1] = MEMORY_CONTRACT_SCHEMA_VERSION
+    report_id: Sha256Digest
+    repository_key: Sha256Digest
+    policy: MemoryRetentionPolicy
+    evaluated_at_ms: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
+    candidate_count: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
+    deleted_memory_ids: tuple[Sha256Digest, ...] = Field(
+        default=(),
+        max_length=1_000,
+    )
+    truncated: bool
+
+    @model_validator(mode="after")
+    def require_content_addressed_report(self) -> "MemoryRetentionReport":
+        if len(set(self.deleted_memory_ids)) != len(self.deleted_memory_ids):
+            raise ValueError("deleted memory IDs must be unique")
+        if len(self.deleted_memory_ids) > self.policy.max_deletions_per_run:
+            raise ValueError("retention report exceeds its deletion bound")
+        if self.candidate_count < len(self.deleted_memory_ids):
+            raise ValueError("candidate count cannot be below deletion count")
+        if self.truncated != (self.candidate_count > len(self.deleted_memory_ids)):
+            raise ValueError("retention truncation flag is inconsistent")
+        expected = _memory_retention_report_id(
+            repository_key=self.repository_key,
+            policy_id=self.policy.policy_id,
+            evaluated_at_ms=self.evaluated_at_ms,
+            candidate_count=self.candidate_count,
+            deleted_memory_ids=self.deleted_memory_ids,
+            truncated=self.truncated,
+        )
+        if self.report_id != expected:
+            raise ValueError("report_id does not match retention report")
+        return self
+
+
 def create_memory_repository_identity(
     *,
     kind: MemoryRepositoryIdentityKind,
@@ -704,6 +840,87 @@ def create_memory_audit_event(
     )
 
 
+def create_memory_tombstone(
+    *,
+    memory_id: str,
+    repository_key: str,
+    memory_scope: MemoryScope,
+    deletion_event_id: str,
+    reason: MemoryAuditReason,
+    deleted_at_ms: int,
+) -> MemoryTombstone:
+    """Create one sanitized tombstone that cannot contain memory payload text."""
+
+    tombstone_id = _memory_tombstone_id(
+        memory_id=memory_id,
+        repository_key=repository_key,
+        memory_scope=memory_scope,
+        deletion_event_id=deletion_event_id,
+        reason=reason,
+        deleted_at_ms=deleted_at_ms,
+    )
+    return MemoryTombstone(
+        tombstone_id=tombstone_id,
+        memory_id=memory_id,
+        repository_key=repository_key,
+        memory_scope=memory_scope,
+        deletion_event_id=deletion_event_id,
+        reason=reason,
+        deleted_at_ms=deleted_at_ms,
+    )
+
+
+def create_memory_retention_policy(
+    *,
+    max_episodic_entries: int,
+    max_age_ms: int | None = None,
+    max_deletions_per_run: int = 100,
+) -> MemoryRetentionPolicy:
+    """Create one content-addressed, episodic-only retention policy."""
+
+    policy_id = _memory_retention_policy_id(
+        max_episodic_entries=max_episodic_entries,
+        max_age_ms=max_age_ms,
+        max_deletions_per_run=max_deletions_per_run,
+    )
+    return MemoryRetentionPolicy(
+        policy_id=policy_id,
+        max_episodic_entries=max_episodic_entries,
+        max_age_ms=max_age_ms,
+        max_deletions_per_run=max_deletions_per_run,
+    )
+
+
+def create_memory_retention_report(
+    *,
+    repository_key: str,
+    policy: MemoryRetentionPolicy,
+    evaluated_at_ms: int,
+    candidate_count: int,
+    deleted_memory_ids: tuple[str, ...],
+    truncated: bool,
+) -> MemoryRetentionReport:
+    """Create one deterministic result for a bounded retention transaction."""
+
+    report_id = _memory_retention_report_id(
+        repository_key=repository_key,
+        policy_id=policy.policy_id,
+        evaluated_at_ms=evaluated_at_ms,
+        candidate_count=candidate_count,
+        deleted_memory_ids=deleted_memory_ids,
+        truncated=truncated,
+    )
+    return MemoryRetentionReport(
+        report_id=report_id,
+        repository_key=repository_key,
+        policy=policy,
+        evaluated_at_ms=evaluated_at_ms,
+        candidate_count=candidate_count,
+        deleted_memory_ids=deleted_memory_ids,
+        truncated=truncated,
+    )
+
+
 def _repository_key(
     *,
     kind: MemoryRepositoryIdentityKind,
@@ -866,6 +1083,66 @@ def _memory_audit_event_id(
             "created_at_ms": created_at_ms,
             "run_id": run_id,
             "actor_digest": actor_digest,
+        },
+    )
+
+
+def _memory_tombstone_id(
+    *,
+    memory_id: str,
+    repository_key: str,
+    memory_scope: MemoryScope,
+    deletion_event_id: str,
+    reason: MemoryAuditReason,
+    deleted_at_ms: int,
+) -> str:
+    return _canonical_hash(
+        b"repocompass:memory-tombstone:v1",
+        {
+            "memory_id": memory_id,
+            "repository_key": repository_key,
+            "memory_scope": memory_scope.value,
+            "deletion_event_id": deletion_event_id,
+            "reason": reason.value,
+            "deleted_at_ms": deleted_at_ms,
+        },
+    )
+
+
+def _memory_retention_policy_id(
+    *,
+    max_episodic_entries: int,
+    max_age_ms: int | None,
+    max_deletions_per_run: int,
+) -> str:
+    return _canonical_hash(
+        b"repocompass:memory-retention-policy:v1",
+        {
+            "max_episodic_entries": max_episodic_entries,
+            "max_age_ms": max_age_ms,
+            "max_deletions_per_run": max_deletions_per_run,
+        },
+    )
+
+
+def _memory_retention_report_id(
+    *,
+    repository_key: str,
+    policy_id: str,
+    evaluated_at_ms: int,
+    candidate_count: int,
+    deleted_memory_ids: tuple[str, ...],
+    truncated: bool,
+) -> str:
+    return _canonical_hash(
+        b"repocompass:memory-retention-report:v1",
+        {
+            "repository_key": repository_key,
+            "policy_id": policy_id,
+            "evaluated_at_ms": evaluated_at_ms,
+            "candidate_count": candidate_count,
+            "deleted_memory_ids": deleted_memory_ids,
+            "truncated": truncated,
         },
     )
 

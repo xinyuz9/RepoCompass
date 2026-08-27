@@ -24,7 +24,9 @@ from repocompass.agent.lifecycle import (
 from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import RunOutcome
 from repocompass.agent.trace import RunTrace, TraceEventKind
-from repocompass.memory.store import MemoryStore
+from repocompass.memory.store import MemoryStore, open_memory_store
+from tests.unit.memory.test_episodic_store import _episode
+from tests.unit.memory.test_store import _create_repository, _memory
 
 
 def test_main_runs_investigation_and_writes_trace(
@@ -187,6 +189,113 @@ def test_main_explicitly_enables_bounded_memory_store(
     assert request.max_episodic_memory_results == 2
     assert memory_database.is_file()
     assert f"Memory store: {memory_database.resolve()}" in captured.err
+
+
+def test_memory_management_cli_is_payload_free_and_never_builds_models(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repository, context = _create_repository(tmp_path)
+    memory = _memory(context)
+    memory_database = tmp_path / "memory.sqlite"
+    with open_memory_store(memory_database) as store:
+        store.put_repository_memory(memory, context=context)
+    create_models = MagicMock(side_effect=AssertionError("models must stay offline"))
+    monkeypatch.setattr(cli, "create_workflow_models", create_models)
+    monkeypatch.setattr(cli, "_utc_now_ms", lambda: 2_000)
+
+    listed = cli.main(
+        [
+            str(repository),
+            "--memory-list",
+            "--memory-scope",
+            "repository",
+            "--memory-db",
+            str(memory_database),
+        ]
+    )
+    list_output = capsys.readouterr()
+    records = json.loads(list_output.out)
+    assert listed == 0
+    assert records[0]["memory_id"] == memory.memory_id
+    assert "Authentication entry point" not in list_output.out
+    assert "src/api.py" not in list_output.out
+
+    deleted = cli.main(
+        [
+            str(repository),
+            "--memory-delete",
+            memory.memory_id,
+            "--memory-db",
+            str(memory_database),
+        ]
+    )
+    delete_output = capsys.readouterr()
+    deletion = json.loads(delete_output.out)
+    assert deleted == 0
+    assert deletion["status"] == "deleted"
+    assert deletion["tombstone"]["memory_id"] == memory.memory_id
+
+    tombstones_exit = cli.main(
+        [
+            str(repository),
+            "--memory-list-deleted",
+            "--memory-db",
+            str(memory_database),
+        ]
+    )
+    tombstone_output = capsys.readouterr()
+    tombstones = json.loads(tombstone_output.out)
+    assert tombstones_exit == 0
+    assert [item["memory_id"] for item in tombstones] == [memory.memory_id]
+    assert create_models.call_count == 0
+
+
+def test_memory_retention_cli_is_bounded_and_reports_machine_readable_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repository, context = _create_repository(tmp_path)
+    episodes = tuple(
+        _episode(
+            context,
+            run_id=f"run-{turn}",
+            thread_id="retention-thread",
+            turn_number=turn,
+            created_at_ms=turn * 1_000,
+        )
+        for turn in range(1, 4)
+    )
+    memory_database = tmp_path / "memory.sqlite"
+    with open_memory_store(memory_database) as store:
+        for episode in episodes:
+            store.put_episodic_memory(episode, context=context)
+    create_models = MagicMock(side_effect=AssertionError("models must stay offline"))
+    monkeypatch.setattr(cli, "create_workflow_models", create_models)
+    monkeypatch.setattr(cli, "_utc_now_ms", lambda: 5_000)
+
+    exit_code = cli.main(
+        [
+            str(repository),
+            "--memory-retain",
+            "1",
+            "--memory-max-deletions",
+            "1",
+            "--memory-db",
+            str(memory_database),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert exit_code == 0
+    assert report["candidate_count"] == 2
+    assert report["deleted_memory_ids"] == [episodes[0].episode_id]
+    assert report["truncated"] is True
+    assert "1 deleted; 2 eligible; truncated=True" in captured.err
+    assert create_models.call_count == 0
 
 
 def test_main_rejects_memory_result_limit_above_ten(

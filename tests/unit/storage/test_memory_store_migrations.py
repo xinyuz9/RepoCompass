@@ -17,6 +17,7 @@ REQUIRED_TABLES = {
     "memory_sources",
     "memory_audit_events",
     "memory_episodes",
+    "memory_tombstones",
     "memory_fts",
 }
 REQUIRED_TRIGGERS = {
@@ -27,6 +28,7 @@ REQUIRED_TRIGGERS = {
 REQUIRED_INDEXES = {
     "idx_memory_episodes_repository_thread_turn",
     "idx_memory_episodes_repository_run",
+    "idx_memory_tombstones_repository_time",
 }
 
 
@@ -58,7 +60,7 @@ def _foreign_key_edges(
         )
 
 
-def test_fresh_memory_store_creates_exact_v2_schema_and_fts5(
+def test_fresh_memory_store_creates_exact_v3_schema_and_fts5(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "nested" / "memory.sqlite"
@@ -77,6 +79,9 @@ def test_fresh_memory_store_creates_exact_v2_schema_and_fts5(
     ]
     assert _foreign_key_edges(database_path, "memory_episodes") == [
         ("memory_entries", "episode_id", "memory_id", "CASCADE")
+    ]
+    assert _foreign_key_edges(database_path, "memory_tombstones") == [
+        ("memory_audit_events", "deletion_event_id", "event_id", "RESTRICT")
     ]
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -169,6 +174,7 @@ def test_reopening_current_memory_schema_is_idempotent(tmp_path: Path) -> None:
 
 def _downgrade_empty_current_store_to_v1(database_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP TABLE memory_tombstones")
         connection.execute("DROP TABLE memory_episodes")
         connection.execute(
             "UPDATE memory_schema SET value = '1' WHERE key = 'schema_version'"
@@ -176,7 +182,7 @@ def _downgrade_empty_current_store_to_v1(database_path: Path) -> None:
         connection.execute("PRAGMA user_version = 1")
 
 
-def test_v1_memory_store_migrates_to_v2_without_losing_entries(
+def test_v1_memory_store_migrates_to_current_without_losing_entries(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "v1.sqlite"
@@ -217,9 +223,10 @@ def test_v1_memory_store_migrates_to_v2_without_losing_entries(
             ("a" * 64,),
         ).fetchone() == ("Preserved memory",)
     assert "memory_episodes" in _schema_objects(database_path, "table")
+    assert "memory_tombstones" in _schema_objects(database_path, "table")
 
 
-def test_tampered_v1_schema_is_rejected_before_v2_migration(
+def test_tampered_v1_schema_is_rejected_before_current_migration(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "tampered-v1.sqlite"
@@ -290,6 +297,20 @@ def test_current_schema_with_missing_episode_unique_index_fails_closed(
         pass
     with sqlite3.connect(database_path) as connection:
         connection.execute("DROP INDEX idx_memory_episodes_repository_thread_turn")
+
+    with pytest.raises(MemoryStoreMigrationError, match="index"):
+        with open_memory_store(database_path):
+            pass
+
+
+def test_current_schema_with_missing_tombstone_index_fails_closed(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "missing-tombstone-index.sqlite"
+    with open_memory_store(database_path):
+        pass
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP INDEX idx_memory_tombstones_repository_time")
 
     with pytest.raises(MemoryStoreMigrationError, match="index"):
         with open_memory_store(database_path):

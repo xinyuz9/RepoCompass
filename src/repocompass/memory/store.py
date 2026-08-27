@@ -19,13 +19,20 @@ from repocompass.memory.contracts import (
     MemoryAuditAction,
     MemoryAuditEvent,
     MemoryAuditReason,
+    MemoryEntryMetadata,
     MemoryFreshnessStatus,
+    MemoryRetentionPolicy,
+    MemoryRetentionReport,
     MemoryRetrievalHit,
+    MemoryScope,
     MemoryStalenessReason,
+    MemoryTombstone,
     RepositoryMemory,
     RepositoryMemorySource,
     create_memory_audit_event,
+    create_memory_retention_report,
     create_memory_retrieval_hit,
+    create_memory_tombstone,
 )
 from repocompass.memory.identity import resolve_memory_repository_identity
 from repocompass.memory.revalidation import (
@@ -34,7 +41,7 @@ from repocompass.memory.revalidation import (
 from repocompass.tools.contracts import IDENTIFIER_PATTERN, SHA256_PATTERN
 from repocompass.tools.gateway import ToolExecutionContext
 
-MEMORY_STORE_SCHEMA_VERSION = 2
+MEMORY_STORE_SCHEMA_VERSION = 3
 _SQLITE_TIMEOUT_SECONDS = 10.0
 _FTS_TOKENIZER = "unicode61 remove_diacritics 2"
 _MAX_MEMORY_QUERY_CHARACTERS = 512
@@ -214,6 +221,28 @@ _SCHEMA_V2_STATEMENTS = (
     "ON memory_episodes(repository_key, run_id)",
     "UPDATE memory_schema SET value = '2' WHERE key = 'schema_version'",
 )
+_SCHEMA_V3_STATEMENTS = (
+    """
+    CREATE TABLE memory_tombstones (
+        tombstone_id TEXT NOT NULL PRIMARY KEY CHECK(length(tombstone_id) = 64),
+        memory_id TEXT NOT NULL UNIQUE CHECK(length(memory_id) = 64),
+        repository_key TEXT NOT NULL CHECK(length(repository_key) = 64),
+        memory_scope TEXT NOT NULL
+            CHECK(memory_scope IN ('repository', 'episodic')),
+        deletion_event_id TEXT NOT NULL UNIQUE
+            CHECK(length(deletion_event_id) = 64),
+        reason TEXT NOT NULL
+            CHECK(reason IN ('user_request', 'retention_policy')),
+        deleted_at_ms INTEGER NOT NULL CHECK(deleted_at_ms >= 0),
+        tombstone_json TEXT NOT NULL,
+        FOREIGN KEY(deletion_event_id)
+            REFERENCES memory_audit_events(event_id) ON DELETE RESTRICT
+    )
+    """,
+    "CREATE INDEX idx_memory_tombstones_repository_time "
+    "ON memory_tombstones(repository_key, deleted_at_ms, memory_id)",
+    "UPDATE memory_schema SET value = '3' WHERE key = 'schema_version'",
+)
 
 _REQUIRED_COLUMNS = {
     "memory_schema": ("key", "value"),
@@ -258,6 +287,16 @@ _REQUIRED_COLUMNS = {
         "objective_digest",
         "final_result_digest",
     ),
+    "memory_tombstones": (
+        "tombstone_id",
+        "memory_id",
+        "repository_key",
+        "memory_scope",
+        "deletion_event_id",
+        "reason",
+        "deleted_at_ms",
+        "tombstone_json",
+    ),
 }
 _REQUIRED_NOT_NULL = {
     "memory_schema": frozenset(_REQUIRED_COLUMNS["memory_schema"]),
@@ -279,6 +318,7 @@ _REQUIRED_NOT_NULL = {
     "memory_sources": frozenset(_REQUIRED_COLUMNS["memory_sources"]),
     "memory_audit_events": frozenset(_REQUIRED_COLUMNS["memory_audit_events"]),
     "memory_episodes": frozenset(_REQUIRED_COLUMNS["memory_episodes"]),
+    "memory_tombstones": frozenset(_REQUIRED_COLUMNS["memory_tombstones"]),
 }
 _EXPECTED_TRIGGER_SQL = {
     "memory_entries_fts_insert": _normalize_schema_sql(_SCHEMA_V1_STATEMENTS[6]),
@@ -295,6 +335,11 @@ _EXPECTED_V2_INDEX_SQL = {
     )
     for index in _SCHEMA_V2_STATEMENTS[1:3]
 }
+_EXPECTED_V3_INDEX_SQL = {
+    str(_SCHEMA_V3_STATEMENTS[1]).split()[2]: _normalize_schema_sql(
+        str(_SCHEMA_V3_STATEMENTS[1])
+    )
+}
 _ForeignKeyEdge = tuple[str, str, str, str]
 _EXPECTED_FOREIGN_KEYS: dict[str, Counter[_ForeignKeyEdge]] = {
     "memory_schema": Counter(),
@@ -305,6 +350,16 @@ _EXPECTED_FOREIGN_KEYS: dict[str, Counter[_ForeignKeyEdge]] = {
     "memory_audit_events": Counter(),
     "memory_episodes": Counter(
         [("memory_entries", "episode_id", "memory_id", "CASCADE")]
+    ),
+    "memory_tombstones": Counter(
+        [
+            (
+                "memory_audit_events",
+                "deletion_event_id",
+                "event_id",
+                "RESTRICT",
+            )
+        ]
     ),
 }
 _EXPECTED_BASE_METADATA = {
@@ -377,6 +432,7 @@ class MemoryStore:
         )
         inserted = False
         with self._transaction():
+            self._raise_if_tombstoned(memory.episode_id)
             existing_row = self._connection.execute(
                 "SELECT * FROM memory_entries WHERE memory_id = ?",
                 (memory.episode_id,),
@@ -601,6 +657,7 @@ class MemoryStore:
         )
         inserted = False
         with self._transaction():
+            self._raise_if_tombstoned(memory.memory_id)
             existing_row = self._connection.execute(
                 "SELECT * FROM memory_entries WHERE memory_id = ?",
                 (memory.memory_id,),
@@ -661,6 +718,213 @@ class MemoryStore:
             if row is None:
                 return None
             return _decode_repository_memory(self._connection, row)
+
+    def get_memory_metadata(
+        self,
+        memory_id: str,
+        *,
+        context: ToolExecutionContext,
+    ) -> MemoryEntryMetadata | None:
+        """Inspect one live memory without returning title, content, or paths."""
+
+        _validate_digest(memory_id, name="memory_id")
+        if not isinstance(context, ToolExecutionContext):
+            raise TypeError("context must be a ToolExecutionContext")
+        identity = resolve_memory_repository_identity(context)
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT memory_entries.*,
+                       (SELECT count(*) FROM memory_sources
+                        WHERE memory_sources.memory_id = memory_entries.memory_id)
+                           AS source_count,
+                       (SELECT count(*) FROM memory_audit_events
+                        WHERE memory_audit_events.memory_id = memory_entries.memory_id)
+                           AS audit_event_count
+                FROM memory_entries
+                WHERE memory_id = ? AND repository_key = ?
+                """,
+                (memory_id, identity.repository_key),
+            ).fetchone()
+            if row is None:
+                return None
+            return _decode_memory_metadata(self._connection, row)
+
+    def list_memory_metadata(
+        self,
+        *,
+        context: ToolExecutionContext,
+        max_results: int,
+        memory_scope: MemoryScope | None = None,
+    ) -> tuple[MemoryEntryMetadata, ...]:
+        """List a bounded, payload-free view of the current repository's memory."""
+
+        _validate_context_and_result_limit(context, max_results)
+        if memory_scope is not None and not isinstance(memory_scope, MemoryScope):
+            raise TypeError("memory_scope must be a MemoryScope")
+        identity = resolve_memory_repository_identity(context)
+        predicates = ["memory_entries.repository_key = ?"]
+        parameters: list[object] = [identity.repository_key]
+        if memory_scope is not None:
+            predicates.append("memory_entries.memory_scope = ?")
+            parameters.append(memory_scope.value)
+        parameters.append(max_results)
+        statement = (
+            "SELECT memory_entries.*, "
+            "(SELECT count(*) FROM memory_sources "
+            "WHERE memory_sources.memory_id = memory_entries.memory_id) "
+            "AS source_count, "
+            "(SELECT count(*) FROM memory_audit_events "
+            "WHERE memory_audit_events.memory_id = memory_entries.memory_id) "
+            "AS audit_event_count FROM memory_entries "
+            f"WHERE {' AND '.join(predicates)} "
+            "ORDER BY memory_entries.created_at_ms DESC, "
+            "memory_entries.memory_id LIMIT ?"
+        )
+        with self._lock:
+            rows = self._connection.execute(statement, parameters).fetchall()
+            return tuple(_decode_memory_metadata(self._connection, row) for row in rows)
+
+    def list_memory_tombstones(
+        self,
+        *,
+        context: ToolExecutionContext,
+        max_results: int,
+    ) -> tuple[MemoryTombstone, ...]:
+        """List bounded payload-free deletion markers for this repository."""
+
+        _validate_context_and_result_limit(context, max_results)
+        identity = resolve_memory_repository_identity(context)
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM memory_tombstones WHERE repository_key = ? "
+                "ORDER BY deleted_at_ms DESC, memory_id LIMIT ?",
+                (identity.repository_key, max_results),
+            ).fetchall()
+        return tuple(_decode_tombstone(row) for row in rows)
+
+    def delete_memory(
+        self,
+        memory_id: str,
+        *,
+        context: ToolExecutionContext,
+        deleted_at_ms: int,
+        reason: MemoryAuditReason = MemoryAuditReason.USER_REQUEST,
+        run_id: str | None = None,
+        actor_digest: str | None = None,
+    ) -> MemoryTombstone | None:
+        """Atomically delete one repository-scoped memory and retain its audit."""
+
+        _validate_digest(memory_id, name="memory_id")
+        if not isinstance(context, ToolExecutionContext):
+            raise TypeError("context must be a ToolExecutionContext")
+        _validate_deletion_reason(reason)
+        _validate_timestamp(deleted_at_ms, name="deleted_at_ms")
+        _validate_optional_identifier(run_id, name="run_id")
+        if actor_digest is not None:
+            _validate_digest(actor_digest, name="actor_digest")
+        identity = resolve_memory_repository_identity(context)
+        with self._transaction():
+            tombstone_row = self._connection.execute(
+                "SELECT * FROM memory_tombstones "
+                "WHERE memory_id = ? AND repository_key = ?",
+                (memory_id, identity.repository_key),
+            ).fetchone()
+            if tombstone_row is not None:
+                return _decode_tombstone(tombstone_row)
+            entry_row = self._connection.execute(
+                "SELECT memory_id, memory_scope, repository_key "
+                "FROM memory_entries WHERE memory_id = ? AND repository_key = ?",
+                (memory_id, identity.repository_key),
+            ).fetchone()
+            if entry_row is None:
+                return None
+            return self._delete_memory_entry(
+                memory_id=memory_id,
+                repository_key=identity.repository_key,
+                memory_scope=MemoryScope(str(entry_row["memory_scope"])),
+                reason=reason,
+                deleted_at_ms=deleted_at_ms,
+                run_id=run_id,
+                actor_digest=actor_digest,
+            )
+
+    def apply_retention_policy(
+        self,
+        policy: MemoryRetentionPolicy,
+        *,
+        context: ToolExecutionContext,
+        evaluated_at_ms: int,
+        run_id: str | None = None,
+        actor_digest: str | None = None,
+    ) -> MemoryRetentionReport:
+        """Delete only eligible episodes in one bounded repository transaction."""
+
+        policy = _revalidate_memory_retention_policy(policy)
+        if not isinstance(context, ToolExecutionContext):
+            raise TypeError("context must be a ToolExecutionContext")
+        _validate_timestamp(evaluated_at_ms, name="evaluated_at_ms")
+        _validate_optional_identifier(run_id, name="run_id")
+        if actor_digest is not None:
+            _validate_digest(actor_digest, name="actor_digest")
+        identity = resolve_memory_repository_identity(context)
+        age_cutoff = (
+            -1
+            if policy.max_age_ms is None
+            else max(0, evaluated_at_ms - policy.max_age_ms)
+        )
+        ranked = """
+            WITH ranked_episodes AS (
+                SELECT memory_id, repository_key, memory_scope, created_at_ms,
+                       row_number() OVER (
+                           ORDER BY created_at_ms DESC, memory_id DESC
+                       ) AS newest_rank
+                FROM memory_entries
+                WHERE repository_key = ? AND memory_scope = 'episodic'
+            )
+        """
+        candidate_parameters = (
+            identity.repository_key,
+            policy.max_episodic_entries,
+            age_cutoff,
+        )
+        with self._transaction():
+            candidate_count = int(
+                self._connection.execute(
+                    ranked + "SELECT count(*) FROM ranked_episodes "
+                    "WHERE newest_rank > ? OR created_at_ms < ?",
+                    candidate_parameters,
+                ).fetchone()[0]
+            )
+            rows = self._connection.execute(
+                ranked + "SELECT memory_id, repository_key, memory_scope "
+                "FROM ranked_episodes "
+                "WHERE newest_rank > ? OR created_at_ms < ? "
+                "ORDER BY created_at_ms, memory_id LIMIT ?",
+                (*candidate_parameters, policy.max_deletions_per_run),
+            ).fetchall()
+            deleted_memory_ids: list[str] = []
+            for row in rows:
+                memory_id = str(row["memory_id"])
+                self._delete_memory_entry(
+                    memory_id=memory_id,
+                    repository_key=identity.repository_key,
+                    memory_scope=MemoryScope.EPISODIC,
+                    reason=MemoryAuditReason.RETENTION_POLICY,
+                    deleted_at_ms=evaluated_at_ms,
+                    run_id=run_id,
+                    actor_digest=actor_digest,
+                )
+                deleted_memory_ids.append(memory_id)
+        deleted = tuple(deleted_memory_ids)
+        return create_memory_retention_report(
+            repository_key=identity.repository_key,
+            policy=policy,
+            evaluated_at_ms=evaluated_at_ms,
+            candidate_count=candidate_count,
+            deleted_memory_ids=deleted,
+            truncated=candidate_count > len(deleted),
+        )
 
     def search_repository_memories(
         self,
@@ -780,6 +1044,97 @@ class MemoryStore:
                 _canonical_model_json(source),
             ),
         )
+
+    def _raise_if_tombstoned(self, memory_id: str) -> None:
+        if (
+            self._connection.execute(
+                "SELECT 1 FROM memory_tombstones WHERE memory_id = ?",
+                (memory_id,),
+            ).fetchone()
+            is not None
+        ):
+            raise MemoryStoreConflictError(
+                "memory identity was deleted and cannot be resurrected"
+            )
+
+    def _delete_memory_entry(
+        self,
+        *,
+        memory_id: str,
+        repository_key: str,
+        memory_scope: MemoryScope,
+        reason: MemoryAuditReason,
+        deleted_at_ms: int,
+        run_id: str | None,
+        actor_digest: str | None,
+    ) -> MemoryTombstone:
+        event = create_memory_audit_event(
+            memory_id=memory_id,
+            repository_key=repository_key,
+            action=MemoryAuditAction.DELETED,
+            reason=reason,
+            created_at_ms=deleted_at_ms,
+            run_id=run_id,
+            actor_digest=actor_digest,
+        )
+        tombstone = create_memory_tombstone(
+            memory_id=memory_id,
+            repository_key=repository_key,
+            memory_scope=memory_scope,
+            deletion_event_id=event.event_id,
+            reason=reason,
+            deleted_at_ms=deleted_at_ms,
+        )
+        self._insert_audit_event(event)
+        self._insert_tombstone(tombstone)
+        try:
+            cursor = self._connection.execute(
+                "DELETE FROM memory_entries WHERE memory_id = ? AND repository_key = ?",
+                (memory_id, repository_key),
+            )
+        except sqlite3.IntegrityError as error:
+            raise MemoryStoreIntegrityError(
+                "memory deletion violates storage integrity"
+            ) from error
+        if cursor.rowcount != 1:
+            raise MemoryStoreConflictError("memory entry changed during deletion")
+        return tombstone
+
+    def _insert_tombstone(self, tombstone: MemoryTombstone) -> None:
+        record_json = _canonical_model_json(tombstone)
+        existing = self._connection.execute(
+            "SELECT tombstone_json FROM memory_tombstones WHERE memory_id = ?",
+            (tombstone.memory_id,),
+        ).fetchone()
+        if existing is not None:
+            if str(existing["tombstone_json"]) != record_json:
+                raise MemoryStoreConflictError(
+                    "memory identity has a conflicting tombstone"
+                )
+            return
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO memory_tombstones (
+                    tombstone_id, memory_id, repository_key, memory_scope,
+                    deletion_event_id, reason, deleted_at_ms, tombstone_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    tombstone.tombstone_id,
+                    tombstone.memory_id,
+                    tombstone.repository_key,
+                    tombstone.memory_scope.value,
+                    tombstone.deletion_event_id,
+                    tombstone.reason.value,
+                    tombstone.deleted_at_ms,
+                    record_json,
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            raise MemoryStoreIntegrityError(
+                "memory tombstone violates storage integrity"
+            ) from error
 
     def _insert_episode_index(self, memory: EpisodicMemory) -> None:
         self._connection.execute(
@@ -930,7 +1285,14 @@ def _migrate_and_validate(connection: sqlite3.Connection) -> None:
             for statement in _SCHEMA_V2_STATEMENTS:
                 connection.execute(statement)
             connection.execute("PRAGMA user_version = 2")
-        elif version != 2:
+            version = 2
+        if version == 2:
+            _validate_schema(connection, schema_version=2)
+            for statement in _SCHEMA_V3_STATEMENTS:
+                connection.execute(statement)
+            connection.execute("PRAGMA user_version = 3")
+            version = 3
+        if version != MEMORY_STORE_SCHEMA_VERSION:
             raise MemoryStoreMigrationError(
                 f"Unsupported Memory Store schema version: {version}"
             )
@@ -951,18 +1313,21 @@ def _validate_schema(
     *,
     schema_version: int,
 ) -> None:
-    if schema_version not in {1, MEMORY_STORE_SCHEMA_VERSION}:
+    if schema_version not in {1, 2, MEMORY_STORE_SCHEMA_VERSION}:
         raise MemoryStoreMigrationError("Memory Store validation version is invalid")
     has_episodes = schema_version >= 2
+    has_tombstones = schema_version >= 3
     required_columns = {
         table: columns
         for table, columns in _REQUIRED_COLUMNS.items()
-        if has_episodes or table != "memory_episodes"
+        if (has_episodes or table != "memory_episodes")
+        and (has_tombstones or table != "memory_tombstones")
     }
     expected_foreign_keys = {
         table: edges
         for table, edges in _EXPECTED_FOREIGN_KEYS.items()
-        if has_episodes or table != "memory_episodes"
+        if (has_episodes or table != "memory_episodes")
+        and (has_tombstones or table != "memory_tombstones")
     }
     tables = _schema_object_names(connection, "table")
     if not {*required_columns, "memory_fts"}.issubset(tables):
@@ -1016,6 +1381,8 @@ def _validate_schema(
     expected_index_sql = dict(_EXPECTED_V1_INDEX_SQL)
     if has_episodes:
         expected_index_sql.update(_EXPECTED_V2_INDEX_SQL)
+    if has_tombstones:
+        expected_index_sql.update(_EXPECTED_V3_INDEX_SQL)
     index_sql = {
         str(row["name"]): _normalize_schema_sql(str(row["sql"]))
         for row in connection.execute(
@@ -1057,6 +1424,8 @@ def _validate_schema(
     _validate_fts_integrity(connection)
     if has_episodes:
         _validate_episode_index_integrity(connection)
+    if has_tombstones:
+        _validate_tombstone_integrity(connection)
 
 
 def _validate_episode_index_integrity(connection: sqlite3.Connection) -> None:
@@ -1088,6 +1457,51 @@ def _validate_episode_index_integrity(connection: sqlite3.Connection) -> None:
         raise MemoryStoreMigrationError(
             "Memory Store episodic index integrity check failed"
         )
+
+
+def _validate_tombstone_integrity(connection: sqlite3.Connection) -> None:
+    if (
+        connection.execute(
+            "SELECT 1 FROM memory_tombstones "
+            "JOIN memory_entries USING(memory_id) LIMIT 1"
+        ).fetchone()
+        is not None
+    ):
+        raise MemoryStoreMigrationError(
+            "Memory Store tombstone coexists with a live entry"
+        )
+
+    try:
+        deletion_events = {
+            event.event_id: event
+            for event in (
+                _decode_audit_event(row)
+                for row in connection.execute(
+                    "SELECT * FROM memory_audit_events WHERE action = 'deleted'"
+                )
+            )
+        }
+        tombstones = tuple(
+            _decode_tombstone(row)
+            for row in connection.execute("SELECT * FROM memory_tombstones")
+        )
+    except MemoryStoreCorruptionError as error:
+        raise MemoryStoreMigrationError(
+            "Memory Store tombstone or deletion audit is corrupt"
+        ) from error
+    for tombstone in tombstones:
+        event = deletion_events.get(tombstone.deletion_event_id)
+        if (
+            event is None
+            or event.memory_id != tombstone.memory_id
+            or event.repository_key != tombstone.repository_key
+            or event.action is not MemoryAuditAction.DELETED
+            or event.reason is not tombstone.reason
+            or event.created_at_ms != tombstone.deleted_at_ms
+        ):
+            raise MemoryStoreMigrationError(
+                "Memory Store tombstone audit integrity check failed"
+            )
 
 
 def _validate_fts_integrity(connection: sqlite3.Connection) -> None:
@@ -1129,6 +1543,21 @@ def _revalidate_episodic_memory_contract(value: object) -> EpisodicMemory:
     except (ValidationError, ValueError, TypeError) as error:
         raise MemoryStoreIntegrityError(
             "episodic memory contract failed revalidation"
+        ) from error
+
+
+def _revalidate_memory_retention_policy(
+    value: object,
+) -> MemoryRetentionPolicy:
+    if not isinstance(value, MemoryRetentionPolicy):
+        raise TypeError("policy must be a MemoryRetentionPolicy")
+    try:
+        return MemoryRetentionPolicy.model_validate_json(
+            value.model_dump_json(exclude_computed_fields=True, warnings=False)
+        )
+    except (ValidationError, ValueError, TypeError) as error:
+        raise MemoryStoreIntegrityError(
+            "memory retention policy failed revalidation"
         ) from error
 
 
@@ -1316,6 +1745,73 @@ def _decode_audit_event(row: sqlite3.Row) -> MemoryAuditEvent:
     return event
 
 
+def _decode_memory_metadata(
+    connection: sqlite3.Connection,
+    row: sqlite3.Row,
+) -> MemoryEntryMetadata:
+    scope_value = str(row["memory_scope"])
+    if scope_value == MemoryScope.REPOSITORY.value:
+        record = _decode_repository_memory(connection, row)
+        memory_id = record.memory_id
+        source_count = len(record.sources)
+    elif scope_value == MemoryScope.EPISODIC.value:
+        episode = _decode_episodic_memory(connection, row)
+        record = episode
+        memory_id = episode.episode_id
+        source_count = 0
+    else:
+        raise MemoryStoreCorruptionError("stored memory scope is invalid")
+    if source_count != int(row["source_count"]):
+        raise MemoryStoreCorruptionError("stored memory source count disagrees")
+    try:
+        return MemoryEntryMetadata(
+            memory_id=memory_id,
+            repository_key=record.repository_key,
+            source_repository_id=record.source_repository_id,
+            memory_scope=MemoryScope(scope_value),
+            commit_sha=record.commit_sha,
+            verification_status=record.verification_status,
+            write_authority=record.write_authority,
+            created_at_ms=record.created_at_ms,
+            source_count=source_count,
+            audit_event_count=int(row["audit_event_count"]),
+        )
+    except (ValidationError, ValueError, TypeError) as error:
+        raise MemoryStoreCorruptionError(
+            "stored memory metadata is inconsistent"
+        ) from error
+
+
+def _decode_tombstone(row: sqlite3.Row) -> MemoryTombstone:
+    try:
+        tombstone = MemoryTombstone.model_validate_json(str(row["tombstone_json"]))
+    except (ValidationError, ValueError, TypeError) as error:
+        raise MemoryStoreCorruptionError(
+            "stored memory tombstone is invalid"
+        ) from error
+    mirrored = (
+        tombstone.tombstone_id,
+        tombstone.memory_id,
+        tombstone.repository_key,
+        tombstone.memory_scope.value,
+        tombstone.deletion_event_id,
+        tombstone.reason.value,
+        tombstone.deleted_at_ms,
+    )
+    stored = (
+        str(row["tombstone_id"]),
+        str(row["memory_id"]),
+        str(row["repository_key"]),
+        str(row["memory_scope"]),
+        str(row["deletion_event_id"]),
+        str(row["reason"]),
+        int(row["deleted_at_ms"]),
+    )
+    if mirrored != stored:
+        raise MemoryStoreCorruptionError("stored memory tombstone columns disagree")
+    return tombstone
+
+
 def _bounded_fts_query(query: str) -> tuple[str, str]:
     if not isinstance(query, str):
         raise TypeError("query must be a string")
@@ -1369,6 +1865,16 @@ def _validate_context_and_result_limit(
 def _validate_timestamp(value: object, *, name: str) -> None:
     if type(value) is not int or value < 0:
         raise ValueError(f"{name} must be a non-negative integer")
+
+
+def _validate_deletion_reason(value: object) -> None:
+    if not isinstance(value, MemoryAuditReason):
+        raise TypeError("reason must be a MemoryAuditReason")
+    if value not in {
+        MemoryAuditReason.USER_REQUEST,
+        MemoryAuditReason.RETENTION_POLICY,
+    }:
+        raise ValueError("reason must describe a memory deletion")
 
 
 def _validate_turn_number(value: object) -> None:

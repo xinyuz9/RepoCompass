@@ -15,8 +15,12 @@ from repocompass.memory.contracts import (
     MemoryFreshnessStatus,
     MemoryRepositoryIdentity,
     MemoryRepositoryIdentityKind,
+    MemoryRetentionPolicy,
+    MemoryRetentionReport,
     MemoryRetrievalHit,
+    MemoryScope,
     MemoryStalenessReason,
+    MemoryTombstone,
     MemoryVerificationStatus,
     MemoryWriteAuthority,
     RepositoryMemory,
@@ -24,7 +28,10 @@ from repocompass.memory.contracts import (
     create_episodic_memory,
     create_memory_audit_event,
     create_memory_repository_identity,
+    create_memory_retention_policy,
+    create_memory_retention_report,
     create_memory_retrieval_hit,
+    create_memory_tombstone,
     create_repository_memory,
     create_repository_memory_source,
 )
@@ -104,6 +111,81 @@ def test_repository_identity_is_content_addressed_but_keeps_clone_binding() -> N
     tampered = identity.model_copy(update={"scope": "src"})
     with pytest.raises(ValidationError, match="repository_key"):
         MemoryRepositoryIdentity.model_validate_json(tampered.model_dump_json())
+
+
+def test_tombstone_is_payload_free_content_addressed_and_deletion_only() -> None:
+    event = create_memory_audit_event(
+        memory_id="b" * 64,
+        repository_key=_identity().repository_key,
+        action=MemoryAuditAction.DELETED,
+        reason=MemoryAuditReason.USER_REQUEST,
+        created_at_ms=2_000,
+        run_id="delete-1",
+    )
+    tombstone = create_memory_tombstone(
+        memory_id=event.memory_id,
+        repository_key=event.repository_key,
+        memory_scope=MemoryScope.REPOSITORY,
+        deletion_event_id=event.event_id,
+        reason=event.reason,
+        deleted_at_ms=event.created_at_ms,
+    )
+
+    assert tombstone == MemoryTombstone.model_validate_json(tombstone.model_dump_json())
+    assert set(tombstone.model_dump()) == {
+        "schema_version",
+        "tombstone_id",
+        "memory_id",
+        "repository_key",
+        "memory_scope",
+        "deletion_event_id",
+        "reason",
+        "deleted_at_ms",
+    }
+    tampered = tombstone.model_copy(update={"deleted_at_ms": 2_001})
+    with pytest.raises(ValidationError, match="tombstone_id"):
+        MemoryTombstone.model_validate_json(tampered.model_dump_json())
+    with pytest.raises(ValidationError, match="deletion"):
+        create_memory_tombstone(
+            memory_id=event.memory_id,
+            repository_key=event.repository_key,
+            memory_scope=MemoryScope.REPOSITORY,
+            deletion_event_id=event.event_id,
+            reason=MemoryAuditReason.SOURCE_STALE,
+            deleted_at_ms=event.created_at_ms,
+        )
+
+
+def test_retention_policy_and_report_are_bounded_and_content_addressed() -> None:
+    policy = create_memory_retention_policy(
+        max_episodic_entries=25,
+        max_age_ms=86_400_000,
+        max_deletions_per_run=10,
+    )
+    deleted_ids = ("c" * 64, "d" * 64)
+    report = create_memory_retention_report(
+        repository_key=_identity().repository_key,
+        policy=policy,
+        evaluated_at_ms=100_000_000,
+        candidate_count=3,
+        deleted_memory_ids=deleted_ids,
+        truncated=True,
+    )
+
+    assert policy == MemoryRetentionPolicy.model_validate_json(policy.model_dump_json())
+    assert report == MemoryRetentionReport.model_validate_json(report.model_dump_json())
+    tampered = policy.model_copy(update={"max_episodic_entries": 24})
+    with pytest.raises(ValidationError, match="policy_id"):
+        MemoryRetentionPolicy.model_validate_json(tampered.model_dump_json())
+    with pytest.raises(ValidationError, match="truncation"):
+        create_memory_retention_report(
+            repository_key=_identity().repository_key,
+            policy=policy,
+            evaluated_at_ms=100_000_000,
+            candidate_count=2,
+            deleted_memory_ids=deleted_ids,
+            truncated=True,
+        )
 
 
 def test_repository_source_binds_location_digest_claim_and_assertions() -> None:
