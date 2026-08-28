@@ -142,6 +142,18 @@ def test_task_and_hidden_labels_have_stable_separate_identities() -> None:
     assert "gold_symbols" not in agent_payload
     assert case.labels.source_artifact_digest not in agent_payload
 
+    whitespace_task = create_localization_task(
+        dataset_kind=LocalizationDatasetKind.SYNTHETIC_FIXTURE,
+        instance_id=" fixture__canonical ",
+        repository=" example/repository ",
+        base_commit=f" {'a' * 40} ",
+        objective=" objective with upstream newline \n",
+    )
+    assert whitespace_task.instance_id == "fixture__canonical"
+    assert whitespace_task.repository == "example/repository"
+    assert whitespace_task.base_commit == "a" * 40
+    assert whitespace_task.objective == "objective with upstream newline"
+
 
 def test_content_ids_reject_task_label_case_manifest_and_observation_tampering() -> (
     None

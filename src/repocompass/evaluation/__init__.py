@@ -57,6 +57,11 @@ from repocompass.evaluation.localization_contracts import (
     observed_localization_metric,
     unavailable_localization_metric,
 )
+from repocompass.evaluation.localization_gold import (
+    MAX_GOLD_PATCH_BYTES,
+    GoldPatchLocalization,
+    derive_gold_patch_localization,
+)
 from repocompass.evaluation.localization_metrics import (
     PARTS_PER_MILLION,
     LocalizationAggregateRate,
@@ -98,6 +103,7 @@ __all__ = [
     "LiveProviderSmokeReport",
     "LiveProviderSmokeReportSink",
     "LiveProviderSmokeError",
+    "MAX_GOLD_PATCH_BYTES",
     "MAX_CONTEXT_ABLATION_CASE_FILE_BYTES",
     "MAX_LOCALIZATION_DATASET_FILE_BYTES",
     "MAX_MEMORY_ABLATION_CASE_FILE_BYTES",
@@ -107,6 +113,7 @@ __all__ = [
     "MemoryAblationReportSink",
     "MemoryAblationVariant",
     "MemoryAblationVariantMetrics",
+    "GoldPatchLocalization",
     "PARTS_PER_MILLION",
     "LocalizationAggregateRate",
     "LocalizationBudgetProfile",
@@ -141,6 +148,7 @@ __all__ = [
     "create_localization_run_observation",
     "create_localization_task",
     "create_unavailable_cost_observation",
+    "derive_gold_patch_localization",
     "evaluate_localization_case",
     "evaluate_localization_dataset",
     "create_memory_ablation_case",

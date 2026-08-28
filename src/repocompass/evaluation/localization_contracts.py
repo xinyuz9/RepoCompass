@@ -531,20 +531,27 @@ def create_localization_task(
 ) -> LocalizationTask:
     """Create one canonical task that can safely be passed to an Agent."""
 
+    string_values = (instance_id, repository, base_commit, objective)
+    if any(not isinstance(value, str) for value in string_values):
+        raise TypeError("localization task text fields must be strings")
+    canonical_instance_id = instance_id.strip()
+    canonical_repository = repository.strip()
+    canonical_base_commit = base_commit.strip()
+    canonical_objective = objective.strip()
     task_id = _task_id(
         dataset_kind=dataset_kind,
-        instance_id=instance_id,
-        repository=repository,
-        base_commit=base_commit,
-        objective=objective,
+        instance_id=canonical_instance_id,
+        repository=canonical_repository,
+        base_commit=canonical_base_commit,
+        objective=canonical_objective,
     )
     return LocalizationTask(
         task_id=task_id,
         dataset_kind=dataset_kind,
-        instance_id=instance_id,
-        repository=repository,
-        base_commit=base_commit,
-        objective=objective,
+        instance_id=canonical_instance_id,
+        repository=canonical_repository,
+        base_commit=canonical_base_commit,
+        objective=canonical_objective,
     )
 
 
