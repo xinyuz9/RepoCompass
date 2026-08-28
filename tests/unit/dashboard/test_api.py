@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fastapi.testclient import TestClient
 
 from repocompass.agent.trace import TraceEventKind
@@ -146,6 +148,10 @@ def test_read_api_returns_versioned_empty_states_and_security_headers() -> None:
     assert "repository_root" not in system.text
     assert system.headers["cache-control"] == "no-store"
     assert system.headers["x-content-type-options"] == "nosniff"
+    content_security_policy = system.headers["content-security-policy"]
+    assert "script-src 'self'" in content_security_policy
+    assert "style-src-elem 'self'" in content_security_policy
+    assert "style-src-attr 'unsafe-inline'" in content_security_policy
     assert threads.json()["threads"] == []
     assert memory.json()["availability"] == "not_configured"
 
@@ -233,3 +239,22 @@ def test_openapi_contains_only_read_dashboard_paths() -> None:
     serialized = str(document)
     assert "search_text" not in serialized
     assert "read_code" not in serialized
+
+
+def test_built_spa_is_same_origin_and_hashed_assets_are_immutable() -> None:
+    client = _client(_FakeDashboardService())
+
+    index = client.get("/")
+    assert index.status_code == 200
+    assert "RepoCompass · Investigation Observatory" in index.text
+    assert index.headers["cache-control"] == "no-store"
+    asset_match = re.search(r'src="(/assets/[^"]+\.js)"', index.text)
+    assert asset_match is not None
+
+    asset = client.get(asset_match.group(1))
+    assert asset.status_code == 200
+    assert asset.headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert asset.headers["x-content-type-options"] == "nosniff"
+    api_typo = client.get("/api/v1/typo")
+    assert api_typo.status_code == 404
+    assert api_typo.headers["content-type"].startswith("application/problem+json")

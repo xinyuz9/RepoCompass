@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Annotated, Protocol
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -37,10 +39,11 @@ DEFAULT_EVENT_PAGE_SIZE = 250
 MAX_EVENT_PAGE_SIZE = 1_000
 _ALLOWED_LOCAL_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testserver"})
 _SECURITY_HEADERS = {
-    "Cache-Control": "no-store",
     "Content-Security-Policy": (
         "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; "
-        "form-action 'self'; object-src 'none'"
+        "form-action 'self'; object-src 'none'; script-src 'self'; "
+        "connect-src 'self'; font-src 'self'; style-src-elem 'self'; "
+        "style-src-attr 'unsafe-inline'"
     ),
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
@@ -69,7 +72,11 @@ class DashboardReadService(Protocol):
     def get_memory_audit(self, memory_id: str) -> DashboardMemoryAudit: ...
 
 
-def create_dashboard_app(service: DashboardReadService) -> FastAPI:
+def create_dashboard_app(
+    service: DashboardReadService,
+    *,
+    static_directory: Path | None = None,
+) -> FastAPI:
     """Create a same-origin read API over one injected repository-bound service."""
 
     required_methods = (
@@ -91,6 +98,20 @@ def create_dashboard_app(service: DashboardReadService) -> FastAPI:
         redoc_url=None,
         openapi_url=f"{DASHBOARD_API_PREFIX}/openapi.json",
     )
+    resolved_static = (
+        Path(__file__).with_name("static")
+        if static_directory is None
+        else static_directory.expanduser().resolve()
+    )
+    static_index = resolved_static / "index.html"
+    static_assets = resolved_static / "assets"
+    static_available = static_index.is_file() and static_assets.is_dir()
+    if static_available:
+        app.mount(
+            "/assets",
+            StaticFiles(directory=static_assets, check_dir=True),
+            name="dashboard-assets",
+        )
 
     @app.middleware("http")
     async def local_host_and_security_headers(request: Request, call_next):
@@ -105,6 +126,10 @@ def create_dashboard_app(service: DashboardReadService) -> FastAPI:
             )
         else:
             response = await call_next(request)
+        if request.url.path.startswith("/assets/") and response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers.setdefault("Cache-Control", "no-store")
         for name, value in _SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
         return response
@@ -297,6 +322,20 @@ def create_dashboard_app(service: DashboardReadService) -> FastAPI:
     )
     def get_memory_audit(memory_id: str) -> DashboardMemoryAudit:
         return service.get_memory_audit(memory_id)
+
+    @app.get("/", include_in_schema=False)
+    def get_dashboard_index():
+        if not static_available:
+            raise HTTPException(status_code=404)
+        return FileResponse(static_index)
+
+    @app.get("/{frontend_path:path}", include_in_schema=False)
+    def get_dashboard_route(frontend_path: str):
+        if frontend_path == "api" or frontend_path.startswith("api/"):
+            raise HTTPException(status_code=404)
+        if not static_available:
+            raise HTTPException(status_code=404)
+        return FileResponse(static_index)
 
     return app
 

@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+ui/node_modules/
 
 # Local environment files
 .env
