@@ -101,6 +101,14 @@ def test_target_paths_must_be_canonical_repository_relative(path: str) -> None:
         ImproveTargetSelection(path=path)
 
 
+def test_verification_arguments_cannot_smuggle_command_flags() -> None:
+    with pytest.raises(ValidationError, match="command flags"):
+        VerificationSpec(
+            profile=PythonVerificationProfile.PYTEST,
+            arguments=("--pyargs",),
+        )
+
+
 def test_scope_rejects_dirty_snapshot_symlink_and_unknown_symbol(
     tmp_path: Path,
 ) -> None:

@@ -21,8 +21,17 @@ from repocompass.improve.scope import (
     ImproveScopeErrorReason,
     create_focused_improve_scope,
 )
+from repocompass.improve.sandbox import (
+    BubblewrapVerifier,
+    ProposalVerificationReport,
+    SandboxExecutionError,
+    SandboxUnavailableError,
+    VerificationDecisionReason,
+    VerificationStatus,
+)
 
 __all__ = [
+    "BubblewrapVerifier",
     "FocusedChangeProposal",
     "FocusedImproveScope",
     "ImproveScopeError",
@@ -30,11 +39,16 @@ __all__ = [
     "ImproveTargetSelection",
     "ProposalValidationError",
     "ProposalValidationErrorReason",
+    "ProposalVerificationReport",
     "PythonVerificationProfile",
     "ReplacementEdit",
     "ScopedImproveTarget",
+    "SandboxExecutionError",
+    "SandboxUnavailableError",
     "ValidatedFocusedChange",
     "VerificationSpec",
+    "VerificationDecisionReason",
+    "VerificationStatus",
     "create_change_proposal",
     "create_focused_improve_scope",
     "validate_focused_change_proposal",

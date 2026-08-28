@@ -133,6 +133,9 @@ class VerificationSpec(_ImproveContractModel):
                 maximum=MAX_VERIFICATION_ARGUMENT_CHARACTERS,
                 allow_surrounding_whitespace=True,
             )
+            if argument.startswith("-"):
+                raise ValueError("verification arguments cannot be command flags")
+            validate_improve_path(argument)
         return value
 
 
