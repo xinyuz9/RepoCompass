@@ -3,8 +3,10 @@
 from repocompass.dashboard.contracts import (
     DASHBOARD_SCHEMA_VERSION,
     DashboardAvailability,
+    DashboardEventStreamCursor,
     DashboardMemoryAudit,
     DashboardMemoryCatalog,
+    DashboardProblemDetail,
     DashboardRunDetail,
     DashboardRunSummary,
     DashboardSystemInfo,
@@ -29,8 +31,10 @@ from repocompass.dashboard.trace_store import (
 __all__ = [
     "DASHBOARD_SCHEMA_VERSION",
     "DashboardAvailability",
+    "DashboardEventStreamCursor",
     "DashboardMemoryAudit",
     "DashboardMemoryCatalog",
+    "DashboardProblemDetail",
     "DashboardNotFoundError",
     "DashboardQueryService",
     "DashboardRunDetail",

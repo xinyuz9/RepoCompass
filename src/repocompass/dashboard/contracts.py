@@ -134,6 +134,56 @@ class PublicTraceEvent(_DashboardModel):
     payload: dict[str, JsonValue] = Field(default_factory=dict)
 
 
+class DashboardEventStreamCursor(_DashboardModel):
+    """Terminal cursor emitted by one bounded SSE snapshot."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    availability: DashboardAvailability
+    after_sequence: int = Field(ge=-1, le=MAX_SAFE_JSON_INTEGER)
+    emitted_count: int = Field(ge=0, le=1_000)
+    next_after_sequence: int | None = Field(
+        default=None,
+        ge=0,
+        le=MAX_SAFE_JSON_INTEGER,
+    )
+    truncated: bool
+
+    @model_validator(mode="after")
+    def reconcile_stream_cursor(self) -> "DashboardEventStreamCursor":
+        if self.availability not in {
+            DashboardAvailability.AVAILABLE,
+            DashboardAvailability.NOT_PERSISTED,
+        }:
+            raise ValueError("event stream availability is invalid")
+        if self.availability is DashboardAvailability.NOT_PERSISTED and (
+            self.emitted_count != 0
+            or self.next_after_sequence is not None
+            or self.truncated
+        ):
+            raise ValueError("missing trace cannot emit events")
+        if (self.emitted_count == 0) != (self.next_after_sequence is None):
+            raise ValueError("event stream cursor and count disagree")
+        if self.truncated and self.next_after_sequence is None:
+            raise ValueError("truncated event stream requires a cursor")
+        if (
+            self.next_after_sequence is not None
+            and self.next_after_sequence <= self.after_sequence
+        ):
+            raise ValueError("event stream cursor did not advance")
+        return self
+
+
+class DashboardProblemDetail(_DashboardModel):
+    """Sanitized RFC 9457-style error body used by every HTTP failure."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    type: str = Field(pattern=r"^urn:repocompass:problem:[a-z0-9-]+$")
+    title: str = Field(min_length=1, max_length=128)
+    status: int = Field(ge=400, le=599)
+    detail: str = Field(min_length=1, max_length=1_024)
+    instance: str = Field(min_length=1, max_length=2_048)
+
+
 class PlanReplayFrame(_DashboardModel):
     schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
     run_id: str = Field(pattern=IDENTIFIER_PATTERN)
