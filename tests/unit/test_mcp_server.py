@@ -4,8 +4,9 @@ import asyncio
 from pathlib import Path
 
 from mcp import Client
+import pytest
 
-from repocompass.mcp_server import create_mcp_server
+from repocompass.mcp_server import create_mcp_server, main
 from tests.mcp_stub_service import StubInvestigationService
 
 PUBLIC_TOOLS = {
@@ -17,6 +18,34 @@ PUBLIC_TOOLS = {
     "resume_investigation",
     "get_evaluator_report",
 }
+
+
+def test_mcp_server_requires_an_existing_operator_bound_repository(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(FileNotFoundError):
+        create_mcp_server(
+            StubInvestigationService(),
+            repository_root=tmp_path / "missing",
+        )
+
+
+def test_mcp_http_transport_rejects_non_loopback_bind_before_model_setup(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "--repo-path",
+                str(tmp_path),
+                "--transport",
+                "streamable-http",
+                "--host",
+                "0.0.0.0",
+            ]
+        )
+
+    assert raised.value.code == 2
 
 
 def test_mcp_lists_only_high_level_tools_with_safety_annotations(
