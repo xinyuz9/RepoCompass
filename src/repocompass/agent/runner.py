@@ -372,6 +372,8 @@ class RunRequest(BaseModel):
     """Validated, trusted input required to start one investigation.
 
     Attributes:
+        thread_id: Optional application-assigned identity used by durable
+            idempotency boundaries. Model-visible inputs never control it.
         repo_path: Application-supplied repository root. The Runner must resolve
             it and reject paths that are not existing directories.
         objective: Non-empty repository investigation question.
@@ -396,6 +398,7 @@ class RunRequest(BaseModel):
         str_strip_whitespace=True,
     )
 
+    thread_id: str | None = Field(default=None, min_length=1, max_length=256)
     repo_path: Path
     objective: str = Field(min_length=1)
     max_tool_calls_per_step: int = Field(gt=0)
@@ -807,7 +810,7 @@ class AgentRunner:
             )
         repo_path = resolve_repository_path(request.repo_path)
         thread_id = _normalize_identifier(
-            self._thread_id_factory(),
+            request.thread_id or self._thread_id_factory(),
             name="thread_id",
         )
         initial_state = create_initial_state(
@@ -840,7 +843,7 @@ class AgentRunner:
         )
         config = _thread_config(thread_id)
         if graph.get_state(config).values:
-            raise ValueError(f"Generated thread ID already exists: {thread_id}")
+            raise ValueError(f"Checkpoint thread already exists: {thread_id}")
 
         return self._execute_graph(
             graph,

@@ -171,6 +171,42 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
     assert all(event.model_dump_json() for event in events)
 
 
+def test_runner_uses_trusted_explicit_thread_id_without_factory(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "example.py").write_text("value = True\n", encoding="utf-8")
+    final_result = FinalResult(
+        relevant_files=["example.py"],
+        evidence=["example.py contains the relevant implementation."],
+        summary="The relevant implementation is in example.py.",
+        unresolved_questions=[],
+    )
+    thread_id_factory = MagicMock(side_effect=AssertionError("must not run"))
+    runner = AgentRunner(
+        with_scripted_planner(
+            _create_scripted_model(
+                [AIMessage(content="Enough evidence is available.")],
+                final_result,
+            )
+        ),
+        checkpointer=InMemorySaver(),
+        thread_id_factory=thread_id_factory,
+    )
+
+    outcome = runner.run(
+        RunRequest(
+            thread_id="service-assigned-thread",
+            repo_path=tmp_path,
+            objective="Inspect the repository.",
+            max_tool_calls_per_step=2,
+            max_explorer_calls_per_step=2,
+        )
+    )
+
+    assert outcome.thread_id == "service-assigned-thread"
+    thread_id_factory.assert_not_called()
+
+
 def test_runner_omits_hidden_reasoning_and_secret_metadata_from_trace(
     tmp_path: Path,
 ) -> None:

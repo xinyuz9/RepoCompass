@@ -1,0 +1,61 @@
+"""Public application-service boundary for RepoCompass adapters."""
+
+from repocompass.service.contracts import (
+    ArtifactAvailability,
+    CodeGraphView,
+    ContextPackView,
+    EvaluatorReportView,
+    ExpandedSymbolView,
+    ExpandSymbolRequest,
+    InvestigationOperationKind,
+    InvestigationOperationResult,
+    LocalizationResultPayload,
+    LocalizationResultView,
+    ResumeInvestigationRequest,
+    StartInvestigationRequest,
+    ThreadArtifactRequest,
+)
+from repocompass.service.investigation import (
+    InvestigationArtifactUnavailableError,
+    InvestigationOperationPendingError,
+    InvestigationService,
+    InvestigationServiceError,
+    InvestigationSymbolAmbiguousError,
+    InvestigationSymbolNotFoundError,
+)
+from repocompass.service.operation_store import (
+    ServiceOperationConflictError,
+    ServiceOperationCorruptionError,
+    ServiceOperationMigrationError,
+    ServiceOperationStore,
+    ServiceOperationStoreError,
+    open_service_operation_store,
+)
+
+__all__ = [
+    "ArtifactAvailability",
+    "CodeGraphView",
+    "ContextPackView",
+    "EvaluatorReportView",
+    "ExpandSymbolRequest",
+    "ExpandedSymbolView",
+    "InvestigationArtifactUnavailableError",
+    "InvestigationOperationKind",
+    "InvestigationOperationPendingError",
+    "InvestigationOperationResult",
+    "InvestigationService",
+    "InvestigationServiceError",
+    "InvestigationSymbolAmbiguousError",
+    "InvestigationSymbolNotFoundError",
+    "LocalizationResultPayload",
+    "LocalizationResultView",
+    "ResumeInvestigationRequest",
+    "ServiceOperationConflictError",
+    "ServiceOperationCorruptionError",
+    "ServiceOperationMigrationError",
+    "ServiceOperationStore",
+    "ServiceOperationStoreError",
+    "StartInvestigationRequest",
+    "ThreadArtifactRequest",
+    "open_service_operation_store",
+]
