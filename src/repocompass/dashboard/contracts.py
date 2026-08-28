@@ -5,12 +5,13 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import ConfigDict, Field, JsonValue, model_validator
+from pydantic import ConfigDict, Field, JsonValue, field_validator, model_validator
 
 from repocompass.agent.context import ContextPack
 from repocompass.agent.cost import AttemptUsageCostReport
 from repocompass.agent.domain_model import CheckpointSafeModel
 from repocompass.agent.evaluation import EvaluationReport
+from repocompass.agent.lifecycle import HumanDecision
 from repocompass.agent.planning import InvestigationPlan
 from repocompass.agent.routing import TerminationStatus
 from repocompass.agent.thread_view import (
@@ -25,6 +26,7 @@ from repocompass.memory.contracts import (
     MemoryTombstone,
 )
 from repocompass.storage.raw_store import RawRunAttempt
+from repocompass.service.contracts import REQUEST_ID_PATTERN
 from repocompass.tools.contracts import (
     IDENTIFIER_PATTERN,
     MAX_SAFE_JSON_INTEGER,
@@ -184,6 +186,42 @@ class DashboardProblemDetail(_DashboardModel):
     instance: str = Field(min_length=1, max_length=2_048)
 
 
+class DashboardHumanResponseCommand(_DashboardModel):
+    """One idempotent decision bound to an exact pending interrupt."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    request_id: str = Field(pattern=REQUEST_ID_PATTERN)
+    interrupt_id: str = Field(pattern=IDENTIFIER_PATTERN, max_length=256)
+    decision: HumanDecision
+
+    @field_validator("decision", mode="before")
+    @classmethod
+    def decode_json_decision(cls, value: object) -> HumanDecision:
+        if isinstance(value, HumanDecision):
+            return value
+        return HumanDecision.model_validate(value, strict=False)
+
+    @model_validator(mode="after")
+    def bound_revision_feedback(self) -> "DashboardHumanResponseCommand":
+        if self.decision.feedback is not None and len(self.decision.feedback) > 16_384:
+            raise ValueError("revision feedback exceeds the dashboard limit")
+        return self
+
+
+class DashboardMemoryDeleteCommand(_DashboardModel):
+    """Explicit confirmation for one payload-free memory identity."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    request_id: str = Field(pattern=REQUEST_ID_PATTERN)
+    confirm_memory_id: Sha256Digest
+
+    @model_validator(mode="after")
+    def bind_idempotency_to_memory(self) -> "DashboardMemoryDeleteCommand":
+        if self.request_id != f"memory-delete:{self.confirm_memory_id}":
+            raise ValueError("memory deletion request_id must bind the exact identity")
+        return self
+
+
 class PlanReplayFrame(_DashboardModel):
     schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
     run_id: str = Field(pattern=IDENTIFIER_PATTERN)
@@ -296,4 +334,20 @@ class DashboardMemoryAudit(_DashboardModel):
             raise ValueError("memory audit identity disagrees")
         if any(event.memory_id != self.memory_id for event in self.events):
             raise ValueError("memory audit contains an unrelated event")
+        return self
+
+
+class DashboardMemoryDeleteResult(_DashboardModel):
+    """Idempotent proof that an exact memory identity is now deleted."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    request_id: str = Field(pattern=REQUEST_ID_PATTERN)
+    memory_id: Sha256Digest
+    tombstone: MemoryTombstone
+    idempotent_replay: bool
+
+    @model_validator(mode="after")
+    def reconcile_deleted_identity(self) -> "DashboardMemoryDeleteResult":
+        if self.tombstone.memory_id != self.memory_id:
+            raise ValueError("memory deletion result identity disagrees")
         return self

@@ -112,6 +112,65 @@ def test_operation_store_rejects_request_id_reuse_with_changed_payload() -> None
         )
 
 
+def test_operation_lookup_is_non_reserving_and_requires_exact_identity() -> None:
+    store = ServiceOperationStore(sqlite3.connect(":memory:"))
+
+    assert (
+        store.lookup(
+            request_id="request-1",
+            request_digest="a" * 64,
+            kind=InvestigationOperationKind.RESUME,
+            thread_id="thread-1",
+        )
+        is None
+    )
+    reservation = store.reserve(
+        request_id="request-1",
+        request_digest="a" * 64,
+        kind=InvestigationOperationKind.RESUME,
+        proposed_thread_id="thread-1",
+    )
+    pending = store.lookup(
+        request_id="request-1",
+        request_digest="a" * 64,
+        kind=InvestigationOperationKind.RESUME,
+        thread_id="thread-1",
+    )
+
+    assert reservation.state is OperationReservationState.NEW
+    assert pending is not None
+    assert pending.state is OperationReservationState.PENDING
+    with pytest.raises(ServiceOperationConflictError, match="different payload"):
+        store.lookup(
+            request_id="request-1",
+            request_digest="b" * 64,
+            kind=InvestigationOperationKind.RESUME,
+            thread_id="thread-1",
+        )
+    with pytest.raises(ServiceOperationConflictError, match="different thread"):
+        store.lookup(
+            request_id="request-1",
+            request_digest="a" * 64,
+            kind=InvestigationOperationKind.RESUME,
+            thread_id="thread-2",
+        )
+
+    store.complete(
+        request_id="request-1",
+        request_digest="a" * 64,
+        response=_result(),
+    )
+    completed = store.lookup(
+        request_id="request-1",
+        request_digest="a" * 64,
+        kind=InvestigationOperationKind.RESUME,
+        thread_id="thread-1",
+    )
+    assert completed is not None
+    assert completed.state is OperationReservationState.COMPLETED
+    assert completed.response == _result()
+
+
 def test_operation_store_detects_corrupt_persisted_response() -> None:
     connection = sqlite3.connect(":memory:")
     store = ServiceOperationStore(connection)

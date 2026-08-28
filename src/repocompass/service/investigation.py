@@ -192,6 +192,29 @@ class InvestigationService:
                 outcome=outcome,
             )
 
+    def replay_resume_investigation(
+        self,
+        request: ResumeInvestigationRequest,
+    ) -> InvestigationOperationResult | None:
+        """Return an exact existing resume/respond result without reserving a key."""
+
+        if not isinstance(request, ResumeInvestigationRequest):
+            raise TypeError("request must be a ResumeInvestigationRequest")
+        digest = self.request_digest(request)
+        with self._mutation_lock:
+            reservation = self._operation_store.lookup(
+                request_id=request.request_id,
+                request_digest=digest,
+                kind=request.operation_kind,
+                thread_id=request.thread_id,
+            )
+            if reservation is None:
+                return None
+            return self._resolve_existing_reservation(
+                reservation=reservation,
+                request_digest=digest,
+            )
+
     def resume_investigation(
         self,
         request: ResumeInvestigationRequest,

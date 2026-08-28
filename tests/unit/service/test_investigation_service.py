@@ -259,6 +259,41 @@ def test_resume_tool_preserves_resume_versus_human_response_semantics() -> None:
     assert runner.response_requests[0].interrupt_id == "interrupt-1"
 
 
+def test_resume_replay_lookup_never_reserves_and_executes_once() -> None:
+    runner = _FakeRunner()
+    service = _service(runner)
+    request = ResumeInvestigationRequest(
+        request_id="respond-replay-1",
+        thread_id="thread-1",
+        interrupt_id="interrupt-1",
+        decision=HumanDecision(
+            action=HumanDecisionAction.APPROVE,
+            feedback=None,
+        ),
+    )
+
+    assert service.replay_resume_investigation(request) is None
+    first = service.resume_investigation(request)
+    replay = service.replay_resume_investigation(request)
+
+    assert first.idempotent_replay is False
+    assert replay is not None
+    assert replay.idempotent_replay is True
+    assert replay.model_copy(update={"idempotent_replay": False}) == first
+    assert len(runner.response_requests) == 1
+
+    changed = request.model_copy(
+        update={
+            "decision": HumanDecision(
+                action=HumanDecisionAction.CANCEL,
+                feedback=None,
+            )
+        }
+    )
+    with pytest.raises(ServiceOperationConflictError, match="different payload"):
+        service.replay_resume_investigation(changed)
+
+
 def test_high_level_getters_never_offer_internal_repository_tools() -> None:
     runner = _FakeRunner()
     service = _service(runner)

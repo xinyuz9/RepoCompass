@@ -4,19 +4,32 @@ from __future__ import annotations
 
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 
+from repocompass.agent.thread_view import ThreadExecutionState
 from repocompass.agent.trace import TraceEventKind
 from repocompass.dashboard.api import create_dashboard_app
 from repocompass.dashboard.contracts import (
     DashboardAvailability,
+    DashboardHumanResponseCommand,
     DashboardMemoryCatalog,
+    DashboardMemoryDeleteCommand,
+    DashboardMemoryDeleteResult,
     DashboardRunDetail,
     DashboardSystemInfo,
     DashboardThreadCatalog,
     PublicTraceEvent,
 )
 from repocompass.dashboard.service import DashboardNotFoundError
+from repocompass.memory.contracts import (
+    MemoryAuditAction,
+    MemoryAuditReason,
+    MemoryScope,
+    create_memory_audit_event,
+    create_memory_tombstone,
+)
+from repocompass.service.contracts import InvestigationOperationResult
 from repocompass.storage.raw_store import (
     AttemptExecutionMode,
     AttemptStatus,
@@ -80,9 +93,16 @@ def _run_detail(
 
 
 class _FakeDashboardService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        lifecycle_mutations_enabled: bool = False,
+        memory_mutations_enabled: bool = False,
+    ) -> None:
         self.fail_system = False
         self.fail_threads = False
+        self.lifecycle_mutations_enabled = lifecycle_mutations_enabled
+        self.memory_mutations_enabled = memory_mutations_enabled
 
     def system_info(self) -> DashboardSystemInfo:
         if self.fail_system:
@@ -92,8 +112,8 @@ class _FakeDashboardService:
             repository_id="a" * 64,
             commit_sha="b" * 40,
             pricing_configured=False,
-            lifecycle_mutations_enabled=False,
-            memory_mutations_enabled=False,
+            lifecycle_mutations_enabled=self.lifecycle_mutations_enabled,
+            memory_mutations_enabled=self.memory_mutations_enabled,
         )
 
     def list_threads(self, *, max_results: int = 50) -> DashboardThreadCatalog:
@@ -127,6 +147,65 @@ class _FakeDashboardService:
 
     def get_memory_audit(self, memory_id: str):
         raise DashboardNotFoundError(f"missing memory {memory_id}")
+
+
+class _FakeDashboardCommands:
+    lifecycle_mutations_enabled = True
+    memory_mutations_enabled = True
+
+    def __init__(self) -> None:
+        self.response_calls: list[tuple[str, DashboardHumanResponseCommand]] = []
+        self.delete_calls: list[tuple[str, DashboardMemoryDeleteCommand]] = []
+
+    def respond_to_review(
+        self,
+        thread_id: str,
+        command: DashboardHumanResponseCommand,
+    ) -> InvestigationOperationResult:
+        self.response_calls.append((thread_id, command))
+        return InvestigationOperationResult(
+            request_id=command.request_id,
+            thread_id=thread_id,
+            execution_state=ThreadExecutionState.RESUMABLE,
+            run_id="response-run",
+            termination_status=None,
+            step_stop_reason=None,
+            next_nodes=("agent",),
+            final_result=None,
+            pending_review=None,
+            interrupt_id=None,
+            usage_cost_report=None,
+            idempotent_replay=False,
+            recovered_from_checkpoint=False,
+        )
+
+    def delete_memory(
+        self,
+        memory_id: str,
+        command: DashboardMemoryDeleteCommand,
+    ) -> DashboardMemoryDeleteResult:
+        self.delete_calls.append((memory_id, command))
+        event = create_memory_audit_event(
+            memory_id=memory_id,
+            repository_key="a" * 64,
+            action=MemoryAuditAction.DELETED,
+            reason=MemoryAuditReason.USER_REQUEST,
+            created_at_ms=2_000,
+        )
+        tombstone = create_memory_tombstone(
+            memory_id=memory_id,
+            repository_key="a" * 64,
+            memory_scope=MemoryScope.REPOSITORY,
+            deletion_event_id=event.event_id,
+            reason=MemoryAuditReason.USER_REQUEST,
+            deleted_at_ms=2_000,
+        )
+        return DashboardMemoryDeleteResult(
+            request_id=command.request_id,
+            memory_id=memory_id,
+            tombstone=tombstone,
+            idempotent_replay=False,
+        )
 
 
 def _client(service: _FakeDashboardService) -> TestClient:
@@ -236,6 +315,90 @@ def test_openapi_contains_only_read_dashboard_paths() -> None:
     assert document["paths"]
     for operations in document["paths"].values():
         assert set(operations).issubset({"get", "parameters"})
+    serialized = str(document)
+    assert "search_text" not in serialized
+    assert "read_code" not in serialized
+
+
+def test_mutation_routes_require_matching_capabilities() -> None:
+    commands = _FakeDashboardCommands()
+
+    with pytest.raises(ValueError, match="capabilities require"):
+        create_dashboard_app(_FakeDashboardService(lifecycle_mutations_enabled=True))
+    with pytest.raises(ValueError, match="do not reconcile"):
+        create_dashboard_app(_FakeDashboardService(), commands=commands)
+
+
+def test_explicit_mutations_require_idempotency_and_same_origin() -> None:
+    service = _FakeDashboardService(
+        lifecycle_mutations_enabled=True,
+        memory_mutations_enabled=True,
+    )
+    commands = _FakeDashboardCommands()
+    client = TestClient(
+        create_dashboard_app(service, commands=commands),
+        raise_server_exceptions=False,
+    )
+    response_body = {
+        "request_id": "review-command-1",
+        "interrupt_id": "interrupt-1",
+        "decision": {"action": "approve", "feedback": None},
+    }
+
+    missing_key = client.post(
+        "/api/v1/threads/thread-1/responses",
+        json=response_body,
+    )
+    mismatched_key = client.post(
+        "/api/v1/threads/thread-1/responses",
+        json=response_body,
+        headers={"Idempotency-Key": "review-command-other"},
+    )
+    cross_site = client.post(
+        "/api/v1/threads/thread-1/responses",
+        json=response_body,
+        headers={
+            "Idempotency-Key": "review-command-1",
+            "Origin": "http://attacker.example",
+            "Sec-Fetch-Site": "cross-site",
+        },
+    )
+    accepted = client.post(
+        "/api/v1/threads/thread-1/responses",
+        json=response_body,
+        headers={
+            "Idempotency-Key": "review-command-1",
+            "Origin": "http://testserver",
+            "Sec-Fetch-Site": "same-origin",
+        },
+    )
+
+    assert missing_key.status_code == 422
+    assert mismatched_key.status_code == 409
+    assert cross_site.status_code == 403
+    assert cross_site.json()["type"].endswith("cross-site-mutation")
+    assert accepted.status_code == 200
+    assert accepted.json()["request_id"] == "review-command-1"
+    assert len(commands.response_calls) == 1
+
+    memory_id = "d" * 64
+    memory_request_id = f"memory-delete:{memory_id}"
+    deleted = client.request(
+        "DELETE",
+        f"/api/v1/memory/{memory_id}",
+        json={
+            "request_id": memory_request_id,
+            "confirm_memory_id": memory_id,
+        },
+        headers={"Idempotency-Key": memory_request_id},
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["memory_id"] == memory_id
+    assert len(commands.delete_calls) == 1
+
+    document = client.get("/api/v1/openapi.json").json()
+    assert set(document["paths"]["/api/v1/threads/{thread_id}/responses"]) == {"post"}
+    assert set(document["paths"]["/api/v1/memory/{memory_id}"]) == {"delete"}
     serialized = str(document)
     assert "search_text" not in serialized
     assert "read_code" not in serialized

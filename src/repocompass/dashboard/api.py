@@ -6,8 +6,9 @@ import sqlite3
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Annotated, Protocol
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,13 +17,20 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from repocompass.dashboard.contracts import (
     DashboardEventStreamCursor,
+    DashboardHumanResponseCommand,
     DashboardMemoryAudit,
     DashboardMemoryCatalog,
+    DashboardMemoryDeleteCommand,
+    DashboardMemoryDeleteResult,
     DashboardProblemDetail,
     DashboardRunDetail,
     DashboardSystemInfo,
     DashboardThreadCatalog,
     DashboardThreadDetail,
+)
+from repocompass.dashboard.commands import (
+    DashboardCommandConflictError,
+    DashboardCommandUnavailableError,
 )
 from repocompass.dashboard.service import (
     DashboardNotFoundError,
@@ -31,6 +39,10 @@ from repocompass.dashboard.service import (
 from repocompass.memory.contracts import MemoryScope
 from repocompass.memory.store import MemoryStoreError
 from repocompass.storage.raw_store import RawStoreError
+from repocompass.service.contracts import (
+    InvestigationOperationResult,
+    REQUEST_ID_PATTERN,
+)
 from repocompass.tools.contracts import MAX_SAFE_JSON_INTEGER
 
 DASHBOARD_API_VERSION = "v1"
@@ -72,12 +84,33 @@ class DashboardReadService(Protocol):
     def get_memory_audit(self, memory_id: str) -> DashboardMemoryAudit: ...
 
 
+class DashboardMutationService(Protocol):
+    @property
+    def lifecycle_mutations_enabled(self) -> bool: ...
+
+    @property
+    def memory_mutations_enabled(self) -> bool: ...
+
+    def respond_to_review(
+        self,
+        thread_id: str,
+        command: DashboardHumanResponseCommand,
+    ) -> InvestigationOperationResult: ...
+
+    def delete_memory(
+        self,
+        memory_id: str,
+        command: DashboardMemoryDeleteCommand,
+    ) -> DashboardMemoryDeleteResult: ...
+
+
 def create_dashboard_app(
     service: DashboardReadService,
     *,
+    commands: DashboardMutationService | None = None,
     static_directory: Path | None = None,
 ) -> FastAPI:
-    """Create a same-origin read API over one injected repository-bound service."""
+    """Create a local API with optional, explicitly injected command routes."""
 
     required_methods = (
         "system_info",
@@ -89,6 +122,26 @@ def create_dashboard_app(
     )
     if not all(callable(getattr(service, method, None)) for method in required_methods):
         raise TypeError("service does not implement the dashboard read boundary")
+    capabilities = service.system_info()
+    if commands is None:
+        if (
+            capabilities.lifecycle_mutations_enabled
+            or capabilities.memory_mutations_enabled
+        ):
+            raise ValueError("dashboard capabilities require a command service")
+    else:
+        command_methods = ("respond_to_review", "delete_memory")
+        if not all(callable(getattr(commands, name, None)) for name in command_methods):
+            raise TypeError(
+                "commands does not implement the dashboard mutation boundary"
+            )
+        if (
+            commands.lifecycle_mutations_enabled
+            != capabilities.lifecycle_mutations_enabled
+            or commands.memory_mutations_enabled
+            != capabilities.memory_mutations_enabled
+        ):
+            raise ValueError("dashboard command capabilities do not reconcile")
 
     app = FastAPI(
         title="RepoCompass Local Investigation API",
@@ -124,6 +177,14 @@ def create_dashboard_app(
                 detail="The RepoCompass dashboard accepts local Host headers only.",
                 instance=request.url.path,
             )
+        elif _is_api_mutation(request) and not _mutation_origin_allowed(request, host):
+            response = _problem_response(
+                status=403,
+                code="cross-site-mutation",
+                title="Mutation rejected",
+                detail="Dashboard mutations require a same-origin local request.",
+                instance=request.url.path,
+            )
         else:
             response = await call_next(request)
         if request.url.path.startswith("/assets/") and response.status_code == 200:
@@ -141,6 +202,32 @@ def create_dashboard_app(
             code="not-found",
             title="Resource not found",
             detail="The requested repository-bound dashboard resource was not found.",
+            instance=request.url.path,
+        )
+
+    @app.exception_handler(DashboardCommandConflictError)
+    async def dashboard_command_conflict(
+        request: Request,
+        _: DashboardCommandConflictError,
+    ):
+        return _problem_response(
+            status=409,
+            code="mutation-conflict",
+            title="Mutation conflict",
+            detail="The command conflicts with current state or prior identity.",
+            instance=request.url.path,
+        )
+
+    @app.exception_handler(DashboardCommandUnavailableError)
+    async def dashboard_command_unavailable(
+        request: Request,
+        _: DashboardCommandUnavailableError,
+    ):
+        return _problem_response(
+            status=503,
+            code="mutation-unavailable",
+            title="Mutation unavailable",
+            detail="The local mutation could not be completed safely.",
             instance=request.url.path,
         )
 
@@ -323,6 +410,56 @@ def create_dashboard_app(
     def get_memory_audit(memory_id: str) -> DashboardMemoryAudit:
         return service.get_memory_audit(memory_id)
 
+    if commands is not None and commands.lifecycle_mutations_enabled:
+
+        @app.post(
+            f"{DASHBOARD_API_PREFIX}/threads/{{thread_id}}/responses",
+            response_model=InvestigationOperationResult,
+        )
+        def respond_to_review(
+            thread_id: str,
+            command: DashboardHumanResponseCommand,
+            idempotency_key: Annotated[
+                str,
+                Header(
+                    alias="Idempotency-Key",
+                    pattern=REQUEST_ID_PATTERN,
+                    min_length=1,
+                    max_length=128,
+                ),
+            ],
+        ) -> InvestigationOperationResult:
+            if idempotency_key != command.request_id:
+                raise DashboardCommandConflictError(
+                    "idempotency header does not match command"
+                )
+            return commands.respond_to_review(thread_id, command)
+
+    if commands is not None and commands.memory_mutations_enabled:
+
+        @app.delete(
+            f"{DASHBOARD_API_PREFIX}/memory/{{memory_id}}",
+            response_model=DashboardMemoryDeleteResult,
+        )
+        def delete_memory(
+            memory_id: str,
+            command: DashboardMemoryDeleteCommand,
+            idempotency_key: Annotated[
+                str,
+                Header(
+                    alias="Idempotency-Key",
+                    pattern=REQUEST_ID_PATTERN,
+                    min_length=1,
+                    max_length=128,
+                ),
+            ],
+        ) -> DashboardMemoryDeleteResult:
+            if idempotency_key != command.request_id:
+                raise DashboardCommandConflictError(
+                    "idempotency header does not match command"
+                )
+            return commands.delete_memory(memory_id, command)
+
     @app.get("/", include_in_schema=False)
     def get_dashboard_index():
         if not static_available:
@@ -380,3 +517,36 @@ def _host_without_port(value: str) -> str:
     if normalized.count(":") == 1:
         return normalized.rsplit(":", maxsplit=1)[0]
     return normalized
+
+
+def _is_api_mutation(request: Request) -> bool:
+    return request.method in {"POST", "PUT", "PATCH", "DELETE"} and (
+        request.url.path.startswith(f"{DASHBOARD_API_PREFIX}/")
+    )
+
+
+def _mutation_origin_allowed(request: Request, host: str) -> bool:
+    fetch_site = request.headers.get("sec-fetch-site")
+    if fetch_site not in {None, "none", "same-origin"}:
+        return False
+    origin = request.headers.get("origin")
+    if origin is None:
+        return True
+    parsed = urlsplit(origin)
+    if (
+        parsed.scheme.casefold() != request.url.scheme.casefold()
+        or parsed.hostname is None
+        or parsed.hostname.casefold() != host
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        return False
+    try:
+        origin_port = parsed.port
+    except ValueError:
+        return False
+    default_port = 443 if parsed.scheme.casefold() == "https" else 80
+    return (origin_port or default_port) == (request.url.port or default_port)

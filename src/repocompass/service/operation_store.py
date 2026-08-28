@@ -76,6 +76,69 @@ class ServiceOperationStore:
             raise ServiceOperationCorruptionError("operation schema version is invalid")
         return row[0]
 
+    def lookup(
+        self,
+        *,
+        request_id: str,
+        request_digest: str,
+        kind: InvestigationOperationKind | str,
+        thread_id: str,
+    ) -> OperationReservation | None:
+        """Resolve an existing exact operation without reserving a new key."""
+
+        normalized_request_id = _validate_request_id(request_id)
+        normalized_digest = _validate_digest(request_digest)
+        normalized_kind = _normalize_kind(kind)
+        normalized_thread_id = _validate_thread_id(thread_id)
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT request_digest, operation_kind, thread_id, response_json
+                FROM service_operations
+                WHERE request_id = ?
+                """,
+                (normalized_request_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        stored_digest, stored_kind, stored_thread_id, response_json = row
+        if stored_digest != normalized_digest:
+            raise ServiceOperationConflictError(
+                "request_id was already used with a different payload"
+            )
+        if stored_kind != normalized_kind.value:
+            raise ServiceOperationConflictError(
+                "request_id was already used for a different operation kind"
+            )
+        if _validate_thread_id(stored_thread_id) != normalized_thread_id:
+            raise ServiceOperationConflictError(
+                "request_id was already used for a different thread"
+            )
+        if response_json is None:
+            return OperationReservation(
+                request_id=normalized_request_id,
+                request_digest=normalized_digest,
+                kind=normalized_kind,
+                thread_id=normalized_thread_id,
+                state=OperationReservationState.PENDING,
+            )
+        response = _decode_response(response_json)
+        if (
+            response.request_id != normalized_request_id
+            or response.thread_id != normalized_thread_id
+        ):
+            raise ServiceOperationCorruptionError(
+                "persisted operation response identity does not reconcile"
+            )
+        return OperationReservation(
+            request_id=normalized_request_id,
+            request_digest=normalized_digest,
+            kind=normalized_kind,
+            thread_id=normalized_thread_id,
+            state=OperationReservationState.COMPLETED,
+            response=response,
+        )
+
     def reserve(
         self,
         *,

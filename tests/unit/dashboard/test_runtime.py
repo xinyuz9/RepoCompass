@@ -29,11 +29,17 @@ def test_runtime_serves_loopback_read_api_without_provider_credentials(
 
     def fake_run(app, **kwargs) -> None:
         observed.update(kwargs)
-        response = TestClient(app).get("/api/v1/system")
-        threads = TestClient(app).get("/api/v1/threads")
+        client = TestClient(app)
+        response = client.get("/api/v1/system")
+        threads = client.get("/api/v1/threads")
+        document = client.get("/api/v1/openapi.json").json()
         assert response.status_code == 200
         assert response.json()["pricing_configured"] is False
+        assert response.json()["lifecycle_mutations_enabled"] is False
+        assert response.json()["memory_mutations_enabled"] is False
         assert threads.json()["threads"] == []
+        assert "/api/v1/threads/{thread_id}/responses" not in document["paths"]
+        assert "/api/v1/memory/{memory_id}" not in document["paths"]
 
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
@@ -60,6 +66,106 @@ def test_runtime_serves_loopback_read_api_without_provider_credentials(
     assert observed["proxy_headers"] is False
     assert observed["forwarded_allow_ips"] == ""
     assert observed["limit_concurrency"] == 32
+
+
+def test_runtime_memory_mutation_is_independent_and_explicit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    state = tmp_path / "state"
+    operation_database = state / "operations.sqlite"
+
+    def forbid_workflow_models():
+        raise AssertionError("memory-only runtime must not load provider models")
+
+    def fake_run(app, **kwargs) -> None:
+        del kwargs
+        client = TestClient(app)
+        system = client.get("/api/v1/system").json()
+        document = client.get("/api/v1/openapi.json").json()
+        assert system["lifecycle_mutations_enabled"] is False
+        assert system["memory_mutations_enabled"] is True
+        assert "/api/v1/threads/{thread_id}/responses" not in document["paths"]
+        assert set(document["paths"]["/api/v1/memory/{memory_id}"]) == {"delete"}
+
+    monkeypatch.setattr(runtime, "create_workflow_models", forbid_workflow_models)
+    monkeypatch.setattr(runtime.uvicorn, "run", fake_run)
+
+    result = runtime.main(
+        [
+            "--repo-path",
+            str(repository),
+            "--checkpoint-db",
+            str(state / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(state / "raw.sqlite"),
+            "--memory-db",
+            str(state / "memory.sqlite"),
+            "--operation-db",
+            str(operation_database),
+            "--trace-dir",
+            str(state / "traces"),
+            "--enable-memory-mutations",
+        ]
+    )
+
+    assert result == 0
+    assert not operation_database.exists()
+
+
+def test_runtime_lifecycle_mutation_loads_models_and_durable_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    state = tmp_path / "state"
+    operation_database = state / "operations.sqlite"
+    model_factory_calls = 0
+
+    def fake_workflow_models():
+        nonlocal model_factory_calls
+        model_factory_calls += 1
+        return runtime.create_inspection_models()
+
+    def fake_run(app, **kwargs) -> None:
+        del kwargs
+        client = TestClient(app)
+        system = client.get("/api/v1/system").json()
+        document = client.get("/api/v1/openapi.json").json()
+        assert system["lifecycle_mutations_enabled"] is True
+        assert system["memory_mutations_enabled"] is False
+        assert set(document["paths"]["/api/v1/threads/{thread_id}/responses"]) == {
+            "post"
+        }
+        assert "/api/v1/memory/{memory_id}" not in document["paths"]
+
+    monkeypatch.setattr(runtime, "create_workflow_models", fake_workflow_models)
+    monkeypatch.setattr(runtime.uvicorn, "run", fake_run)
+
+    result = runtime.main(
+        [
+            "--repo-path",
+            str(repository),
+            "--checkpoint-db",
+            str(state / "checkpoints.sqlite"),
+            "--raw-store-db",
+            str(state / "raw.sqlite"),
+            "--memory-db",
+            str(state / "memory.sqlite"),
+            "--operation-db",
+            str(operation_database),
+            "--trace-dir",
+            str(state / "traces"),
+            "--enable-lifecycle-mutations",
+        ]
+    )
+
+    assert result == 0
+    assert model_factory_calls == 1
+    assert operation_database.is_file()
 
 
 def test_runtime_parser_rejects_non_loopback_host_and_invalid_port(
