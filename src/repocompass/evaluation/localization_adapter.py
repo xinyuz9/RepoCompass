@@ -5,11 +5,17 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from time import monotonic_ns
 from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
+from repocompass.agent.architecture import (
+    AgentArchitecturePreset,
+    AgentArchitectureProfile,
+    create_agent_architecture_profile,
+)
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.cost import (
     CostCoverage,
@@ -18,7 +24,7 @@ from repocompass.agent.cost import (
 )
 from repocompass.agent.evaluation import EvaluationReport
 from repocompass.agent.lifecycle import ExecutionStatus, HumanReviewPolicy
-from repocompass.agent.runner import RunOutcome, RunRequest
+from repocompass.agent.runner import AgentRunner, RunOutcome, RunRequest
 from repocompass.agent.trace import RunTrace, TraceEventKind
 from repocompass.evaluation.localization_contracts import (
     MAX_PREDICTED_FILES,
@@ -72,9 +78,63 @@ class LocalizationVariantExecutor(Protocol):
     """One explicitly labelled architecture implementation under evaluation."""
 
     variant: LocalizationVariant
+    architecture_profile: AgentArchitectureProfile
 
     def run(self, request: RunRequest) -> RunOutcome:
         """Execute one label-free production RunRequest."""
+
+
+@dataclass(frozen=True, slots=True)
+class AgentRunnerVariantExecutor:
+    """Bind one AgentRunner to a truthful localization architecture label."""
+
+    variant: LocalizationVariant
+    runner: AgentRunner
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.variant, LocalizationVariant):
+            raise TypeError("variant must be a LocalizationVariant")
+        if not isinstance(self.runner, AgentRunner):
+            raise TypeError("runner must be an AgentRunner")
+        if self.runner.architecture_profile != localization_architecture_profile(
+            self.variant
+        ):
+            raise ValueError("AgentRunner architecture does not match variant")
+
+    @property
+    def architecture_profile(self) -> AgentArchitectureProfile:
+        return self.runner.architecture_profile
+
+    def run(self, request: RunRequest) -> RunOutcome:
+        expected_memory = (
+            self.variant is LocalizationVariant.EVALUATOR_LOOP_CONTEXT_BUILDER_MEMORY
+        )
+        if request.memory_retrieval_enabled is not expected_memory:
+            raise ValueError("RunRequest memory mode does not match variant")
+        return self.runner.run(request)
+
+
+def localization_architecture_profile(
+    variant: LocalizationVariant,
+) -> AgentArchitectureProfile:
+    """Return the exact static graph profile required by one M6 variant."""
+
+    if not isinstance(variant, LocalizationVariant):
+        raise TypeError("variant must be a LocalizationVariant")
+    preset = {
+        LocalizationVariant.TOOL_WRAPPER: AgentArchitecturePreset.TOOL_WRAPPER,
+        LocalizationVariant.EVALUATOR_LOOP: AgentArchitecturePreset.EVALUATOR_LOOP,
+        LocalizationVariant.EVALUATOR_LOOP_SYMBOL_TOOLS: (
+            AgentArchitecturePreset.EVALUATOR_LOOP_SYMBOL_TOOLS
+        ),
+        LocalizationVariant.EVALUATOR_LOOP_CONTEXT_BUILDER: (
+            AgentArchitecturePreset.EVALUATOR_LOOP_CONTEXT_BUILDER
+        ),
+        LocalizationVariant.EVALUATOR_LOOP_CONTEXT_BUILDER_MEMORY: (
+            AgentArchitecturePreset.EVALUATOR_LOOP_CONTEXT_BUILDER
+        ),
+    }[variant]
+    return create_agent_architecture_profile(preset)
 
 
 def create_localization_run_request(
@@ -204,6 +264,12 @@ class LocalizationBenchmarkRunner:
             if executor.variant is not variant:
                 raise ValueError(
                     "executor label does not match its variant mapping key"
+                )
+            if executor.architecture_profile != localization_architecture_profile(
+                variant
+            ):
+                raise ValueError(
+                    "executor architecture profile does not match its variant"
                 )
         if not callable(clock_ns) or not callable(failed_run_id_factory):
             raise TypeError("clock and failed run ID factory must be callable")
@@ -541,15 +607,36 @@ def _latest_model(
         if payload is None:
             continue
         try:
-            return expected_type.model_validate_json(
+            expected_passed = None
+            normalized_payload = payload
+            if expected_type is EvaluationReport:
+                if not isinstance(payload, dict):
+                    raise TypeError("evaluation report payload must be an object")
+                extras = set(payload) - set(EvaluationReport.model_fields)
+                if not extras.issubset({"passed"}):
+                    raise ValueError("evaluation report has unexpected fields")
+                expected_passed = payload.get("passed")
+                if expected_passed is not None and type(expected_passed) is not bool:
+                    raise TypeError("evaluation report passed field must be a bool")
+                normalized_payload = {
+                    name: value for name, value in payload.items() if name != "passed"
+                }
+            parsed = expected_type.model_validate_json(
                 json.dumps(
-                    payload,
+                    normalized_payload,
                     ensure_ascii=False,
                     allow_nan=False,
                     sort_keys=True,
                     separators=(",", ":"),
                 )
             )
+            if (
+                expected_type is EvaluationReport
+                and expected_passed is not None
+                and parsed.passed is not expected_passed
+            ):
+                raise ValueError("evaluation report computed pass result is invalid")
+            return parsed
         except (TypeError, ValueError) as error:
             raise ValueError(f"trace {node} payload is invalid") from error
     return None

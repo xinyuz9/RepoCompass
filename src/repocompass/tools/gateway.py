@@ -814,53 +814,59 @@ class ToolGateway:
         )
 
 
-def create_repository_tool_registry() -> ToolRegistry:
+def create_repository_tool_registry(
+    *,
+    include_structural: bool = True,
+) -> ToolRegistry:
     """Build the immutable registry for every model-visible repository tool."""
 
-    return ToolRegistry(
-        (
-            ToolRegistration(
-                descriptor=REPOSITORY_TOOL_DESCRIPTORS["list_tree"],
-                arguments_model=ListTreeArguments,
-                executor=_execute_list_tree,
-            ),
-            ToolRegistration(
-                descriptor=REPOSITORY_TOOL_DESCRIPTORS["search_text"],
-                arguments_model=SearchTextArguments,
-                executor=_execute_search_text,
-            ),
-            ToolRegistration(
-                descriptor=REPOSITORY_TOOL_DESCRIPTORS["read_code"],
-                arguments_model=ReadCodeArguments,
-                executor=_execute_read_code,
-                repository_path_field="relative_path",
-            ),
-            ToolRegistration(
-                descriptor=REPOSITORY_TOOL_DESCRIPTORS["list_symbols"],
-                arguments_model=ListSymbolsArguments,
-                executor=_execute_list_symbols,
-                repository_path_field="relative_path",
-            ),
-            ToolRegistration(
-                descriptor=REPOSITORY_TOOL_DESCRIPTORS["inspect_imports"],
-                arguments_model=InspectImportsArguments,
-                executor=_execute_inspect_imports,
-                repository_path_field="relative_path",
-            ),
-            ToolRegistration(
-                descriptor=REPOSITORY_TOOL_DESCRIPTORS["find_symbol_definition"],
-                arguments_model=FindSymbolDefinitionArguments,
-                executor=_execute_find_symbol_definition,
-                repository_path_field="relative_path",
-            ),
-            ToolRegistration(
-                descriptor=REPOSITORY_TOOL_DESCRIPTORS["find_references"],
-                arguments_model=FindReferencesArguments,
-                executor=_execute_find_references,
-                repository_path_field="relative_path",
-            ),
-        )
+    if type(include_structural) is not bool:
+        raise TypeError("include_structural must be a bool")
+    registrations = (
+        ToolRegistration(
+            descriptor=REPOSITORY_TOOL_DESCRIPTORS["list_tree"],
+            arguments_model=ListTreeArguments,
+            executor=_execute_list_tree,
+        ),
+        ToolRegistration(
+            descriptor=REPOSITORY_TOOL_DESCRIPTORS["search_text"],
+            arguments_model=SearchTextArguments,
+            executor=_execute_search_text,
+        ),
+        ToolRegistration(
+            descriptor=REPOSITORY_TOOL_DESCRIPTORS["read_code"],
+            arguments_model=ReadCodeArguments,
+            executor=_execute_read_code,
+            repository_path_field="relative_path",
+        ),
+        ToolRegistration(
+            descriptor=REPOSITORY_TOOL_DESCRIPTORS["list_symbols"],
+            arguments_model=ListSymbolsArguments,
+            executor=_execute_list_symbols,
+            repository_path_field="relative_path",
+        ),
+        ToolRegistration(
+            descriptor=REPOSITORY_TOOL_DESCRIPTORS["inspect_imports"],
+            arguments_model=InspectImportsArguments,
+            executor=_execute_inspect_imports,
+            repository_path_field="relative_path",
+        ),
+        ToolRegistration(
+            descriptor=REPOSITORY_TOOL_DESCRIPTORS["find_symbol_definition"],
+            arguments_model=FindSymbolDefinitionArguments,
+            executor=_execute_find_symbol_definition,
+            repository_path_field="relative_path",
+        ),
+        ToolRegistration(
+            descriptor=REPOSITORY_TOOL_DESCRIPTORS["find_references"],
+            arguments_model=FindReferencesArguments,
+            executor=_execute_find_references,
+            repository_path_field="relative_path",
+        ),
     )
+    if not include_structural:
+        registrations = registrations[:3]
+    return ToolRegistry(registrations)
 
 
 def _execute_list_tree(

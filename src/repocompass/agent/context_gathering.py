@@ -26,6 +26,7 @@ from repocompass.agent.context import (
 )
 from repocompass.agent.context_builder import (
     ContextBudgetPolicy,
+    ContextSelectionStrategy,
     ContextSectionReservation,
     build_active_context,
     render_context_pack,
@@ -140,6 +141,9 @@ def gather_planner_context(
     max_tool_calls_per_step: int,
     max_explorer_calls_per_step: int,
     budget_tokens: int,
+    selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> GatheredContext:
     """Gather the planner's isolated objective and execution budgets."""
 
@@ -170,6 +174,7 @@ def gather_planner_context(
         budget_tokens=budget_tokens,
         reserve_evidence=False,
         reserve_feedback=False,
+        selection_strategy=selection_strategy,
     )
 
 
@@ -184,6 +189,9 @@ def gather_explorer_context(
     evaluation_report: EvaluationReport | None,
     budget_tokens: int,
     memory_items: tuple[ContextItem, ...] = (),
+    selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> GatheredContext:
     """Gather active-step instructions, successful tool evidence, and feedback."""
 
@@ -252,6 +260,7 @@ def gather_explorer_context(
         reserve_evidence=True,
         reserve_feedback=evaluation_report is not None,
         reserve_memory=bool(memory_items),
+        selection_strategy=selection_strategy,
     )
 
 
@@ -263,6 +272,9 @@ def gather_candidate_context(
     step_stop_reason: str,
     messages: tuple[AnyMessage, ...],
     budget_tokens: int,
+    selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> GatheredContext:
     """Gather bounded successful repository evidence for candidate synthesis."""
 
@@ -297,6 +309,7 @@ def gather_candidate_context(
         budget_tokens=budget_tokens,
         reserve_evidence=True,
         reserve_feedback=False,
+        selection_strategy=selection_strategy,
     )
 
 
@@ -310,6 +323,9 @@ def gather_evaluator_context(
     evidence_pack: tuple[EvidenceExcerpt, ...],
     budget_tokens: int,
     investigation_structure: InvestigationStructure | None = None,
+    selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> GatheredContext:
     """Gather only validated candidate/evidence inputs for the evaluator."""
 
@@ -408,6 +424,7 @@ def gather_evaluator_context(
         budget_tokens=budget_tokens,
         reserve_evidence=True,
         reserve_feedback=bool(deterministic_issues),
+        selection_strategy=selection_strategy,
     )
 
 
@@ -423,6 +440,9 @@ def gather_replanner_context(
     max_explorer_calls_per_step: int,
     budget_tokens: int,
     memory_items: tuple[ContextItem, ...] = (),
+    selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> GatheredContext:
     """Gather the complete required replanning state without Explorer history."""
 
@@ -521,6 +541,7 @@ def gather_replanner_context(
         reserve_evidence=False,
         reserve_feedback=True,
         reserve_memory=bool(memory_items),
+        selection_strategy=selection_strategy,
     )
 
 
@@ -1045,23 +1066,27 @@ def _build_gathered_context(
     reserve_evidence: bool,
     reserve_feedback: bool,
     reserve_memory: bool = False,
+    selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> GatheredContext:
     reservations: list[ContextSectionReservation] = []
-    if reserve_evidence and budget_tokens // 2 >= 1:
+    prioritized = selection_strategy is ContextSelectionStrategy.PRIORITIZED
+    if prioritized and reserve_evidence and budget_tokens // 2 >= 1:
         reservations.append(
             ContextSectionReservation(
                 section=ContextSection.EVIDENCE,
                 reserved_tokens=budget_tokens // 2,
             )
         )
-    if reserve_feedback and budget_tokens // 8 >= 1:
+    if prioritized and reserve_feedback and budget_tokens // 8 >= 1:
         reservations.append(
             ContextSectionReservation(
                 section=ContextSection.FEEDBACK,
                 reserved_tokens=budget_tokens // 8,
             )
         )
-    if reserve_memory and budget_tokens // 8 >= 1:
+    if prioritized and reserve_memory and budget_tokens // 8 >= 1:
         reservations.append(
             ContextSectionReservation(
                 section=ContextSection.MEMORY,
@@ -1072,8 +1097,9 @@ def _build_gathered_context(
         candidates=candidates,
         policy=ContextBudgetPolicy(
             budget_tokens=budget_tokens,
+            selection_strategy=selection_strategy,
             section_reservations=tuple(reservations),
-            compression_enabled=True,
+            compression_enabled=prioritized,
             min_compressed_content_bytes=64,
         ),
     )

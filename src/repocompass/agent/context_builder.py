@@ -2,6 +2,7 @@
 
 import json
 from collections import defaultdict
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import ConfigDict, Field, model_validator
@@ -28,6 +29,13 @@ from repocompass.tools.contracts import MAX_SAFE_JSON_INTEGER
 CONTEXT_BUILDER_SCHEMA_VERSION = 1
 DEFAULT_CONTEXT_BUDGET_TOKENS = 32_768
 _TRUNCATION_MARKER = "\n[TRUNCATED: full content retained in raw artifact]"
+
+
+class ContextSelectionStrategy(StrEnum):
+    """Closed selection policies used by architecture ablations."""
+
+    FIFO = "fifo"
+    PRIORITIZED = "prioritized"
 
 
 class ContextBuilderError(RuntimeError):
@@ -68,6 +76,7 @@ class ContextBudgetPolicy(_BuilderContractModel):
 
     schema_version: Literal[1] = CONTEXT_BUILDER_SCHEMA_VERSION
     budget_tokens: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+    selection_strategy: ContextSelectionStrategy = ContextSelectionStrategy.PRIORITIZED
     section_reservations: tuple[ContextSectionReservation, ...] = Field(
         default=(),
         max_length=len(ContextSection),
@@ -81,6 +90,12 @@ class ContextBudgetPolicy(_BuilderContractModel):
 
     @model_validator(mode="after")
     def reconcile_section_reservations(self) -> "ContextBudgetPolicy":
+        if self.selection_strategy is ContextSelectionStrategy.FIFO and (
+            self.section_reservations or self.compression_enabled
+        ):
+            raise ValueError(
+                "FIFO context selection cannot reserve sections or compress items"
+            )
         sections = [reservation.section for reservation in self.section_reservations]
         if len(sections) != len(set(sections)):
             raise ValueError("context reservation sections must be unique")
@@ -165,11 +180,11 @@ def build_active_context(
     if len(candidate_ids) != len(set(candidate_ids)):
         raise ContextCandidateError("candidate item IDs must be unique")
 
-    ordered = tuple(
-        sorted(
-            (_normalize_token_estimate(item) for item in candidates),
-            key=_selection_rank,
-        )
+    normalized = tuple(_normalize_token_estimate(item) for item in candidates)
+    ordered = (
+        normalized
+        if policy.selection_strategy is ContextSelectionStrategy.FIFO
+        else tuple(sorted(normalized, key=_selection_rank))
     )
     unique_candidates, duplicate_ids = _deduplicate_candidates(ordered)
     mandatory = tuple(item for item in unique_candidates if _is_mandatory(item))

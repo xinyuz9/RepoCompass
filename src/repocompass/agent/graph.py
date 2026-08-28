@@ -6,6 +6,10 @@ from typing import TYPE_CHECKING
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
+from repocompass.agent.architecture import (
+    DEFAULT_AGENT_ARCHITECTURE,
+    AgentArchitectureProfile,
+)
 from repocompass.agent.invocation import RawRunRecorder
 from repocompass.agent.nodes import (
     advance_plan_step,
@@ -25,6 +29,7 @@ from repocompass.agent.nodes import (
     mark_step_explorer_budget_exhausted,
     prepare_human_review,
     review_final_candidate,
+    seed_tool_wrapper_plan,
 )
 from repocompass.agent.progress import assess_tool_progress
 from repocompass.agent.routing import (
@@ -36,7 +41,12 @@ from repocompass.agent.routing import (
     route_tool_calls,
 )
 from repocompass.agent.state import RepoCompassState
+from repocompass.agent.tool_adapters import (
+    LEXICAL_REPOSITORY_TOOLS,
+    REPOSITORY_TOOLS,
+)
 from repocompass.models import WorkflowModels
+from repocompass.tools.gateway import ToolGateway, create_repository_tool_registry
 
 if TYPE_CHECKING:
     from repocompass.memory.store import MemoryStore
@@ -54,6 +64,7 @@ def _route_after_initial_plan(state: RepoCompassState) -> str:
 def create_agent_graph(
     models: WorkflowModels,
     *,
+    architecture_profile: AgentArchitectureProfile = DEFAULT_AGENT_ARCHITECTURE,
     checkpointer: BaseCheckpointSaver | None = None,
     raw_run_recorder: RawRunRecorder | None = None,
     memory_store: MemoryStore | None = None,
@@ -61,18 +72,47 @@ def create_agent_graph(
 ):
     """Compile the graph with optional checkpoint and Raw Run persistence."""
 
+    if not isinstance(architecture_profile, AgentArchitectureProfile):
+        raise TypeError("architecture_profile must be an AgentArchitectureProfile")
+    repository_tools = (
+        REPOSITORY_TOOLS
+        if architecture_profile.structural_tools_enabled
+        else LEXICAL_REPOSITORY_TOOLS
+    )
+    gateway = ToolGateway(
+        create_repository_tool_registry(
+            include_structural=architecture_profile.structural_tools_enabled
+        )
+    )
+    context_strategy = architecture_profile.context_selection_strategy
     builder = StateGraph(RepoCompassState)
 
     builder.add_node(
         "plan_investigation",
-        create_plan_investigation_node(models.planner, raw_run_recorder),
+        (
+            create_plan_investigation_node(
+                models.planner,
+                raw_run_recorder,
+                context_strategy,
+            )
+            if architecture_profile.planner_enabled
+            else seed_tool_wrapper_plan
+        ),
     )
     builder.add_node(
         "recall_memory",
         create_recall_memory_node(memory_store, memory_clock),
     )
-    builder.add_node("agent", create_agent_node(models.explorer, raw_run_recorder))
-    builder.add_node("tools", create_execute_tools_node())
+    builder.add_node(
+        "agent",
+        create_agent_node(
+            models.explorer,
+            raw_run_recorder,
+            repository_tools,
+            context_strategy,
+        ),
+    )
+    builder.add_node("tools", create_execute_tools_node(gateway))
     builder.add_node("assess_progress", assess_tool_progress)
     builder.add_node(
         "step_explorer_budget_exhausted",
@@ -80,17 +120,29 @@ def create_agent_graph(
     )
     builder.add_node(
         "build_candidate",
-        create_build_candidate_node(models.explorer, raw_run_recorder),
+        create_build_candidate_node(
+            models.explorer,
+            raw_run_recorder,
+            context_strategy,
+        ),
     )
     builder.add_node(
         "evaluate_candidate",
-        create_evaluate_candidate_node(models.evaluator, raw_run_recorder),
+        create_evaluate_candidate_node(
+            models.evaluator,
+            raw_run_recorder,
+            context_strategy,
+        ),
     )
     builder.add_node("decide_next_action", decide_next_action)
     builder.add_node("advance_plan_step", advance_plan_step)
     builder.add_node(
         "revise_plan",
-        create_revise_plan_node(models.planner, raw_run_recorder),
+        create_revise_plan_node(
+            models.planner,
+            raw_run_recorder,
+            context_strategy,
+        ),
     )
     builder.add_node("mark_investigation_accepted", mark_investigation_accepted)
     builder.add_node("mark_investigation_cancelled", mark_investigation_cancelled)
@@ -112,6 +164,14 @@ def create_agent_graph(
         "continue": "evaluate_candidate",
         "cost_budget_exhausted": "finalize_cost_budget_exhausted",
     }
+    post_candidate_routes = (
+        post_model_routes
+        if architecture_profile.evaluator_enabled
+        else {
+            "continue": "prepare_human_review",
+            "cost_budget_exhausted": "finalize_cost_budget_exhausted",
+        }
+    )
     builder.add_edge(START, "plan_investigation")
     builder.add_conditional_edges(
         "plan_investigation",
@@ -141,7 +201,7 @@ def create_agent_graph(
     builder.add_conditional_edges(
         "build_candidate",
         route_after_model_invocation,
-        post_model_routes,
+        post_candidate_routes,
     )
     builder.add_conditional_edges(
         "evaluate_candidate",

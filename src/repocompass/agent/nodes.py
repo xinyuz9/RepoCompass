@@ -17,13 +17,17 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import BaseTool
 from langgraph.graph import MessagesState
 from langgraph.types import interrupt
 from pydantic import ValidationError
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.context import ContextItem, ContextPack, MemoryRecallReport
-from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
+from repocompass.agent.context_builder import (
+    DEFAULT_CONTEXT_BUDGET_TOKENS,
+    ContextSelectionStrategy,
+)
 from repocompass.agent.context_gathering import (
     GatheredContext,
     gather_candidate_context,
@@ -241,6 +245,9 @@ def build_planner_messages(
 def create_plan_investigation_node(
     model: BaseChatModel,
     recorder: RawRunRecorder | None = None,
+    context_selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> PlannerNode:
     """Create the node that generates the initial investigation plan."""
 
@@ -261,6 +268,7 @@ def create_plan_investigation_node(
             max_tool_calls_per_step=state["max_tool_calls_per_step"],
             max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
             budget_tokens=_context_budget(state),
+            selection_strategy=context_selection_strategy,
         )
         messages = build_planner_messages(state, gathered_context=gathered)
         response = _invoke_model(
@@ -291,6 +299,28 @@ def create_plan_investigation_node(
         }
 
     return planner_node
+
+
+def seed_tool_wrapper_plan(state: PlannerInput) -> dict[str, InvestigationPlan]:
+    """Create one deterministic active step without a planner model call."""
+
+    objective = state["objective"].strip()
+    if not objective:
+        raise ValueError("Tool-wrapper baseline requires a non-empty objective")
+    return {
+        "investigation_plan": InvestigationPlan(
+            steps=[
+                PlanStep(
+                    id="tool-wrapper-step",
+                    objective=objective,
+                    expected_evidence=[
+                        "Repository-relative files and exact source locations"
+                    ],
+                    status="active",
+                )
+            ]
+        )
+    }
 
 
 class MemoryRecallNodeInput(TypedDict):
@@ -431,10 +461,16 @@ def build_agent_messages(
 def create_agent_node(
     model: BaseChatModel,
     recorder: RawRunRecorder | None = None,
+    repository_tools: tuple[BaseTool, ...] = REPOSITORY_TOOLS,
+    context_selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> AgentNode:
     """Bind repository tools once and create the graph's Explorer node."""
 
-    bound_model = model.bind_tools(REPOSITORY_TOOLS)
+    if not isinstance(repository_tools, tuple) or not repository_tools:
+        raise TypeError("repository_tools must be a non-empty tuple")
+    bound_model = model.bind_tools(repository_tools)
 
     def agent_node(
         state: AgentNodeInput,
@@ -462,6 +498,7 @@ def create_agent_node(
             evaluation_report=state["evaluation_report"],
             budget_tokens=_context_budget(state),
             memory_items=tuple(state.get("memory_context_items", [])),
+            selection_strategy=context_selection_strategy,
         )
         messages = build_agent_messages(state, gathered_context=gathered)
         response = _invoke_model(
@@ -790,6 +827,9 @@ def build_candidate_messages(
 def create_build_candidate_node(
     model: BaseChatModel,
     recorder: RawRunRecorder | None = None,
+    context_selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> CandidateBuilderNode:
     """Create a node that turns Explorer evidence into an internal candidate."""
 
@@ -815,6 +855,7 @@ def create_build_candidate_node(
             step_stop_reason=state["step_stop_reason"] or "none",
             messages=tuple(state["messages"]),
             budget_tokens=_context_budget(state),
+            selection_strategy=context_selection_strategy,
         )
         messages = build_candidate_messages(state, gathered_context=gathered)
         response = _invoke_model(
@@ -911,6 +952,9 @@ def build_evaluator_messages(
 def create_evaluate_candidate_node(
     model: BaseChatModel,
     recorder: RawRunRecorder | None = None,
+    context_selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> EvaluatorNode:
     """Create the isolated semantic evaluator with deterministic validation."""
 
@@ -973,6 +1017,7 @@ def create_evaluate_candidate_node(
             evidence_pack=prompt_input["evidence_pack"],
             budget_tokens=_context_budget(prompt_input),
             investigation_structure=prompt_input["investigation_structure"],
+            selection_strategy=context_selection_strategy,
         )
         messages = build_evaluator_messages(prompt_input, gathered_context=gathered)
         response = _invoke_model(
@@ -1199,6 +1244,9 @@ def build_replanner_messages(
 def create_revise_plan_node(
     model: BaseChatModel,
     recorder: RawRunRecorder | None = None,
+    context_selection_strategy: ContextSelectionStrategy = (
+        ContextSelectionStrategy.PRIORITIZED
+    ),
 ) -> ReplannerNode:
     """Create the model node that revises only unfinished plan work."""
 
@@ -1239,6 +1287,7 @@ def create_revise_plan_node(
             max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
             budget_tokens=_context_budget(state),
             memory_items=tuple(state.get("memory_context_items", [])),
+            selection_strategy=context_selection_strategy,
         )
         messages = build_replanner_messages(state, gathered_context=gathered)
         response = _invoke_model(

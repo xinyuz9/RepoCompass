@@ -24,6 +24,7 @@ from repocompass.agent.context_builder import (
     ContextBudgetError,
     ContextBudgetPolicy,
     ContextCandidateError,
+    ContextSelectionStrategy,
     ContextSectionReservation,
     build_active_context,
     estimate_context_item_tokens,
@@ -139,6 +140,38 @@ def test_builder_rejects_empty_or_duplicate_candidate_identity() -> None:
     item = _item("same", "same content")
     with pytest.raises(ContextCandidateError, match="unique"):
         build_active_context(candidates=(item, item), policy=_policy(1_000))
+
+
+def test_fifo_baseline_and_prioritized_builder_select_different_evidence() -> None:
+    objective = _item(
+        "objective",
+        "Locate the implementation.",
+        kind=ContextSourceKind.OBJECTIVE,
+        section=ContextSection.OBJECTIVE,
+    )
+    first = _item("first", "same-sized evidence", priority=1, path="src/a.py")
+    preferred = _item("better", "same-sized evidence", priority=100, path="src/b.py")
+    budget = estimate_context_item_tokens(objective) + max(
+        estimate_context_item_tokens(first),
+        estimate_context_item_tokens(preferred),
+    )
+
+    fifo = build_active_context(
+        candidates=(objective, first, preferred),
+        policy=ContextBudgetPolicy(
+            budget_tokens=budget,
+            selection_strategy=ContextSelectionStrategy.FIFO,
+        ),
+    )
+    prioritized = build_active_context(
+        candidates=(objective, first, preferred),
+        policy=ContextBudgetPolicy(budget_tokens=budget),
+    )
+
+    assert first.item_id in {item.item_id for item in fifo.items}
+    assert preferred.item_id not in {item.item_id for item in fifo.items}
+    assert preferred.item_id in {item.item_id for item in prioritized.items}
+    assert first.item_id not in {item.item_id for item in prioritized.items}
 
 
 def test_required_objective_exactly_fits_hard_budget() -> None:

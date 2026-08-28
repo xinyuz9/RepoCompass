@@ -23,10 +23,12 @@ from repocompass.evaluation.live_smoke import (
     run_live_provider_smoke,
 )
 from repocompass.evaluation.localization_adapter import (
+    AgentRunnerVariantExecutor,
     LocalizationBenchmarkRunner,
     LocalizationVariantExecutor,
     adapt_localization_run_outcome,
     create_localization_run_request,
+    localization_architecture_profile,
 )
 from repocompass.evaluation.localization_case_file import (
     MAX_LOCALIZATION_DATASET_FILE_BYTES,
@@ -106,6 +108,7 @@ from repocompass.evaluation.memory_case_file import (
 
 __all__ = [
     "AblationVariant",
+    "AgentRunnerVariantExecutor",
     "ContextAblationCase",
     "ContextAblationReport",
     "ContextAblationReportSink",
@@ -178,6 +181,7 @@ __all__ = [
     "load_localization_dataset_file",
     "load_localization_observation_set_file",
     "load_memory_ablation_case_file",
+    "localization_architecture_profile",
     "render_context_ablation_summary",
     "render_localization_summary",
     "render_memory_ablation_summary",

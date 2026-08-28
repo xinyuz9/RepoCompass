@@ -2,8 +2,13 @@
 
 import subprocess
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableLambda
+from langgraph.checkpoint.memory import InMemorySaver
 
 from repocompass.agent.candidate import CandidateResult, EvidenceItem
 from repocompass.agent.cost import ModelPrice, build_attempt_usage_cost_report
@@ -13,7 +18,7 @@ from repocompass.agent.evaluation import (
     ValidationIssue,
 )
 from repocompass.agent.result import FinalResult
-from repocompass.agent.runner import RunOutcome, RunRequest
+from repocompass.agent.runner import AgentRunner, RunOutcome, RunRequest
 from repocompass.agent.trace import RunTrace, TraceEventKind
 from repocompass.agent.usage import (
     ModelInvocationStatus,
@@ -37,10 +42,12 @@ from repocompass.evaluation import (
     create_localization_task,
 )
 from repocompass.evaluation.localization_adapter import (
+    AgentRunnerVariantExecutor,
     LocalizationBenchmarkRunner,
     LocalizationVariantExecutor,
     adapt_localization_run_outcome,
     create_localization_run_request,
+    localization_architecture_profile,
 )
 from repocompass.tools.contracts import (
     ToolAuditRecord,
@@ -50,6 +57,9 @@ from repocompass.tools.contracts import (
     ToolPolicyDecision,
 )
 from repocompass.tools.gateway import ToolExecutionContext
+from repocompass.memory.store import open_memory_store
+from repocompass.models import WorkflowModels
+from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
 
 @pytest.fixture
@@ -390,6 +400,7 @@ class _Executor(LocalizationVariantExecutor):
         error: Exception | None = None,
     ) -> None:
         self.variant = variant
+        self.architecture_profile = localization_architecture_profile(variant)
         self.error = error
         self.requests: list[RunRequest] = []
 
@@ -402,6 +413,17 @@ class _Executor(LocalizationVariantExecutor):
 
 def _executors() -> dict[LocalizationVariant, _Executor]:
     return {variant: _Executor(variant) for variant in LocalizationVariant}
+
+
+def _workflow_models(final_result: FinalResult) -> WorkflowModels:
+    explorer = MagicMock(spec=BaseChatModel)
+    explorer.bind_tools.return_value = RunnableLambda(
+        lambda _: AIMessage(content="Enough evidence is available.")
+    )
+    explorer.with_structured_output.return_value = RunnableLambda(
+        lambda _: candidate_from_final_result(final_result)
+    )
+    return with_scripted_planner(explorer)
 
 
 def test_five_variant_runner_preflights_identity_and_uses_one_budget(
@@ -439,6 +461,72 @@ def test_five_variant_runner_preflights_identity_and_uses_one_budget(
         not executor.requests[0].memory_retrieval_enabled
         for variant, executor in executors.items()
         if variant is not LocalizationVariant.EVALUATOR_LOOP_CONTEXT_BUILDER_MEMORY
+    )
+
+
+def test_real_agent_runners_execute_complete_five_variant_matrix(
+    checkout: Path,
+    tmp_path: Path,
+) -> None:
+    manifest = _manifest(checkout)
+    budget = create_localization_budget_profile(
+        max_tool_calls_per_step=3,
+        max_explorer_calls_per_step=2,
+        max_no_progress_rounds=2,
+        max_plan_revisions=1,
+        context_budget_tokens=6_000,
+        max_attempt_cost_usd=None,
+        max_repository_memory_results=2,
+        max_episodic_memory_results=2,
+    )
+    final_result = FinalResult(
+        relevant_files=["module.py"],
+        evidence=["module.py contains the requested implementation."],
+        summary="The implementation is in module.py.",
+        unresolved_questions=[],
+    )
+    executors: dict[LocalizationVariant, AgentRunnerVariantExecutor] = {}
+    with open_memory_store(tmp_path / "memory.sqlite3") as memory_store:
+        for variant in LocalizationVariant:
+            runner = AgentRunner(
+                models=_workflow_models(final_result),
+                checkpointer=InMemorySaver(),
+                architecture_profile=localization_architecture_profile(variant),
+                memory_store=(
+                    memory_store
+                    if variant
+                    is LocalizationVariant.EVALUATOR_LOOP_CONTEXT_BUILDER_MEMORY
+                    else None
+                ),
+                run_id_factory=lambda value=variant.value: f"matrix-{value}",
+                thread_id_factory=lambda value=variant.value: f"thread-{value}",
+            )
+            executors[variant] = AgentRunnerVariantExecutor(
+                variant=variant,
+                runner=runner,
+            )
+        observation_set = LocalizationBenchmarkRunner(
+            manifest=manifest,
+            budget_profile=budget,
+            pricing_table_id="9" * 64,
+            executors=executors,
+        ).run(repository_paths={manifest.cases[0].task.task_id: checkout})
+
+    assert len(observation_set.observations) == 5
+    assert [item.status for item in observation_set.observations] == [
+        LocalizationRunStatus.ACCEPTED
+    ] * 5
+    assert observation_set.observations[0].evaluator_iterations.value == 0
+    assert all(
+        item.evaluator_iterations.value == 1
+        for item in observation_set.observations[1:]
+    )
+    assert observation_set.observations[0].prediction.quality_unavailable_reason is (
+        LocalizationMetricUnavailableReason.NOT_COLLECTED
+    )
+    assert all(
+        item.prediction.quality_availability is LocalizationMetricAvailability.OBSERVED
+        for item in observation_set.observations[1:]
     )
 
 
@@ -509,6 +597,20 @@ def test_runner_rejects_missing_mislabeled_or_reused_variant_executors(
             budget_profile=_budget(),
             pricing_table_id=pricing_table_id,
             executors=mislabeled,
+        )
+
+    wrong_profile = _executors()
+    wrong_profile[
+        LocalizationVariant.TOOL_WRAPPER
+    ].architecture_profile = localization_architecture_profile(
+        LocalizationVariant.EVALUATOR_LOOP
+    )
+    with pytest.raises(ValueError, match="architecture profile"):
+        LocalizationBenchmarkRunner(
+            manifest=manifest,
+            budget_profile=_budget(),
+            pricing_table_id=pricing_table_id,
+            executors=wrong_profile,
         )
 
     shared = _Executor(LocalizationVariant.TOOL_WRAPPER)

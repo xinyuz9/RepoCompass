@@ -110,12 +110,17 @@ def _gateway_only() -> NoReturn:
     raise RuntimeError("Repository tools may execute only through the Tool Gateway")
 
 
-REPOSITORY_TOOLS = (
+LEXICAL_REPOSITORY_TOOLS = (
     list_tree_tool,
     search_text_tool,
     read_code_tool,
+)
+
+STRUCTURAL_REPOSITORY_TOOLS = (
     list_symbols_tool,
     inspect_imports_tool,
     find_symbol_definition_tool,
     find_references_tool,
 )
+
+REPOSITORY_TOOLS = (*LEXICAL_REPOSITORY_TOOLS, *STRUCTURAL_REPOSITORY_TOOLS)

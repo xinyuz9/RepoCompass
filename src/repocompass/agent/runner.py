@@ -20,6 +20,10 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command, StateSnapshot
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
+from repocompass.agent.architecture import (
+    DEFAULT_AGENT_ARCHITECTURE,
+    AgentArchitectureProfile,
+)
 from repocompass.agent.context import ContextItem, ContextPack
 from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
 from repocompass.agent.cost import (
@@ -675,6 +679,7 @@ class AgentRunner:
         models: WorkflowModels,
         *,
         checkpointer: BaseCheckpointSaver,
+        architecture_profile: AgentArchitectureProfile = DEFAULT_AGENT_ARCHITECTURE,
         raw_run_store: RawRunStore | None = None,
         pricing_table: PricingTable | None = None,
         memory_store: MemoryStore | None = None,
@@ -710,6 +715,9 @@ class AgentRunner:
 
         self._models = models
         self._checkpointer = checkpointer
+        if not isinstance(architecture_profile, AgentArchitectureProfile):
+            raise TypeError("architecture_profile must be an AgentArchitectureProfile")
+        self._architecture_profile = architecture_profile
         if pricing_table is not None and not isinstance(pricing_table, PricingTable):
             raise TypeError("pricing_table must be a PricingTable or None")
         self._pricing_table = pricing_table
@@ -729,6 +737,12 @@ class AgentRunner:
         )
         self._run_id_factory = run_id_factory
         self._thread_id_factory = thread_id_factory
+
+    @property
+    def architecture_profile(self) -> AgentArchitectureProfile:
+        """Return the immutable graph feature profile used by this Runner."""
+
+        return self._architecture_profile
 
     def run(self, request: RunRequest) -> RunOutcome:
         """Start one new repository investigation.
@@ -760,6 +774,13 @@ class AgentRunner:
             )
         if request.memory_retrieval_enabled and self._memory_store is None:
             raise ValueError("memory retrieval requires a memory store")
+        if (
+            not self._architecture_profile.evaluator_enabled
+            and request.human_review_policy is not HumanReviewPolicy.NEVER
+        ):
+            raise ValueError(
+                "tool-wrapper architecture does not support evaluator-bound review"
+            )
         repo_path = resolve_repository_path(request.repo_path)
         thread_id = _normalize_identifier(
             self._thread_id_factory(),
@@ -787,6 +808,7 @@ class AgentRunner:
         )
         graph = create_agent_graph(
             self._models,
+            architecture_profile=self._architecture_profile,
             checkpointer=self._checkpointer,
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
@@ -813,6 +835,7 @@ class AgentRunner:
 
         graph = create_agent_graph(
             self._models,
+            architecture_profile=self._architecture_profile,
             checkpointer=self._checkpointer,
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
@@ -838,6 +861,7 @@ class AgentRunner:
         thread_id = _normalize_identifier(request.thread_id, name="thread_id")
         graph = create_agent_graph(
             self._models,
+            architecture_profile=self._architecture_profile,
             checkpointer=self._checkpointer,
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
@@ -892,6 +916,7 @@ class AgentRunner:
         thread_id = _normalize_identifier(request.thread_id, name="thread_id")
         graph = create_agent_graph(
             self._models,
+            architecture_profile=self._architecture_profile,
             checkpointer=self._checkpointer,
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
