@@ -20,7 +20,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.graph import MessagesState
 from langgraph.types import interrupt
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.context import ContextItem, ContextPack, MemoryRecallReport
@@ -182,19 +182,58 @@ def _invoke_model(
 def _parse_structured_response(
     response: object,
     *,
-    expected_type: type,
+    expected_type: type[BaseModel],
     error_message: str,
-) -> object:
+) -> BaseModel:
     """Extract a validated parsed value while retaining include_raw envelopes."""
 
     parsed = response
     if isinstance(response, Mapping):
-        if response.get("parsing_error") is not None:
-            raise TypeError(error_message)
         parsed = response.get("parsed")
+        if (
+            not isinstance(parsed, expected_type)
+            and response.get("parsing_error") is not None
+        ):
+            parsed = _parse_strict_json_tool_call(
+                response.get("raw"),
+                expected_type=expected_type,
+            )
     if not isinstance(parsed, expected_type):
         raise TypeError(error_message)
     return parsed
+
+
+def _parse_strict_json_tool_call(
+    raw_response: object,
+    *,
+    expected_type: type[BaseModel],
+) -> BaseModel | None:
+    """Revalidate one exact function call at the strict JSON transport boundary."""
+
+    if not isinstance(raw_response, AIMessage) or raw_response.invalid_tool_calls:
+        return None
+    if len(raw_response.tool_calls) != 1:
+        return None
+    tool_call = raw_response.tool_calls[0]
+    schema_title = expected_type.model_json_schema().get("title")
+    if not isinstance(schema_title, str) or tool_call.get("name") != schema_title:
+        return None
+    arguments = tool_call.get("args")
+    if not isinstance(arguments, Mapping) or not all(
+        isinstance(key, str) for key in arguments
+    ):
+        return None
+    try:
+        payload = json.dumps(
+            dict(arguments),
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return expected_type.model_validate_json(payload)
+    except (TypeError, ValueError, ValidationError):
+        return None
 
 
 def _parse_explorer_response(response: object) -> AIMessage:

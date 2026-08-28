@@ -218,6 +218,109 @@ def test_candidate_builder_rejects_non_candidate_model_response(
         create_build_candidate_node(model)(state)
 
 
+def test_candidate_builder_revalidates_strict_types_from_json_tool_call(
+    tmp_path: Path,
+) -> None:
+    raw = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "CandidateResult",
+                "args": {
+                    "evidence": [
+                        {
+                            "path": "src/auth.py",
+                            "line_start": 4,
+                            "line_end": 8,
+                            "symbol": "authenticate",
+                            "claim": "authenticate is the authentication entry point.",
+                        }
+                    ],
+                    "relations": [
+                        {
+                            "source": "src/auth.py::authenticate",
+                            "relation": "references",
+                            "target": "src/session.py::Session",
+                            "verification_status": "inferred",
+                            "supporting_evidence_indices": [0],
+                            "explanation": "Authentication references the session model.",
+                        }
+                    ],
+                    "summary": "Authentication delegates session state.",
+                    "unresolved_questions": [],
+                },
+                "id": "call-candidate",
+                "type": "tool_call",
+            }
+        ],
+    )
+    envelope = {
+        "raw": raw,
+        "parsed": None,
+        "parsing_error": ValueError("strict Python transport mismatch"),
+    }
+    model = MagicMock(spec=BaseChatModel)
+    model.with_structured_output.return_value = RunnableLambda(lambda _: envelope)
+    state: CandidateBuilderInput = {
+        "messages": [HumanMessage(content="Inspect authentication.")],
+        "repo_path": tmp_path,
+        "objective": "Inspect authentication.",
+        "investigation_plan": _active_plan(),
+        "step_stop_reason": None,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
+    }
+
+    candidate = create_build_candidate_node(model)(state)["candidate_result"]
+
+    assert candidate.relations[0].relation.value == "references"
+    assert candidate.relations[0].supporting_evidence_indices == (0,)
+
+
+def test_candidate_builder_does_not_recover_a_different_tool_call(
+    tmp_path: Path,
+) -> None:
+    raw = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "UnexpectedResult",
+                "args": {
+                    "evidence": [],
+                    "relations": [],
+                    "summary": "Unexpected result.",
+                    "unresolved_questions": [],
+                },
+                "id": "call-unexpected",
+                "type": "tool_call",
+            }
+        ],
+    )
+    model = MagicMock(spec=BaseChatModel)
+    model.with_structured_output.return_value = RunnableLambda(
+        lambda _: {
+            "raw": raw,
+            "parsed": None,
+            "parsing_error": ValueError("wrong tool"),
+        }
+    )
+    state: CandidateBuilderInput = {
+        "messages": [HumanMessage(content="Inspect the repository.")],
+        "repo_path": tmp_path,
+        "objective": "Inspect the repository.",
+        "investigation_plan": _active_plan(),
+        "step_stop_reason": None,
+        "context_budget_tokens": 16_384,
+        "context_build_count": 0,
+    }
+
+    with pytest.raises(
+        TypeError,
+        match="Candidate builder model did not return CandidateResult",
+    ):
+        create_build_candidate_node(model)(state)
+
+
 def test_finalize_candidate_is_a_deterministic_public_adapter() -> None:
     candidate = CandidateResult(
         evidence=[
