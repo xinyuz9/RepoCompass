@@ -22,6 +22,12 @@ from repocompass.evaluation.live_smoke import (
     LiveProviderSmokeError,
     run_live_provider_smoke,
 )
+from repocompass.evaluation.localization_adapter import (
+    LocalizationBenchmarkRunner,
+    LocalizationVariantExecutor,
+    adapt_localization_run_outcome,
+    create_localization_run_request,
+)
 from repocompass.evaluation.localization_case_file import (
     MAX_LOCALIZATION_DATASET_FILE_BYTES,
     load_localization_dataset_file,
@@ -125,6 +131,7 @@ __all__ = [
     "GoldPatchLocalization",
     "PARTS_PER_MILLION",
     "LocalizationAggregateRate",
+    "LocalizationBenchmarkRunner",
     "LocalizationBudgetProfile",
     "LocalizationCase",
     "LocalizationCaseMetrics",
@@ -149,6 +156,8 @@ __all__ = [
     "LocalizationTask",
     "LocalizationVariant",
     "LocalizationVariantAggregate",
+    "LocalizationVariantExecutor",
+    "adapt_localization_run_outcome",
     "create_context_ablation_case",
     "create_estimated_cost_observation",
     "create_localization_budget_profile",
@@ -157,6 +166,7 @@ __all__ = [
     "create_localization_labels",
     "create_localization_observation_set",
     "create_localization_prediction",
+    "create_localization_run_request",
     "create_localization_run_observation",
     "create_localization_task",
     "create_unavailable_cost_observation",
