@@ -1,0 +1,876 @@
+{
+  "schema_version": 1,
+  "set_id": "612bc96bcb867db4c11379361579f770624c1d8b1c59448b849fb4c08b931d43",
+  "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+  "budget_profile": {
+    "schema_version": 1,
+    "profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+    "max_tool_calls_per_step": 8,
+    "max_explorer_calls_per_step": 3,
+    "max_no_progress_rounds": 2,
+    "max_plan_revisions": 2,
+    "context_budget_tokens": 6000,
+    "max_attempt_cost_usd": "0.5",
+    "max_repository_memory_results": 5,
+    "max_episodic_memory_results": 3,
+    "human_review_enabled": false
+  },
+  "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "observations": [
+    {
+      "schema_version": 1,
+      "observation_id": "087266086468e39f7a2279f10c8219c78729f690a1f4e7db4820107ad5922aac",
+      "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+      "variant": "tool_wrapper",
+      "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+      "run_id": "fixture-tool_wrapper-2",
+      "repeat_index": 0,
+      "status": "accepted",
+      "prediction": {
+        "schema_version": 1,
+        "prediction_id": "0982526887315b4f139269133dcafb5de3e8ce18efcbba9a5a9555830c95e597",
+        "ranked_files": [
+          "src/noise.py"
+        ],
+        "ranked_symbols": [],
+        "quality_availability": "observed",
+        "evidence_count": 1,
+        "valid_evidence_count": 0,
+        "relation_count": 0,
+        "unsupported_relation_count": 0,
+        "quality_unavailable_reason": null
+      },
+      "context_lines": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 420,
+        "unavailable_reason": null
+      },
+      "context_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 7500,
+        "unavailable_reason": null
+      },
+      "tool_calls": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 12,
+        "unavailable_reason": null
+      },
+      "latency_ms": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 900,
+        "unavailable_reason": null
+      },
+      "evaluator_iterations": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 0,
+        "unavailable_reason": null
+      },
+      "input_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 8000,
+        "unavailable_reason": null
+      },
+      "output_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 700,
+        "unavailable_reason": null
+      },
+      "cost": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "usage_cost_report_id": null,
+        "estimated_cost_usd": null,
+        "unavailable_reason": "price_not_found",
+        "disclaimer": "estimate_not_invoice"
+      },
+      "evaluation_scope": "localization_only",
+      "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "0eed395dda2e12ecf1260a5f1140caf4b3aacecc8e110ed5aeddf0f835de3ab2",
+      "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+      "variant": "tool_wrapper",
+      "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+      "run_id": "fixture-tool_wrapper-1",
+      "repeat_index": 0,
+      "status": "accepted",
+      "prediction": {
+        "schema_version": 1,
+        "prediction_id": "9a249e527d3cbdb6a178c1315b9b13a83d67a90ef55318fc11f4c7a385fe4e72",
+        "ranked_files": [
+          "src/noise.py",
+          "src/router.py"
+        ],
+        "ranked_symbols": [],
+        "quality_availability": "observed",
+        "evidence_count": 2,
+        "valid_evidence_count": 1,
+        "relation_count": 0,
+        "unsupported_relation_count": 0,
+        "quality_unavailable_reason": null
+      },
+      "context_lines": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 420,
+        "unavailable_reason": null
+      },
+      "context_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 7500,
+        "unavailable_reason": null
+      },
+      "tool_calls": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 12,
+        "unavailable_reason": null
+      },
+      "latency_ms": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 900,
+        "unavailable_reason": null
+      },
+      "evaluator_iterations": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 0,
+        "unavailable_reason": null
+      },
+      "input_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 8000,
+        "unavailable_reason": null
+      },
+      "output_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 700,
+        "unavailable_reason": null
+      },
+      "cost": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "usage_cost_report_id": null,
+        "estimated_cost_usd": null,
+        "unavailable_reason": "price_not_found",
+        "disclaimer": "estimate_not_invoice"
+      },
+      "evaluation_scope": "localization_only",
+      "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "808ae55bc5fae60934f3a239a8a7c05cd2f08332496f06cbd309c4a718c27650",
+      "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+      "variant": "evaluator_loop",
+      "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+      "run_id": "fixture-evaluator_loop-2",
+      "repeat_index": 0,
+      "status": "accepted",
+      "prediction": {
+        "schema_version": 1,
+        "prediction_id": "ac6aca1b988c6b8ce2445f978dec6a6f0ea76e110f1ad3230107e0b9e7619a69",
+        "ranked_files": [
+          "src/noise.py",
+          "src/cost.py"
+        ],
+        "ranked_symbols": [],
+        "quality_availability": "observed",
+        "evidence_count": 2,
+        "valid_evidence_count": 1,
+        "relation_count": 1,
+        "unsupported_relation_count": 1,
+        "quality_unavailable_reason": null
+      },
+      "context_lines": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 390,
+        "unavailable_reason": null
+      },
+      "context_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 6900,
+        "unavailable_reason": null
+      },
+      "tool_calls": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 11,
+        "unavailable_reason": null
+      },
+      "latency_ms": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 1150,
+        "unavailable_reason": null
+      },
+      "evaluator_iterations": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 2,
+        "unavailable_reason": null
+      },
+      "input_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 9100,
+        "unavailable_reason": null
+      },
+      "output_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 1000,
+        "unavailable_reason": null
+      },
+      "cost": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "usage_cost_report_id": null,
+        "estimated_cost_usd": null,
+        "unavailable_reason": "price_not_found",
+        "disclaimer": "estimate_not_invoice"
+      },
+      "evaluation_scope": "localization_only",
+      "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "54d7e0702c67e10fecb3f3d5efdc4405e42ed3f548da651726236a5530010a27",
+      "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+      "variant": "evaluator_loop",
+      "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+      "run_id": "fixture-evaluator_loop-1",
+      "repeat_index": 0,
+      "status": "accepted",
+      "prediction": {
+        "schema_version": 1,
+        "prediction_id": "15acec0a71bc76dc4af3db798dd42afdc4690840a48a3c23e941bee8bf4b2d75",
+        "ranked_files": [
+          "src/router.py",
+          "src/noise.py",
+          "src/controller.py"
+        ],
+        "ranked_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/router.py",
+            "qualified_name": "src.router.Router.retry"
+          }
+        ],
+        "quality_availability": "observed",
+        "evidence_count": 3,
+        "valid_evidence_count": 2,
+        "relation_count": 2,
+        "unsupported_relation_count": 1,
+        "quality_unavailable_reason": null
+      },
+      "context_lines": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 390,
+        "unavailable_reason": null
+      },
+      "context_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 6900,
+        "unavailable_reason": null
+      },
+      "tool_calls": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 11,
+        "unavailable_reason": null
+      },
+      "latency_ms": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 1150,
+        "unavailable_reason": null
+      },
+      "evaluator_iterations": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 2,
+        "unavailable_reason": null
+      },
+      "input_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 9100,
+        "unavailable_reason": null
+      },
+      "output_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 1000,
+        "unavailable_reason": null
+      },
+      "cost": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "usage_cost_report_id": null,
+        "estimated_cost_usd": null,
+        "unavailable_reason": "price_not_found",
+        "disclaimer": "estimate_not_invoice"
+      },
+      "evaluation_scope": "localization_only",
+      "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "9f17524b72ccc2bb2edf14b0cff26501dd9a7d454e0ac7d81c91f031b028d1d8",
+      "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+      "variant": "evaluator_loop_symbol_tools",
+      "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+      "run_id": "fixture-evaluator_loop_symbol_tools-2",
+      "repeat_index": 0,
+      "status": "accepted",
+      "prediction": {
+        "schema_version": 1,
+        "prediction_id": "68409e9ba1423df4eef20f4b1497efaa9a9b9e1c23f52f9ec080f0cb9571dd94",
+        "ranked_files": [
+          "src/cost.py",
+          "src/noise.py"
+        ],
+        "ranked_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/cost.py",
+            "qualified_name": "src.cost.build_cost_report"
+          }
+        ],
+        "quality_availability": "observed",
+        "evidence_count": 2,
+        "valid_evidence_count": 2,
+        "relation_count": 1,
+        "unsupported_relation_count": 0,
+        "quality_unavailable_reason": null
+      },
+      "context_lines": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 350,
+        "unavailable_reason": null
+      },
+      "context_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 6100,
+        "unavailable_reason": null
+      },
+      "tool_calls": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 9,
+        "unavailable_reason": null
+      },
+      "latency_ms": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 1080,
+        "unavailable_reason": null
+      },
+      "evaluator_iterations": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 2,
+        "unavailable_reason": null
+      },
+      "input_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 8400,
+        "unavailable_reason": null
+      },
+      "output_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 900,
+        "unavailable_reason": null
+      },
+      "cost": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "usage_cost_report_id": null,
+        "estimated_cost_usd": null,
+        "unavailable_reason": "price_not_found",
+        "disclaimer": "estimate_not_invoice"
+      },
+      "evaluation_scope": "localization_only",
+      "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f5cde542285a1c26ae837c5805548fcf2ea477d11604a607500cd8d9a1cf1280",
+      "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+      "variant": "evaluator_loop_symbol_tools",
+      "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+      "run_id": "fixture-evaluator_loop_symbol_tools-1",
+      "repeat_index": 0,
+      "status": "accepted",
+      "prediction": {
+        "schema_version": 1,
+        "prediction_id": "191979770742df98ffed86e0e9164d3c919fa6091f5d6705077db193a7985627",
+        "ranked_files": [
+          "src/router.py",
+          "src/controller.py"
+        ],
+        "ranked_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/router.py",
+            "qualified_name": "src.router.Router.retry"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/controller.py",
+            "qualified_name": "src.controller.route_request"
+          }
+        ],
+        "quality_availability": "observed",
+        "evidence_count": 3,
+        "valid_evidence_count": 3,
+        "relation_count": 2,
+        "unsupported_relation_count": 0,
+        "quality_unavailable_reason": null
+      },
+      "context_lines": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 350,
+        "unavailable_reason": null
+      },
+      "context_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 6100,
+        "unavailable_reason": null
+      },
+      "tool_calls": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 9,
+        "unavailable_reason": null
+      },
+      "latency_ms": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 1080,
+        "unavailable_reason": null
+      },
+      "evaluator_iterations": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 2,
+        "unavailable_reason": null
+      },
+      "input_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 8400,
+        "unavailable_reason": null
+      },
+      "output_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 900,
+        "unavailable_reason": null
+      },
+      "cost": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "usage_cost_report_id": null,
+        "estimated_cost_usd": null,
+        "unavailable_reason": "price_not_found",
+        "disclaimer": "estimate_not_invoice"
+      },
+      "evaluation_scope": "localization_only",
+      "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "308eabe71819becb5ba29ed215736a77fc0aaefe9bf921b97f1f72fc29a3d602",
+      "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+      "variant": "evaluator_loop_context_builder",
+      "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+      "run_id": "fixture-evaluator_loop_context_builder-2",
+      "repeat_index": 0,
+      "status": "accepted",
+      "prediction": {
+        "schema_version": 1,
+        "prediction_id": "bc6d5fec93cb38b3e0d2f478a31268a5e8d46f092be4c03532611ace69dafe54",
+        "ranked_files": [
+          "src/cost.py"
+        ],
+        "ranked_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/cost.py",
+            "qualified_name": "src.cost.build_cost_report"
+          }
+        ],
+        "quality_availability": "observed",
+        "evidence_count": 2,
+        "valid_evidence_count": 2,
+        "relation_count": 1,
+        "unsupported_relation_count": 0,
+        "quality_unavailable_reason": null
+      },
+      "context_lines": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 180,
+        "unavailable_reason": null
+      },
+      "context_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 3200,
+        "unavailable_reason": null
+      },
+      "tool_calls": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 8,
+        "unavailable_reason": null
+      },
+      "latency_ms": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 980,
+        "unavailable_reason": null
+      },
+      "evaluator_iterations": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 1,
+        "unavailable_reason": null
+      },
+      "input_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 5000,
+        "unavailable_reason": null
+      },
+      "output_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 750,
+        "unavailable_reason": null
+      },
+      "cost": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "usage_cost_report_id": null,
+        "estimated_cost_usd": null,
+        "unavailable_reason": "price_not_found",
+        "disclaimer": "estimate_not_invoice"
+      },
+      "evaluation_scope": "localization_only",
+      "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "39ac6a980e1a1dd6fb7ef87b09da717054fb82cbcfe3d63b7eb4b6cb36454a77",
+      "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+      "variant": "evaluator_loop_context_builder",
+      "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+      "run_id": "fixture-evaluator_loop_context_builder-1",
+      "repeat_index": 0,
+      "status": "accepted",
+      "prediction": {
+        "schema_version": 1,
+        "prediction_id": "191979770742df98ffed86e0e9164d3c919fa6091f5d6705077db193a7985627",
+        "ranked_files": [
+          "src/router.py",
+          "src/controller.py"
+        ],
+        "ranked_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/router.py",
+            "qualified_name": "src.router.Router.retry"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/controller.py",
+            "qualified_name": "src.controller.route_request"
+          }
+        ],
+        "quality_availability": "observed",
+        "evidence_count": 3,
+        "valid_evidence_count": 3,
+        "relation_count": 2,
+        "unsupported_relation_count": 0,
+        "quality_unavailable_reason": null
+      },
+      "context_lines": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 180,
+        "unavailable_reason": null
+      },
+      "context_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 3200,
+        "unavailable_reason": null
+      },
+      "tool_calls": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 8,
+        "unavailable_reason": null
+      },
+      "latency_ms": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 980,
+        "unavailable_reason": null
+      },
+      "evaluator_iterations": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 1,
+        "unavailable_reason": null
+      },
+      "input_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 5000,
+        "unavailable_reason": null
+      },
+      "output_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 750,
+        "unavailable_reason": null
+      },
+      "cost": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "usage_cost_report_id": null,
+        "estimated_cost_usd": null,
+        "unavailable_reason": "price_not_found",
+        "disclaimer": "estimate_not_invoice"
+      },
+      "evaluation_scope": "localization_only",
+      "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f7c3a49fd95334dda7a376caa0f5deb12ae225a1bc50cefc5152194f3afaa9d5",
+      "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+      "variant": "evaluator_loop_context_builder_memory",
+      "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+      "run_id": "fixture-evaluator_loop_context_builder_memory-2",
+      "repeat_index": 0,
+      "status": "accepted",
+      "prediction": {
+        "schema_version": 1,
+        "prediction_id": "bc6d5fec93cb38b3e0d2f478a31268a5e8d46f092be4c03532611ace69dafe54",
+        "ranked_files": [
+          "src/cost.py"
+        ],
+        "ranked_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/cost.py",
+            "qualified_name": "src.cost.build_cost_report"
+          }
+        ],
+        "quality_availability": "observed",
+        "evidence_count": 2,
+        "valid_evidence_count": 2,
+        "relation_count": 1,
+        "unsupported_relation_count": 0,
+        "quality_unavailable_reason": null
+      },
+      "context_lines": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 205,
+        "unavailable_reason": null
+      },
+      "context_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 3650,
+        "unavailable_reason": null
+      },
+      "tool_calls": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 6,
+        "unavailable_reason": null
+      },
+      "latency_ms": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 920,
+        "unavailable_reason": null
+      },
+      "evaluator_iterations": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 1,
+        "unavailable_reason": null
+      },
+      "input_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 5350,
+        "unavailable_reason": null
+      },
+      "output_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 700,
+        "unavailable_reason": null
+      },
+      "cost": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "usage_cost_report_id": null,
+        "estimated_cost_usd": null,
+        "unavailable_reason": "price_not_found",
+        "disclaimer": "estimate_not_invoice"
+      },
+      "evaluation_scope": "localization_only",
+      "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8e7cc62c69fc53912b6d35dfae89cc5fa09baac47ed63651dfeb06b739fd8d50",
+      "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+      "variant": "evaluator_loop_context_builder_memory",
+      "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+      "run_id": "fixture-evaluator_loop_context_builder_memory-1",
+      "repeat_index": 0,
+      "status": "accepted",
+      "prediction": {
+        "schema_version": 1,
+        "prediction_id": "191979770742df98ffed86e0e9164d3c919fa6091f5d6705077db193a7985627",
+        "ranked_files": [
+          "src/router.py",
+          "src/controller.py"
+        ],
+        "ranked_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/router.py",
+            "qualified_name": "src.router.Router.retry"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/controller.py",
+            "qualified_name": "src.controller.route_request"
+          }
+        ],
+        "quality_availability": "observed",
+        "evidence_count": 3,
+        "valid_evidence_count": 3,
+        "relation_count": 2,
+        "unsupported_relation_count": 0,
+        "quality_unavailable_reason": null
+      },
+      "context_lines": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 205,
+        "unavailable_reason": null
+      },
+      "context_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 3650,
+        "unavailable_reason": null
+      },
+      "tool_calls": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 6,
+        "unavailable_reason": null
+      },
+      "latency_ms": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 920,
+        "unavailable_reason": null
+      },
+      "evaluator_iterations": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 1,
+        "unavailable_reason": null
+      },
+      "input_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 5350,
+        "unavailable_reason": null
+      },
+      "output_tokens": {
+        "schema_version": 1,
+        "availability": "observed",
+        "value": 700,
+        "unavailable_reason": null
+      },
+      "cost": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "usage_cost_report_id": null,
+        "estimated_cost_usd": null,
+        "unavailable_reason": "price_not_found",
+        "disclaimer": "estimate_not_invoice"
+      },
+      "evaluation_scope": "localization_only",
+      "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+    }
+  ]
+}

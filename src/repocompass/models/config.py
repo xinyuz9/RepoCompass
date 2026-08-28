@@ -54,9 +54,7 @@ def load_model_settings() -> ModelSettings:
 
     load_dotenv(override=False)
     provider_name = (
-        os.getenv("REPOCOMPASS_MODEL_PROVIDER", ModelProvider.DEEPSEEK)
-        .strip()
-        .lower()
+        os.getenv("REPOCOMPASS_MODEL_PROVIDER", ModelProvider.DEEPSEEK).strip().lower()
     )
     try:
         provider = ModelProvider(provider_name)

@@ -1,0 +1,2444 @@
+{
+  "schema_version": 1,
+  "report_id": "01dd3fbd5ee267186c01313fa0c67450e85b3564449d4c8c4d91f0eb22ce55ef",
+  "dataset_manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+  "dataset_name": "localization-fixture",
+  "dataset_version": "v1",
+  "dataset_kind": "synthetic_fixture",
+  "budget_profile_id": "0134a502503adcd47780ef46de48b64aae096ee12dd8af81e4d8f1c6cfcc877d",
+  "pricing_table_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "case_count": 2,
+  "observation_count": 10,
+  "observation_ids": [
+    "087266086468e39f7a2279f10c8219c78729f690a1f4e7db4820107ad5922aac",
+    "0eed395dda2e12ecf1260a5f1140caf4b3aacecc8e110ed5aeddf0f835de3ab2",
+    "808ae55bc5fae60934f3a239a8a7c05cd2f08332496f06cbd309c4a718c27650",
+    "54d7e0702c67e10fecb3f3d5efdc4405e42ed3f548da651726236a5530010a27",
+    "9f17524b72ccc2bb2edf14b0cff26501dd9a7d454e0ac7d81c91f031b028d1d8",
+    "f5cde542285a1c26ae837c5805548fcf2ea477d11604a607500cd8d9a1cf1280",
+    "308eabe71819becb5ba29ed215736a77fc0aaefe9bf921b97f1f72fc29a3d602",
+    "39ac6a980e1a1dd6fb7ef87b09da717054fb82cbcfe3d63b7eb4b6cb36454a77",
+    "f7c3a49fd95334dda7a376caa0f5deb12ae225a1bc50cefc5152194f3afaa9d5",
+    "8e7cc62c69fc53912b6d35dfae89cc5fa09baac47ed63651dfeb06b739fd8d50"
+  ],
+  "case_metrics": [
+    {
+      "schema_version": 1,
+      "metrics_id": "f7f1080f9e09b75f107c8df1cb7e87b60d32e2f7db0e6a6cdbfd2dc08abc998b",
+      "observation_id": "087266086468e39f7a2279f10c8219c78729f690a1f4e7db4820107ad5922aac",
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "gold_file_count": 1,
+      "gold_symbol_count": 1,
+      "matched_file_ranks": [],
+      "matched_symbol_ranks": [],
+      "prediction_quality_unavailable_reason": null,
+      "evidence_count": 1,
+      "valid_evidence_count": 0,
+      "relation_count": 0,
+      "unsupported_relation_count": 0,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "reciprocal_rank": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "numerator": null,
+        "denominator": null,
+        "value_ppm": null,
+        "unavailable_reason": "no_relations"
+      }
+    },
+    {
+      "schema_version": 1,
+      "metrics_id": "bdf8983325642d948d653dc2824dcb36f55095932273bf5b9f7b1468e9b804c5",
+      "observation_id": "0eed395dda2e12ecf1260a5f1140caf4b3aacecc8e110ed5aeddf0f835de3ab2",
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "gold_file_count": 2,
+      "gold_symbol_count": 2,
+      "matched_file_ranks": [
+        2
+      ],
+      "matched_symbol_ranks": [],
+      "prediction_quality_unavailable_reason": null,
+      "evidence_count": 2,
+      "valid_evidence_count": 1,
+      "relation_count": 0,
+      "unsupported_relation_count": 0,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 2,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      },
+      "reciprocal_rank": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "availability": "unavailable",
+        "numerator": null,
+        "denominator": null,
+        "value_ppm": null,
+        "unavailable_reason": "no_relations"
+      }
+    },
+    {
+      "schema_version": 1,
+      "metrics_id": "441356c76d4ef227457f0c9b470527e81a7dc12f1d7bbad8aa550868ad21bb3f",
+      "observation_id": "808ae55bc5fae60934f3a239a8a7c05cd2f08332496f06cbd309c4a718c27650",
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "gold_file_count": 1,
+      "gold_symbol_count": 1,
+      "matched_file_ranks": [
+        2
+      ],
+      "matched_symbol_ranks": [],
+      "prediction_quality_unavailable_reason": null,
+      "evidence_count": 2,
+      "valid_evidence_count": 1,
+      "relation_count": 1,
+      "unsupported_relation_count": 1,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "reciprocal_rank": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "metrics_id": "086971363c5ad227c81e2806e612de758b8874e7d440ba367a959b6c5abde9ad",
+      "observation_id": "54d7e0702c67e10fecb3f3d5efdc4405e42ed3f548da651726236a5530010a27",
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "gold_file_count": 2,
+      "gold_symbol_count": 2,
+      "matched_file_ranks": [
+        1,
+        3
+      ],
+      "matched_symbol_ranks": [
+        1
+      ],
+      "prediction_quality_unavailable_reason": null,
+      "evidence_count": 3,
+      "valid_evidence_count": 2,
+      "relation_count": 2,
+      "unsupported_relation_count": 1,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "reciprocal_rank": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 3,
+        "value_ppm": 666666,
+        "unavailable_reason": null
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "metrics_id": "0ff26e3a85993cdf1b126f6b71d9df5eaf22a01cae612197d04d01df0d2169c1",
+      "observation_id": "9f17524b72ccc2bb2edf14b0cff26501dd9a7d454e0ac7d81c91f031b028d1d8",
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "gold_file_count": 1,
+      "gold_symbol_count": 1,
+      "matched_file_ranks": [
+        1
+      ],
+      "matched_symbol_ranks": [
+        1
+      ],
+      "prediction_quality_unavailable_reason": null,
+      "evidence_count": 2,
+      "valid_evidence_count": 2,
+      "relation_count": 1,
+      "unsupported_relation_count": 0,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "reciprocal_rank": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "metrics_id": "b94d4b483af5f44bf8a2d5558e7a5fc5ba2b849299ade0a85ea5fc6fd7a3b3c5",
+      "observation_id": "f5cde542285a1c26ae837c5805548fcf2ea477d11604a607500cd8d9a1cf1280",
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "gold_file_count": 2,
+      "gold_symbol_count": 2,
+      "matched_file_ranks": [
+        1,
+        2
+      ],
+      "matched_symbol_ranks": [
+        1,
+        2
+      ],
+      "prediction_quality_unavailable_reason": null,
+      "evidence_count": 3,
+      "valid_evidence_count": 3,
+      "relation_count": 2,
+      "unsupported_relation_count": 0,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "reciprocal_rank": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 3,
+        "denominator": 3,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 2,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "metrics_id": "fe51b1d1189559cf67882d53efd1c69e269d32958bdc93e70ead31eb72f62982",
+      "observation_id": "308eabe71819becb5ba29ed215736a77fc0aaefe9bf921b97f1f72fc29a3d602",
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "gold_file_count": 1,
+      "gold_symbol_count": 1,
+      "matched_file_ranks": [
+        1
+      ],
+      "matched_symbol_ranks": [
+        1
+      ],
+      "prediction_quality_unavailable_reason": null,
+      "evidence_count": 2,
+      "valid_evidence_count": 2,
+      "relation_count": 1,
+      "unsupported_relation_count": 0,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "reciprocal_rank": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "metrics_id": "492d5bf47311d9ffd3122cc4a2024aaf89b6301fcd7a9ac4c0976809308bd2bb",
+      "observation_id": "39ac6a980e1a1dd6fb7ef87b09da717054fb82cbcfe3d63b7eb4b6cb36454a77",
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "gold_file_count": 2,
+      "gold_symbol_count": 2,
+      "matched_file_ranks": [
+        1,
+        2
+      ],
+      "matched_symbol_ranks": [
+        1,
+        2
+      ],
+      "prediction_quality_unavailable_reason": null,
+      "evidence_count": 3,
+      "valid_evidence_count": 3,
+      "relation_count": 2,
+      "unsupported_relation_count": 0,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "reciprocal_rank": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 3,
+        "denominator": 3,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 2,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "metrics_id": "db078aff18993c57b0f449da4046ded2e5188138f606ebb6ff684666dfdeb8d4",
+      "observation_id": "f7c3a49fd95334dda7a376caa0f5deb12ae225a1bc50cefc5152194f3afaa9d5",
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "gold_file_count": 1,
+      "gold_symbol_count": 1,
+      "matched_file_ranks": [
+        1
+      ],
+      "matched_symbol_ranks": [
+        1
+      ],
+      "prediction_quality_unavailable_reason": null,
+      "evidence_count": 2,
+      "valid_evidence_count": 2,
+      "relation_count": 1,
+      "unsupported_relation_count": 0,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "reciprocal_rank": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 1,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "metrics_id": "3b19a0955208d10c740bfc2bbdb56687bcc50833955e00b9c1a9f06470820cdf",
+      "observation_id": "8e7cc62c69fc53912b6d35dfae89cc5fa09baac47ed63651dfeb06b739fd8d50",
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "gold_file_count": 2,
+      "gold_symbol_count": 2,
+      "matched_file_ranks": [
+        1,
+        2
+      ],
+      "matched_symbol_ranks": [
+        1,
+        2
+      ],
+      "prediction_quality_unavailable_reason": null,
+      "evidence_count": 3,
+      "valid_evidence_count": 3,
+      "relation_count": 2,
+      "unsupported_relation_count": 0,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 2,
+        "value_ppm": 500000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 2,
+        "denominator": 2,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "reciprocal_rank": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 1,
+        "denominator": 1,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 3,
+        "denominator": 3,
+        "value_ppm": 1000000,
+        "unavailable_reason": null
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "availability": "observed",
+        "numerator": 0,
+        "denominator": 2,
+        "value_ppm": 0,
+        "unavailable_reason": null
+      }
+    }
+  ],
+  "aggregates": [
+    {
+      "schema_version": 1,
+      "aggregate_id": "6f87aaeecb5eca5bcec18aefe74403ee1465c0040fdbd004a5a96f7edd2afaca",
+      "variant": "tool_wrapper",
+      "observation_count": 2,
+      "unique_case_count": 2,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 0,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 0,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        }
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 1,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        }
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 1,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 0,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 0,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 500000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 250000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 1,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 333333,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 500000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 250000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 1,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 333333,
+          "unavailable_reason": null
+        }
+      },
+      "mean_reciprocal_rank": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 500000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 250000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": null,
+        "micro_denominator": null,
+        "micro": {
+          "schema_version": 1,
+          "availability": "unavailable",
+          "value_ppm": null,
+          "unavailable_reason": "not_applicable"
+        }
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 0,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 0,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        }
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 0,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 0,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        }
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 0,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 0,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        }
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 500000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 250000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 1,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 333333,
+          "unavailable_reason": null
+        }
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 0,
+        "score_sum_ppm": 0,
+        "macro": {
+          "schema_version": 1,
+          "availability": "unavailable",
+          "value_ppm": null,
+          "unavailable_reason": "no_eligible_observations"
+        },
+        "micro_numerator": null,
+        "micro_denominator": null,
+        "micro": {
+          "schema_version": 1,
+          "availability": "unavailable",
+          "value_ppm": null,
+          "unavailable_reason": "no_eligible_observations"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "aggregate_id": "231648244bbd8f8372df458b900a287ca7070c8182e6aa7f73678ba7bba238af",
+      "variant": "evaluator_loop",
+      "observation_count": 2,
+      "unique_case_count": 2,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 1,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        }
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 500000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 250000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 1,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 333333,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 3,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 3,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "mean_reciprocal_rank": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1500000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 750000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": null,
+        "micro_denominator": null,
+        "micro": {
+          "schema_version": 1,
+          "availability": "unavailable",
+          "value_ppm": null,
+          "unavailable_reason": "not_applicable"
+        }
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 1,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        }
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 1,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        }
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 1,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 500000,
+          "unavailable_reason": null
+        }
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1166666,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 583333,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 3,
+        "micro_denominator": 5,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 600000,
+          "unavailable_reason": null
+        }
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1500000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 750000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 666666,
+          "unavailable_reason": null
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "aggregate_id": "cf5db4587e23818c3d9a3a1e7f017f4b5525e6ff7d2da9b828ff6c0e4e959e77",
+      "variant": "evaluator_loop_symbol_tools",
+      "observation_count": 2,
+      "unique_case_count": 2,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1500000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 750000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 666666,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 3,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 3,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "mean_reciprocal_rank": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": null,
+        "micro_denominator": null,
+        "micro": {
+          "schema_version": 1,
+          "availability": "unavailable",
+          "value_ppm": null,
+          "unavailable_reason": "not_applicable"
+        }
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 5,
+        "micro_denominator": 5,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 0,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 0,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "aggregate_id": "d5f9c5973d0a2a1eb85d5501c20d35accf173515c6a0ea7b27d6fc71813055f9",
+      "variant": "evaluator_loop_context_builder",
+      "observation_count": 2,
+      "unique_case_count": 2,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1500000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 750000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 666666,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 3,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 3,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "mean_reciprocal_rank": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": null,
+        "micro_denominator": null,
+        "micro": {
+          "schema_version": 1,
+          "availability": "unavailable",
+          "value_ppm": null,
+          "unavailable_reason": "not_applicable"
+        }
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 5,
+        "micro_denominator": 5,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 0,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 0,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "aggregate_id": "71be168948f227a98514932470a53138000ad3a5c8e6d8b02d2eaece95bc88c6",
+      "variant": "evaluator_loop_context_builder_memory",
+      "observation_count": 2,
+      "unique_case_count": 2,
+      "file_hit_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_hit_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_hit_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 1500000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 750000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 666666,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 3,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "file_recall_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 3,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "mean_reciprocal_rank": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": null,
+        "micro_denominator": null,
+        "micro": {
+          "schema_version": 1,
+          "availability": "unavailable",
+          "value_ppm": null,
+          "unavailable_reason": "not_applicable"
+        }
+      },
+      "symbol_hit_at_1": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "symbol_hit_at_3": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "symbol_hit_at_5": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 2,
+        "micro_denominator": 2,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "evidence_validity": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 2000000,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 5,
+        "micro_denominator": 5,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 1000000,
+          "unavailable_reason": null
+        }
+      },
+      "unsupported_relation_rate": {
+        "schema_version": 1,
+        "total_observations": 2,
+        "eligible_observations": 2,
+        "score_sum_ppm": 0,
+        "macro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        },
+        "micro_numerator": 0,
+        "micro_denominator": 3,
+        "micro": {
+          "schema_version": 1,
+          "availability": "observed",
+          "value_ppm": 0,
+          "unavailable_reason": null
+        }
+      }
+    }
+  ],
+  "evaluation_scope": "localization_only",
+  "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+}

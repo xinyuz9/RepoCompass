@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "manifest_id": "2e69c3375dcc7d87db53a2f8ba9cee89b153c95d865d9f33005472d6df5ecf23",
+  "name": "localization-fixture",
+  "version": "v1",
+  "kind": "synthetic_fixture",
+  "cases": [
+    {
+      "schema_version": 1,
+      "case_id": "9c8a578f969c4761e314178556190fc469111a95275165adaea52ae585fdd2ef",
+      "task": {
+        "schema_version": 1,
+        "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__cost-2",
+        "repository": "example/repocompass-fixture",
+        "base_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "objective": "Locate the attempt cost aggregation entry point.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "011d6881ab0460e136f94a703d4d5461626a3aae0dfa4ce3087bb27e8c0a9e46",
+        "task_id": "5e30d49c4969eaa5cf631cb62537c6e28f634ace2f56af1ca0b59e494dbe7096",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "gold_files": [
+          "src/cost.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/cost.py",
+            "qualified_name": "src.cost.build_cost_report"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "c05dce0fde864641ca3e47555ca308d22a29cbc73a02a55143e359901721b7de",
+      "task": {
+        "schema_version": 1,
+        "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__routing-1",
+        "repository": "example/repocompass-fixture",
+        "base_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "objective": "Locate retry routing and controller ownership.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "398596117c763c32e1b9df63f163f55c3f65c3196b389246e4cf7d79d94895f7",
+        "task_id": "1e08863e78be43d5e41ce4e91812641abe85d301dabc9d81cfab71e55e104c4d",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "gold_files": [
+          "src/controller.py",
+          "src/router.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/controller.py",
+            "qualified_name": "src.controller.route_request"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/router.py",
+            "qualified_name": "src.router.Router.retry"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    }
+  ],
+  "evaluation_scope": "localization_only",
+  "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+}
