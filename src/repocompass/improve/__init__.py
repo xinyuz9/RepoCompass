@@ -10,6 +10,13 @@ from repocompass.improve.contracts import (
     VerificationSpec,
     create_change_proposal,
 )
+from repocompass.improve.engine import (
+    FocusedImproveEngine,
+    FocusedImproveRunReport,
+    ImproveEvaluationFeedback,
+    ImproveStopReason,
+    SequenceProposalProducer,
+)
 from repocompass.improve.proposal import (
     ProposalValidationError,
     ProposalValidationErrorReason,
@@ -33,10 +40,14 @@ from repocompass.improve.sandbox import (
 __all__ = [
     "BubblewrapVerifier",
     "FocusedChangeProposal",
+    "FocusedImproveEngine",
+    "FocusedImproveRunReport",
     "FocusedImproveScope",
+    "ImproveEvaluationFeedback",
     "ImproveScopeError",
     "ImproveScopeErrorReason",
     "ImproveTargetSelection",
+    "ImproveStopReason",
     "ProposalValidationError",
     "ProposalValidationErrorReason",
     "ProposalVerificationReport",
@@ -45,6 +56,7 @@ __all__ = [
     "ScopedImproveTarget",
     "SandboxExecutionError",
     "SandboxUnavailableError",
+    "SequenceProposalProducer",
     "ValidatedFocusedChange",
     "VerificationSpec",
     "VerificationDecisionReason",

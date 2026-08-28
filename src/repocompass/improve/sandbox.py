@@ -34,7 +34,7 @@ from repocompass.improve.proposal import validate_focused_change_proposal
 from repocompass.tools.contracts import Sha256Digest
 
 MAX_SANDBOX_OUTPUT_BYTES = 262_144
-SANDBOX_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
+SANDBOX_ADDRESS_SPACE_BYTES = 4 * 1024 * 1024 * 1024
 SANDBOX_MAX_PROCESSES = 128
 SANDBOX_MAX_OPEN_FILES = 256
 _GIT_TIMEOUT_SECONDS = 10

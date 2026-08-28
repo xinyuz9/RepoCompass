@@ -106,7 +106,10 @@ def test_all_fixed_python_profiles_run_without_workspace_cache_side_effects(
         repository, scope, _proposal(repository, scope)
     )
 
-    assert report.accepted is True
+    assert report.accepted is True, [
+        (check.profile.value, check.status.value, check.exit_code, check.output)
+        for check in report.checks
+    ]
     assert tuple(check.profile for check in report.checks) == tuple(
         PythonVerificationProfile
     )
