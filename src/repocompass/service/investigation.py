@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from pathlib import Path
 from threading import RLock
 from typing import Protocol
 from uuid import uuid4
@@ -19,6 +20,7 @@ from repocompass.agent.thread_view import (
     ThreadExecutionState,
     ThreadInvestigationView,
 )
+from repocompass.agent.trace import RunTrace
 from repocompass.structure.evidence_graph import EvidenceNodeKind
 from repocompass.service.contracts import (
     ArtifactAvailability,
@@ -61,6 +63,12 @@ class InvestigationSymbolAmbiguousError(InvestigationServiceError):
     """A canonical-name selector matched more than one graph symbol."""
 
 
+class InvestigationTraceSink(Protocol):
+    """Minimal persistence boundary for one completed attempt trace."""
+
+    def write(self, trace: RunTrace, destination: Path) -> Path: ...
+
+
 class InvestigationRunner(Protocol):
     """Runner methods consumed by the application service."""
 
@@ -82,6 +90,8 @@ class InvestigationService:
         *,
         operation_store: ServiceOperationStore,
         thread_id_factory: Callable[[], str] = lambda: str(uuid4()),
+        trace_sink: InvestigationTraceSink | None = None,
+        trace_directory: Path | None = None,
     ) -> None:
         if not all(
             callable(getattr(runner, method, None))
@@ -92,9 +102,19 @@ class InvestigationService:
             raise TypeError("operation_store must be a ServiceOperationStore")
         if not callable(thread_id_factory):
             raise TypeError("thread_id_factory must be callable")
+        if (trace_sink is None) != (trace_directory is None):
+            raise ValueError(
+                "trace_sink and trace_directory must be configured together"
+            )
+        if trace_sink is not None and not callable(getattr(trace_sink, "write", None)):
+            raise TypeError("trace_sink must implement write")
+        if trace_directory is not None and not isinstance(trace_directory, Path):
+            raise TypeError("trace_directory must be a Path")
         self._runner = runner
         self._operation_store = operation_store
         self._thread_id_factory = thread_id_factory
+        self._trace_sink = trace_sink
+        self._trace_directory = trace_directory
         self._mutation_lock = RLock()
 
     @staticmethod
@@ -417,6 +437,12 @@ class InvestigationService:
             outcome=outcome,
             recovered=False,
         )
+        if self._trace_sink is not None:
+            assert self._trace_directory is not None
+            self._trace_sink.write(
+                outcome.trace,
+                self._trace_directory / self._trace_filename(outcome.trace.run_id),
+            )
         self._operation_store.complete(
             request_id=request_id,
             request_digest=request_digest,
@@ -474,3 +500,18 @@ class InvestigationService:
         if not normalized or len(normalized) > 256:
             raise ValueError("thread_id_factory returned an invalid identifier")
         return normalized
+
+    @staticmethod
+    def _trace_filename(run_id: str) -> str:
+        """Map an internal run identifier to one traversal-safe filename."""
+
+        if (
+            not run_id
+            or len(run_id) > 256
+            or run_id in {".", ".."}
+            or "/" in run_id
+            or "\\" in run_id
+            or "\x00" in run_id
+        ):
+            raise ValueError("Runner trace returned an invalid run identifier")
+        return f"{run_id}.jsonl"

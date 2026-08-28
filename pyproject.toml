@@ -11,6 +11,7 @@ dependencies = [
     "langchain-openai>=1.3.5",
     "langgraph>=1.2.9",
     "langgraph-checkpoint-sqlite>=3.1.0",
+    "mcp>=2.1.1,<3.0.0",
     "python-dotenv>=1.2.2",
 ]
 
@@ -22,6 +23,7 @@ repocompass-live-smoke = "repocompass.evaluation.live_smoke:main"
 repocompass-localization-benchmark = "repocompass.evaluation.localization_cli:main"
 repocompass-localization-analyze = "repocompass.evaluation.localization_analysis_cli:analysis_main"
 repocompass-localization-regression = "repocompass.evaluation.localization_analysis_cli:regression_main"
+repocompass-mcp = "repocompass.mcp_server:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]

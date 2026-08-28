@@ -2,6 +2,7 @@
 
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from repocompass.agent.thread_view import (
     ThreadInvestigationView,
 )
 from repocompass.agent.trace import RunTrace
+from repocompass.agent.trace_sink import JsonlTraceSink
 from repocompass.service.contracts import (
     ArtifactAvailability,
     ExpandSymbolRequest,
@@ -175,6 +177,57 @@ def test_start_is_durably_idempotent_and_preserves_all_budgets(tmp_path: Path) -
     changed = request.model_copy(update={"objective": "A changed objective."})
     with pytest.raises(ServiceOperationConflictError, match="different payload"):
         service.start_investigation(changed)
+
+
+def test_service_persists_each_attempt_trace_once(tmp_path: Path) -> None:
+    runner = _FakeRunner()
+    trace_directory = tmp_path / "traces"
+    service = InvestigationService(
+        runner,
+        operation_store=ServiceOperationStore(sqlite3.connect(":memory:")),
+        thread_id_factory=lambda: "thread-generated",
+        trace_sink=JsonlTraceSink(),
+        trace_directory=trace_directory,
+    )
+    request = StartInvestigationRequest(
+        request_id="trace-start",
+        repo_path=tmp_path,
+        objective="Locate authentication.",
+    )
+
+    first = service.start_investigation(request)
+    replay = service.start_investigation(request)
+
+    assert first.run_id == "run-1"
+    assert replay.idempotent_replay is True
+    assert tuple(path.name for path in trace_directory.iterdir()) == ("run-1.jsonl",)
+    assert (trace_directory / "run-1.jsonl").read_text(encoding="utf-8") == ""
+
+
+def test_service_rejects_trace_identifier_path_traversal(tmp_path: Path) -> None:
+    class UnsafeTraceRunner(_FakeRunner):
+        def run(self, request):
+            return replace(super().run(request), trace=RunTrace("../escape"))
+
+    trace_directory = tmp_path / "traces"
+    service = InvestigationService(
+        UnsafeTraceRunner(),
+        operation_store=ServiceOperationStore(sqlite3.connect(":memory:")),
+        thread_id_factory=lambda: "thread-generated",
+        trace_sink=JsonlTraceSink(),
+        trace_directory=trace_directory,
+    )
+
+    with pytest.raises(ValueError, match="invalid run identifier"):
+        service.start_investigation(
+            StartInvestigationRequest(
+                request_id="unsafe-trace",
+                repo_path=tmp_path,
+                objective="Locate authentication.",
+            )
+        )
+
+    assert not (tmp_path / "escape.jsonl").exists()
 
 
 def test_resume_tool_preserves_resume_versus_human_response_semantics() -> None:
