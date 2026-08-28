@@ -1,0 +1,1339 @@
+{
+  "schema_version": 1,
+  "manifest_id": "f88e8822c07af347a50e7cf95a975b479c7aeba6d76c295a2eec21deff9c67aa",
+  "name": "localization-scale-fixture-40",
+  "version": "v1",
+  "kind": "synthetic_fixture",
+  "cases": [
+    {
+      "schema_version": 1,
+      "case_id": "61b107ca149401eabeb3336649da55775fcc1b8ea877c366b728891b13b310c2",
+      "task": {
+        "schema_version": 1,
+        "task_id": "f8069700e78508744f588c5f486b46f927c9a0cb31d872bc721c5d90540767c8",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-000",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "f1d02026c2ecd9dcceea4c6c6742056fd93f623d",
+        "objective": "Synthetic scale case 00: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "2bdce48a59fdbfe539c2aba2affba4a050411d13227dcc045a2fd68afe4b60e9",
+        "task_id": "f8069700e78508744f588c5f486b46f927c9a0cb31d872bc721c5d90540767c8",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "cb44d440145b15a5459683b9d29b91d67b3d365f743a24015b04f4d6928c66f6",
+        "gold_files": [
+          "src/domain_00.py",
+          "src/shared_00.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_00.py",
+            "qualified_name": "src.domain_00.target"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/shared_00.py",
+            "qualified_name": "src.shared_00.helper_00"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "3a6b0018b6a5cfaa453a132e463abaea12543baf0b69e6fa2bdca5047084b797",
+      "task": {
+        "schema_version": 1,
+        "task_id": "c1947ef0acd9baf5522c742dc53d8b34bd869479ae81dfb2df99567c300c215e",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-001",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "5371ca5218acab98d82ba04b639033307313e04e",
+        "objective": "Synthetic scale case 01: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "c1edf5d99644eec2b31010c2a47da797d35bf3ae5821dbdb780a43935041d577",
+        "task_id": "c1947ef0acd9baf5522c742dc53d8b34bd869479ae81dfb2df99567c300c215e",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "d91a22a4f34c6fc8d68a90aac30a554de63aac279a84c4a21cc66627d09262f9",
+        "gold_files": [
+          "src/domain_01.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_01.py",
+            "qualified_name": "src.domain_01.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "b251233244f883ed9492381fdb35c61378a91f315995659b472e3728fad0d846",
+      "task": {
+        "schema_version": 1,
+        "task_id": "7f5faea6ae2578e959ce2597b5cbe0845c86813aa557251cff8483ca38431e50",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-002",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "3381cd07433da02b568c9aeafa372dc522068b90",
+        "objective": "Synthetic scale case 02: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "e8b052fb7d035ebd911bdfa7f8eb7b04834b7d775ce2b5181f96454ac9116212",
+        "task_id": "7f5faea6ae2578e959ce2597b5cbe0845c86813aa557251cff8483ca38431e50",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "b77bc663ae9660d2d4bb62f7f3ee1ed727c02637d5cbc3286b43db3e4ae4eded",
+        "gold_files": [
+          "src/domain_02.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_02.py",
+            "qualified_name": "src.domain_02.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "d3457abc8a606147f4652886e1e5c57653f1d04ad913254f0b11e8b3cf25e909",
+      "task": {
+        "schema_version": 1,
+        "task_id": "3febd4246c9627b6a37dcd38a99cf889235c75239411ca364e46427944403c75",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-003",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "0fd5f18d1c7c5fd5e01cc50bd294a4b23f358e74",
+        "objective": "Synthetic scale case 03: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "2b9a849c3973ed798ae61a4269b3573157bf23cd3d9383e9d9cb1458a6de78da",
+        "task_id": "3febd4246c9627b6a37dcd38a99cf889235c75239411ca364e46427944403c75",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "146300cba697fbe01e24e33865c67d9255b0902cb6a25b12471a18944d0e7d07",
+        "gold_files": [
+          "src/domain_03.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_03.py",
+            "qualified_name": "src.domain_03.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "31fd1686f366f645fad2289cba781b024b77b627e69b0940b2f72cbc228ea7d0",
+      "task": {
+        "schema_version": 1,
+        "task_id": "5eb576a802a42b3f5cdbaa183b2b46bfd45c8c14c6a80e68d74175c906a375f4",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-004",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "f5aef810dab5bccd186f846753ec6b4f0c1ce0e6",
+        "objective": "Synthetic scale case 04: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "e81c73fc25932c7caf7683865d5d4be6e42cbe78858bb39f96f81fff2cb18539",
+        "task_id": "5eb576a802a42b3f5cdbaa183b2b46bfd45c8c14c6a80e68d74175c906a375f4",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "f5395ca3d92457bdc8051fcc52216926d0e4a374879b1786b4d60110feeaf6ae",
+        "gold_files": [
+          "src/domain_04.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_04.py",
+            "qualified_name": "src.domain_04.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "0be3dc5ee22f92c5e5ce2d7b976fb335ff081eae8162d778c8cb2d67b1dab5ca",
+      "task": {
+        "schema_version": 1,
+        "task_id": "2b57ba2f699616d5bf748ee37e58c2425d176874dff2e42576faddac7954d259",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-005",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "23bf0dac8dc2e4b6231e6919c93ac1d20d2f005d",
+        "objective": "Synthetic scale case 05: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "9acc890fa58336ab557b462798c5eed4d74e5df72a53adb14a4b4547ba743db0",
+        "task_id": "2b57ba2f699616d5bf748ee37e58c2425d176874dff2e42576faddac7954d259",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "8c87ea84e5f77de8615692836ea6692dad5abfee0818c22334ce5f1ed7299a80",
+        "gold_files": [
+          "src/domain_05.py",
+          "src/shared_05.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_05.py",
+            "qualified_name": "src.domain_05.target"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/shared_05.py",
+            "qualified_name": "src.shared_05.helper_05"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "82ead899f1e39750a9eb0fb45fb360cdccd92afd8f4c946ccfa82478bd0b844f",
+      "task": {
+        "schema_version": 1,
+        "task_id": "0abe6a38766d5c7614773689e5897298a9c3293cf3b4bcb40e40e6cf7d6fd9ab",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-006",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "7e343e4dddc04c3977b80239ceed972ead8431f0",
+        "objective": "Synthetic scale case 06: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "d679be7363510cd6387c4a0ec0104a6a80e7984678db347d66ca61408abe8e3e",
+        "task_id": "0abe6a38766d5c7614773689e5897298a9c3293cf3b4bcb40e40e6cf7d6fd9ab",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "829a7a4938222d740cf9a24f4f188a189b4d2e5cb15406e36d815376dd1f64d9",
+        "gold_files": [
+          "src/domain_06.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_06.py",
+            "qualified_name": "src.domain_06.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "51545930399d33000b1d913d047da714674c5af61bb9e6ddadc0344051fd0ec1",
+      "task": {
+        "schema_version": 1,
+        "task_id": "4010e074306070a41ec562b141a03a563b6a1942b5bf3dc2df454ad6cc2ef0d1",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-007",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "747fa5cd65355b316daf6e0ad692b3e211d532cd",
+        "objective": "Synthetic scale case 07: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "a059af199380ab2e2f648738552b4cc2f699ee9ee049c2597d1285734cc4ae22",
+        "task_id": "4010e074306070a41ec562b141a03a563b6a1942b5bf3dc2df454ad6cc2ef0d1",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "57e6fa8c78ff5f658c5dd5bfc4cc8765baee7ec9e45bddbc3ba15cf50fa2f657",
+        "gold_files": [
+          "src/domain_07.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_07.py",
+            "qualified_name": "src.domain_07.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "dc4c07cce32b3a9400e691b4387743ab1e5d8e965c7aa76c2773510d135dad6f",
+      "task": {
+        "schema_version": 1,
+        "task_id": "8f13437f2534f39cb1a934986eb078832026a898871ced8ae9fe67d30075cd45",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-008",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "668146bf7b7bc8c7e4f0eaace3f8327c9c1126dc",
+        "objective": "Synthetic scale case 08: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "1e1da3060c04479f35ae5af06587b62d07c5183c6c67dfbfdb3bf59c5c617e09",
+        "task_id": "8f13437f2534f39cb1a934986eb078832026a898871ced8ae9fe67d30075cd45",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "aa3d769b7c4e39120bf831cac99c89c65656baf95e1bb338148cb4d1d7edc6d5",
+        "gold_files": [
+          "src/domain_08.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_08.py",
+            "qualified_name": "src.domain_08.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "0574e15eeef1f554fffa0c0e8cc6c19cb02e4425d04902e5e326285e85dc2d1a",
+      "task": {
+        "schema_version": 1,
+        "task_id": "2f7bc00448ce97488b7940c89cc3712ff310a0959fcb2f226da5eac638ebc497",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-009",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "13beb9b167acebd52388d6790d1083464a84ed27",
+        "objective": "Synthetic scale case 09: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "e515869894f5e1b76aa20e03af4053f54bffcd54d6292f6b45a42a720a60e92a",
+        "task_id": "2f7bc00448ce97488b7940c89cc3712ff310a0959fcb2f226da5eac638ebc497",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "7351937e83f22d0f0365eaa8ef1f60cbef472676c8d27914f015ed055ca1b9cf",
+        "gold_files": [
+          "src/domain_09.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_09.py",
+            "qualified_name": "src.domain_09.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "db3321c903ef31a469097022ab6c80e50c17be66ae7eb90085b7e4dd093cd883",
+      "task": {
+        "schema_version": 1,
+        "task_id": "6087a32e8e6a82742359ad229afb548c97157cc88d2aa463dda260842acb7c0d",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-010",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "8940753043556c2e30b300b83adf51908a03b9ce",
+        "objective": "Synthetic scale case 10: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "c0b31d4d7146a4d98fe34a960fdfd1c86a66f325a1d4a97854ab2b19a431d611",
+        "task_id": "6087a32e8e6a82742359ad229afb548c97157cc88d2aa463dda260842acb7c0d",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "a72b98bfd2503ff0343365f58a93b2fdf875d778d0b6ff5127408ffcebde8eb5",
+        "gold_files": [
+          "src/domain_10.py",
+          "src/shared_03.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_10.py",
+            "qualified_name": "src.domain_10.target"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/shared_03.py",
+            "qualified_name": "src.shared_03.helper_10"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "52e2b67cca966157bd1822b909472db16a2cce5f60a603b199570c8dcbe1b984",
+      "task": {
+        "schema_version": 1,
+        "task_id": "7ecb882961e7aa9a6971ee7b412774e347d981a89eeab222b8e6d56ee7abd68c",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-011",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "eb6d8c12655f494a6ec30d68afc3e572a0e63481",
+        "objective": "Synthetic scale case 11: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "38502a8f4e3fa9b03c7606b33bf2bb4b501b42041c3703ed9242733226662d3f",
+        "task_id": "7ecb882961e7aa9a6971ee7b412774e347d981a89eeab222b8e6d56ee7abd68c",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "239d286dba3edd0165f4e3cea98916cc8c0b35da690229c554b1afadbb6a1498",
+        "gold_files": [
+          "src/domain_11.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_11.py",
+            "qualified_name": "src.domain_11.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "8e53c1fe1b7f2b7620139bf529729f3063d32a45ba14b7f031afe70e537c5c9e",
+      "task": {
+        "schema_version": 1,
+        "task_id": "cd14f2646118bde764afdc514494001f78ad8eff15dcfaf0b00c9343b1965388",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-012",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "469ce8fe9c76d4a34f2d8eb657044b45df813cf2",
+        "objective": "Synthetic scale case 12: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "67fe0501f8eff8e83a5c675a2f7658ea1913b88a9ac5b5b6bcc342970e1648d4",
+        "task_id": "cd14f2646118bde764afdc514494001f78ad8eff15dcfaf0b00c9343b1965388",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "e9e2b2457422a0dd90db6df9610efc9e67d2c0c8175b40c3d038908ae1fac91e",
+        "gold_files": [
+          "src/domain_12.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_12.py",
+            "qualified_name": "src.domain_12.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "448a366d8c5669ec775856c7b6ab84f319f630adf491b8d2e659782acecf85ec",
+      "task": {
+        "schema_version": 1,
+        "task_id": "082e081604bccb620cd54c58c7067aa373cdb2d73cda8eb6a9ac5855765a19e4",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-013",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "4d32e3169a0f51a0b98b0eabaa8b6533eb1c5882",
+        "objective": "Synthetic scale case 13: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "dfa129a33017c3840116b91044dab3f6afb3cd99f3aefe95e0f2353c60ebc748",
+        "task_id": "082e081604bccb620cd54c58c7067aa373cdb2d73cda8eb6a9ac5855765a19e4",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "bb8edb566cf0b8cd5087b239c21c7a6075a5f2afaae92c1029a822f6aadcc0af",
+        "gold_files": [
+          "src/domain_13.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_13.py",
+            "qualified_name": "src.domain_13.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "8dae27cf45947ec1874d1d3f4268cecdca94349a1448b72a2c153e3e6e32c9bb",
+      "task": {
+        "schema_version": 1,
+        "task_id": "e629047c8a922b5032c61bf3ed5486b2e70870a2c7fa096a4d6021330c2ecf14",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-014",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "7cc1354032734d2200f2a500a060f0f0f71862a1",
+        "objective": "Synthetic scale case 14: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "ae0d8d29b9d550e15b5a0b0b34c422c04ff393f74143d77c5d6cd35db635d246",
+        "task_id": "e629047c8a922b5032c61bf3ed5486b2e70870a2c7fa096a4d6021330c2ecf14",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "623ad17a009c1fa220ead49c7672b910fe5e9640108c1d7cbcca31498d5313a2",
+        "gold_files": [
+          "src/domain_14.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_14.py",
+            "qualified_name": "src.domain_14.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "c462c96c15cb7ef219d9f34a47ee7185b3f1a677b53c5ba51e89bdc271352a3c",
+      "task": {
+        "schema_version": 1,
+        "task_id": "2db5e885faf1c43aa6615696cfbd77092e4aed2cbc868f3c805fc1becbca407b",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-015",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "64646c3a38cfc863834971d7cd5aac30a9edc0d8",
+        "objective": "Synthetic scale case 15: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "410bc122bd365ab87d7e104159e7a2eea44ab2179637b3646a0e5b8e2e5d3256",
+        "task_id": "2db5e885faf1c43aa6615696cfbd77092e4aed2cbc868f3c805fc1becbca407b",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "f1aaadd5cef10c5f877782137bcb0b86da9847b325c9a35cbe03f98332fc485b",
+        "gold_files": [
+          "src/domain_15.py",
+          "src/shared_01.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_15.py",
+            "qualified_name": "src.domain_15.target"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/shared_01.py",
+            "qualified_name": "src.shared_01.helper_15"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "878c720ac5f01f71e088f77ec6b891f4351b6ad2043a848914dc5c7d823acb04",
+      "task": {
+        "schema_version": 1,
+        "task_id": "ef72a71216523af4dd2bd9501af42aec4264f9646da660d55ab041e391b69a4a",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-016",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "2989ea514ef6ceac7bd66461f5a47e07fe1f3a6d",
+        "objective": "Synthetic scale case 16: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "33df3038c1539e2361bf760188d0165f804b6b0c946fd82dc085e4740d8ad0a9",
+        "task_id": "ef72a71216523af4dd2bd9501af42aec4264f9646da660d55ab041e391b69a4a",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "f939e481fa956c2ba02361213b5e7884a16f7678df8ca87be864f70f55ca5aa0",
+        "gold_files": [
+          "src/domain_16.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_16.py",
+            "qualified_name": "src.domain_16.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "bbb937475928497df5e0018b2bf1cf092f857aa408621bc3befbfc20c4b344b8",
+      "task": {
+        "schema_version": 1,
+        "task_id": "b1aa69503fab13c2c5b793a327138a6615478f9e3b03f95ccb5d714c3b18cb1b",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-017",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "96e69794561a13c32d6188b4b61ddaae9fe4b1f3",
+        "objective": "Synthetic scale case 17: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "43bdb9987de768c934ec4286bcd197c019043a0163e0a4b607292ed3417ad5f2",
+        "task_id": "b1aa69503fab13c2c5b793a327138a6615478f9e3b03f95ccb5d714c3b18cb1b",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "3eea89613a9893b648fafdb0915330dc9534c16cc4dae7abb92c794968efbd6f",
+        "gold_files": [
+          "src/domain_17.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_17.py",
+            "qualified_name": "src.domain_17.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "a3585918171708d08b6d0adcb8eabbea3f84bc4f14ca74979761d2696d1e5ca2",
+      "task": {
+        "schema_version": 1,
+        "task_id": "cda158af00523cda35d266c82a7cdc58e2f8c69163057f3ede32b97fa18313ff",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-018",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "6af12234f588c12b2a7f1fd48ecb287284216a68",
+        "objective": "Synthetic scale case 18: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "c15f7452d69989547c03535765d126a2dffd13acd8e0c4dab7771774c558d33c",
+        "task_id": "cda158af00523cda35d266c82a7cdc58e2f8c69163057f3ede32b97fa18313ff",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "5be430ab016326fbc375ebac8f65d0952f9f9b94a0da8ce3f87cf0a444b412a9",
+        "gold_files": [
+          "src/domain_18.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_18.py",
+            "qualified_name": "src.domain_18.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "4c98375bf5e6317daeb160f2dda23dcd22f6108c88b92aee1c5fa698b095e242",
+      "task": {
+        "schema_version": 1,
+        "task_id": "b6eb33e06521333b52526f475aec147abc88fa0d6839ef304039e4c89ed8dcef",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-019",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "18453d693a846bca792c5c1d1b58158e20146ca6",
+        "objective": "Synthetic scale case 19: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "78bca20f221a279a7f7b234ac07ab3a6544a08fabf6dba2dd26cc7d52755fd76",
+        "task_id": "b6eb33e06521333b52526f475aec147abc88fa0d6839ef304039e4c89ed8dcef",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "184f0c77d0946671bfd812a46f4f9dc07a93e24e9dd32f9ce59ec45e4a1ed29b",
+        "gold_files": [
+          "src/domain_19.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_19.py",
+            "qualified_name": "src.domain_19.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "d82f1ccbc630209699eefdc12ebe84383fdb148aa0d8ee9d9ea4441b2faf0cfb",
+      "task": {
+        "schema_version": 1,
+        "task_id": "4a9b543983e61947b846e96a3dd470572208af264eeb942c0a6cbe58b1f4e9f0",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-020",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "4cea969c18c01011acdc00a748119f4c53859eed",
+        "objective": "Synthetic scale case 20: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "dcddd97c9a6294054baac4d3b4d6b8b7eb18132f04edf4c7a9a488b404dba60c",
+        "task_id": "4a9b543983e61947b846e96a3dd470572208af264eeb942c0a6cbe58b1f4e9f0",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "017d09bd9499cd33842e32cce515377cda90d950910fd8286ee28860207b1814",
+        "gold_files": [
+          "src/domain_20.py",
+          "src/shared_06.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_20.py",
+            "qualified_name": "src.domain_20.target"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/shared_06.py",
+            "qualified_name": "src.shared_06.helper_20"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "a49e4291123abd903c0081bb56db672f4e20f71207afcbfc042fb8bdf5ee1adf",
+      "task": {
+        "schema_version": 1,
+        "task_id": "d81fdd0b8ad8256b242f40306755b772594628b8644daaf94f614e1ee2f62fd0",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-021",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "f3837e5b5db9719f934e009be70161e6a023b2b9",
+        "objective": "Synthetic scale case 21: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "365222bd8cf0893efa2a1d811a071cf67267d82af725bb0ddcab26cf3eecf8d3",
+        "task_id": "d81fdd0b8ad8256b242f40306755b772594628b8644daaf94f614e1ee2f62fd0",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "ba2ff1d25cdab21235995d99b0d2111d83c03998b9357a007527351359eba208",
+        "gold_files": [
+          "src/domain_21.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_21.py",
+            "qualified_name": "src.domain_21.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "ee13a470f5639dccf38af2259cf6cb2b6c6e55f27b31d52ae5b71ebd88460d27",
+      "task": {
+        "schema_version": 1,
+        "task_id": "cdd5746574a223a9580d64b9a840037f8d281e38d35916ca88efb4ec9a9d99bd",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-022",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "2e96d07a1b2405619ed454bf252c523f53c3016d",
+        "objective": "Synthetic scale case 22: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "6fa51ea4bd2a365fbefaf766699ee13bdfd1623ea11b505674fc9711217071b0",
+        "task_id": "cdd5746574a223a9580d64b9a840037f8d281e38d35916ca88efb4ec9a9d99bd",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "bb7dec667b2117617545468a50704e01ffbdcd89fff6a44d3f1b68a2e444d1f0",
+        "gold_files": [
+          "src/domain_22.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_22.py",
+            "qualified_name": "src.domain_22.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "470e36a519650fec3a14cd274034a98155604583d3148d968ad8583f43623942",
+      "task": {
+        "schema_version": 1,
+        "task_id": "65c10428faf47ff93216bdfea3737aa5fc2b22fb60124b96a03db6ea53f182f5",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-023",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "0dc6502ff950ffda7012b43deea73476801bcc19",
+        "objective": "Synthetic scale case 23: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "635e6ddcaf2392f648c770dbe991262e1827559698ace4855b688cc31bf5c9c0",
+        "task_id": "65c10428faf47ff93216bdfea3737aa5fc2b22fb60124b96a03db6ea53f182f5",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "9c8f3874a0a7bdf49e925f4047045b2289fd8b619dfa7ed4d0a5bef42a8131bc",
+        "gold_files": [
+          "src/domain_23.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_23.py",
+            "qualified_name": "src.domain_23.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "96427f87c8e19fc301458be8bd3ff5b4d1f9c81e716e8128bdd3c42d74da6b73",
+      "task": {
+        "schema_version": 1,
+        "task_id": "7160e8765596370463204d3da91e0264ddb20278b11b97fe46c8d385f4ce79ad",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-024",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "216a84f70d4c551d8a8ab0476ad592a0bb0be602",
+        "objective": "Synthetic scale case 24: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "ad51f29e133795249ae4fd7bcf13e83f245f670c2390bc394620f542457a7090",
+        "task_id": "7160e8765596370463204d3da91e0264ddb20278b11b97fe46c8d385f4ce79ad",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "14872e90bd0e0427cada2f952137af76d3d3eb2b5a5c9456f30223319ed6c95c",
+        "gold_files": [
+          "src/domain_24.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_24.py",
+            "qualified_name": "src.domain_24.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "580f05292439a3520f30a87539a57c63ab9ca50d13ca516b6cc9483c5ff0a92e",
+      "task": {
+        "schema_version": 1,
+        "task_id": "e21d9406207276471032c034c119a4953f58313be757a84a25957b48f0be407e",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-025",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "40ff10d7a4e346161e1c3c2f5cb03cff3d2a3381",
+        "objective": "Synthetic scale case 25: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "ad0a01858b9410ff0e2ad1e84256e5072c60cf2c14aa81c039c364818ee006ef",
+        "task_id": "e21d9406207276471032c034c119a4953f58313be757a84a25957b48f0be407e",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "5fece637bdf5a5cd07b70b48800bfaba9c2246601e0b83328f383ae4e415f02e",
+        "gold_files": [
+          "src/domain_25.py",
+          "src/shared_04.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_25.py",
+            "qualified_name": "src.domain_25.target"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/shared_04.py",
+            "qualified_name": "src.shared_04.helper_25"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "176cb72d19c1f5b3000363904e6e14ff2786b90ba3fe079b5fedba785200d6b1",
+      "task": {
+        "schema_version": 1,
+        "task_id": "686170463cc245006aa7419488d0604d76ec50c3e11a176b91cdb16faaf863f9",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-026",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "3099b893c57121390364ebaca04b6a273dd7c781",
+        "objective": "Synthetic scale case 26: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "a5c6298f345074c975a6761b506ba08c3127b9376ac43e6d9075b1aa445ec44a",
+        "task_id": "686170463cc245006aa7419488d0604d76ec50c3e11a176b91cdb16faaf863f9",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "8972aff4a3b0a995f58ee15f8084ab82ae2ae534d36259f424880d9ddac5bc54",
+        "gold_files": [
+          "src/domain_26.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_26.py",
+            "qualified_name": "src.domain_26.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "ba57ec2d44e55c403686514d64701b89f20abf1dc866d71b6de4cb28c2195303",
+      "task": {
+        "schema_version": 1,
+        "task_id": "6c39233b67710c1a492f61f717ac52ea49d5ede501691dfce36509acf1ee6db5",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-027",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "2ca0646f28c417a5d875c2e62e771b481e9d2c3a",
+        "objective": "Synthetic scale case 27: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "584009bf63a71f87b1be160a5c7138572c1a2051b57caefab551fbacc89940c1",
+        "task_id": "6c39233b67710c1a492f61f717ac52ea49d5ede501691dfce36509acf1ee6db5",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "8b80a2f717307106806842669967be7d4042f80b3adfbf3b138fb179defe01a5",
+        "gold_files": [
+          "src/domain_27.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_27.py",
+            "qualified_name": "src.domain_27.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "b48b7f2c05fe5baa2209c03e8528b03d4e9357dcae8e179a4cbdd2f02ce2eb12",
+      "task": {
+        "schema_version": 1,
+        "task_id": "9511a7a3a1012cc6a1954625ccc024d9e37cb63803061d9a40745201bd49e608",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-028",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "fe6e35e9bf522ff99ddb962fa2354d19ed9ecb5e",
+        "objective": "Synthetic scale case 28: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "fb87c127ca6fe9a29a0ecd665e1d73ef85c476a41e04725ec4ab98058a4ccf18",
+        "task_id": "9511a7a3a1012cc6a1954625ccc024d9e37cb63803061d9a40745201bd49e608",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "f98a1bcb5183c83717d64bfb34a15972cc06ef566008aa086fce6c404fbb9669",
+        "gold_files": [
+          "src/domain_28.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_28.py",
+            "qualified_name": "src.domain_28.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "c534378b389a4b9fa79686c3a5fd245f401445101fac22f7dd185dcf3c059e8f",
+      "task": {
+        "schema_version": 1,
+        "task_id": "7946d2abe8e3dd5a66933e6157fdcb1d39ee7f3d109ea92aad9ccbdec39d4650",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-029",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "e8b88fb843af0a804fb60ddd723ed947c23fed52",
+        "objective": "Synthetic scale case 29: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "52e13c7272f60782dfa3ce4f1850b5c683caf6bad7a7daae901916edfec46af4",
+        "task_id": "7946d2abe8e3dd5a66933e6157fdcb1d39ee7f3d109ea92aad9ccbdec39d4650",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "6b76304c5d342cb355f7fcc9db3353d35bd381494e3b6e8be97371c6c456bf3b",
+        "gold_files": [
+          "src/domain_29.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_29.py",
+            "qualified_name": "src.domain_29.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "6f5d70c0d62ebebe570bd5f03e093d58f761014a9f589dfaac599604f5784b53",
+      "task": {
+        "schema_version": 1,
+        "task_id": "6bf6fb6df730622b32c90744d5a2924ac95e541d1c630a77df39c8893b14ad99",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-030",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "b11fcb14aa040821034953470ffcbe37547862bb",
+        "objective": "Synthetic scale case 30: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "a942407de4112bc1bae25687813f901aee1ebdf3ba6de9c98fc67676c8b7f86e",
+        "task_id": "6bf6fb6df730622b32c90744d5a2924ac95e541d1c630a77df39c8893b14ad99",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "96ae896af78f57102713ba7ebe82337a9fe44b469a4945d80308b0ce49ac4daa",
+        "gold_files": [
+          "src/domain_30.py",
+          "src/shared_02.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_30.py",
+            "qualified_name": "src.domain_30.target"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/shared_02.py",
+            "qualified_name": "src.shared_02.helper_30"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "3ec04b2dd99653395d16e3b9b2a543aff0b2ef021dc9fb13f08d9cc293e46774",
+      "task": {
+        "schema_version": 1,
+        "task_id": "3e368d9d6764639d2ce258a79d3dbad5c622dd32e14eed7bab5c4b42a5de048e",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-031",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "2af70a40c64296d81565d5738a1aeb94915932ce",
+        "objective": "Synthetic scale case 31: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "7cac93327a99122b8d5977eddb0caafd01fd74ed45c277f233f9bf252931d6b3",
+        "task_id": "3e368d9d6764639d2ce258a79d3dbad5c622dd32e14eed7bab5c4b42a5de048e",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "0484c88e20a9d2f6f18f17058663c1f53624d48f603929ee9740d6c71a387c02",
+        "gold_files": [
+          "src/domain_31.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_31.py",
+            "qualified_name": "src.domain_31.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "e633490acb6d8d063b099cedc6c4d00159c96cfcf5c1d8d79fadb00c0d043fbc",
+      "task": {
+        "schema_version": 1,
+        "task_id": "5050206e0134207e49d921e46156f264d30878e28921dafb230e9224f9544156",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-032",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "3d4162897a85e2778bce445bc33400f547bf8e27",
+        "objective": "Synthetic scale case 32: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "2a73457a69338083c3c5d333f646916b9c55a6f2c73f8d21ba680896127cc66b",
+        "task_id": "5050206e0134207e49d921e46156f264d30878e28921dafb230e9224f9544156",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "53964484a66c367537ca38b299d1d234f81d703f2176105e7511f9b82bb8547d",
+        "gold_files": [
+          "src/domain_32.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_32.py",
+            "qualified_name": "src.domain_32.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "be43ab410d7e5239cc7d304dcd5ca1151578d7ceb3798a6102b4a244ec3391b3",
+      "task": {
+        "schema_version": 1,
+        "task_id": "e8d1f30139bf26faab7cf12d605559e8be6f6ee94ac3f752bf3be170f6ebe4cb",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-033",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "44e93e8e5642bab75176f5d53ca7aea2320d9e64",
+        "objective": "Synthetic scale case 33: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "8d32aa7e5b8cbc3f41921a3caa411d5b2fe254265b47d3f8b7f60be39446221a",
+        "task_id": "e8d1f30139bf26faab7cf12d605559e8be6f6ee94ac3f752bf3be170f6ebe4cb",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "1c037c88160d2c851959dcaba74785b60c9132fe8b7bd4b9f9481264ba0318f2",
+        "gold_files": [
+          "src/domain_33.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_33.py",
+            "qualified_name": "src.domain_33.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "79496832d6929a4fa8671188c97aa02e12107c4651afb9eb533c997e79d3b8ce",
+      "task": {
+        "schema_version": 1,
+        "task_id": "fe347b1c38093334b5c047e4dda567168b71e83e1fd412a3d99d416ea9aae269",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-034",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "067a94693834178ef704e7e89bd6a460361ef1a2",
+        "objective": "Synthetic scale case 34: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "a80df38d29c936b8ade02fd1fedf52330ae5b52639e825660fc64a225606cb4a",
+        "task_id": "fe347b1c38093334b5c047e4dda567168b71e83e1fd412a3d99d416ea9aae269",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "4e216bebed23e4e67834f16b4ff33976382b3249b7d0e74babc547b15aec5236",
+        "gold_files": [
+          "src/domain_34.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_34.py",
+            "qualified_name": "src.domain_34.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "c5f02511c58f2933ff40f78b972dae3e25568b830cf92b08c51987535400af42",
+      "task": {
+        "schema_version": 1,
+        "task_id": "5d0194db456abc1af80a74b6c57a3c1030c4747339cd2795c1fdb3a8a3324216",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-035",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "4531e6e1842b1f7375902685cb39596771f7ad3e",
+        "objective": "Synthetic scale case 35: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "ed383cb77f88801a522ff374b62bcc13049c6b8ec7000edfa646d582df41da1f",
+        "task_id": "5d0194db456abc1af80a74b6c57a3c1030c4747339cd2795c1fdb3a8a3324216",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "8971379dd3e26c5f914ce1794d6a081948dd9d26f1eb48c641958ed280d1b960",
+        "gold_files": [
+          "src/domain_35.py",
+          "src/shared_00.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_35.py",
+            "qualified_name": "src.domain_35.target"
+          },
+          {
+            "schema_version": 1,
+            "path": "src/shared_00.py",
+            "qualified_name": "src.shared_00.helper_35"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "dbf11d44e78c0811bf7436e119bbbd36ed0bc3170e29dc0524b76f57991ff1d7",
+      "task": {
+        "schema_version": 1,
+        "task_id": "1e1e887807789d0ce105be8ce072aa8ea0951001e18dcc39f5e2509c21f50581",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-036",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "0924dff61353d67fbd74543d1afc1c86ef1ed4be",
+        "objective": "Synthetic scale case 36: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "3e499a1077e757adcbebd76895e0cb696665e95953e6fe598610c657a692ffcf",
+        "task_id": "1e1e887807789d0ce105be8ce072aa8ea0951001e18dcc39f5e2509c21f50581",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "f248cdbb93f28fb6fbf1d3c6c03dae2aceabd1b707d16b5cbf57cc55c42e0fca",
+        "gold_files": [
+          "src/domain_36.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_36.py",
+            "qualified_name": "src.domain_36.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "2ac61c92dc7413a7004c4dbea593f72aa56504727df5917cb66419369c966fd7",
+      "task": {
+        "schema_version": 1,
+        "task_id": "97f71ae5afa5a2ee8a641ce55bf032e1285735d283122b657fd5d6b67db0fa05",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-037",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "3c64b4ed05fb2097a9f7d2546e27366fda2cd9d2",
+        "objective": "Synthetic scale case 37: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "c7c84876a9e452690706c10fa00df2049d6e0d47cbae600701d692bdcd7084d0",
+        "task_id": "97f71ae5afa5a2ee8a641ce55bf032e1285735d283122b657fd5d6b67db0fa05",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "47dc09cc89831b6a6752c17ebd191061f07252b454ea3a76e1ba8c9accb6601c",
+        "gold_files": [
+          "src/domain_37.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_37.py",
+            "qualified_name": "src.domain_37.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "45c05555ff47d434b3e2a547a54bea462caf9e985a6cbf3cbcf737e1281fd7c2",
+      "task": {
+        "schema_version": 1,
+        "task_id": "ec07557070242be4604e29990baf7c478de3cdea5532d984d9b55d4b8de202bb",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-038",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "5de5222f6c2c7edb7bfb8552e0aab55c1c7e4f3a",
+        "objective": "Synthetic scale case 38: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "d696c1cfe16c9f43819299b284b1129dd17c68e64450e08c4c195763bad27e4f",
+        "task_id": "ec07557070242be4604e29990baf7c478de3cdea5532d984d9b55d4b8de202bb",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "6c634973fb85ef28759e127b92e039b0a8dc5f1b17c98da6fae64774106a7feb",
+        "gold_files": [
+          "src/domain_38.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_38.py",
+            "qualified_name": "src.domain_38.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "6daa355b106885ba23fda4e236e58c47a8f654e8573237789ef7d269ae1b1618",
+      "task": {
+        "schema_version": 1,
+        "task_id": "c2d9dcaaa61eab69ce2831377632488f83e4f7a015249c3b52c98c197627836d",
+        "dataset_kind": "synthetic_fixture",
+        "instance_id": "fixture__scale-039",
+        "repository": "example/repocompass-scale-fixture",
+        "base_commit": "14135ac20579fc62a984acf86952b962cdb11d7e",
+        "objective": "Synthetic scale case 39: localize the deterministic domain ownership path.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "fdf73df3c3fb8027e50137d96e10989b2d46a217b372ad768d6c33802de616ca",
+        "task_id": "c2d9dcaaa61eab69ce2831377632488f83e4f7a015249c3b52c98c197627836d",
+        "source": "synthetic_fixture",
+        "source_artifact_digest": "bcb056daf3f89f91c3b34b3f3c5b2aa0c9b32bb76e502f47cdcb58dc6cd48c71",
+        "gold_files": [
+          "src/domain_39.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "src/domain_39.py",
+            "qualified_name": "src.domain_39.target"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    }
+  ],
+  "evaluation_scope": "localization_only",
+  "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+}

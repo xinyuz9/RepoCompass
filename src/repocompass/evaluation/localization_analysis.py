@@ -711,6 +711,8 @@ def _estimate(
             None,
             LocalizationAnalysisUnavailableReason.INSUFFICIENT_CASES,
         )
+    if len(set(values)) == 1:
+        return point, point, point, None
     generator = random.Random(_stream_seed(config.random_seed, stream_key))
     size = len(values)
     samples = sorted(

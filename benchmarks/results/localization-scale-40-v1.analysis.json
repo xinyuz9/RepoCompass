@@ -1,0 +1,3985 @@
+{
+  "schema_version": 1,
+  "analysis_id": "a477e4ac7dc9ed436baaf326136b072bdf35c2f5529069d6e0f84962620eee9c",
+  "source_report_id": "32c6ba817e5e9d2d0f3ef9d10070e3a37ff9d95f38a45a3abf2ba125e162aa99",
+  "observation_set_id": "5b5a9529dc8667cac20133b05e0228e03dc079a03593aa10e4a55fc9d4cc8cf6",
+  "dataset_manifest_id": "f88e8822c07af347a50e7cf95a975b479c7aeba6d76c295a2eec21deff9c67aa",
+  "dataset_name": "localization-scale-fixture-40",
+  "dataset_version": "v1",
+  "dataset_kind": "synthetic_fixture",
+  "budget_profile_id": "aac2199c64bb99760bf45a7107b69f5237d80dc08d3c7f9ddc5a0680ef1cc1a4",
+  "pricing_table_id": "36d0c46bec356dd53650a3af5312349da95200b94f9e5ff84dbe837fbb3d3aa9",
+  "provenance": "synthetic_fixture",
+  "bootstrap_config": {
+    "schema_version": 1,
+    "config_id": "2e93e28b9390b854b0270029676e7b86146c4cf1fb8bf5af7d6d6506c3f56229",
+    "confidence_level_ppm": 950000,
+    "resamples": 2000,
+    "random_seed": 20260828,
+    "method": "case_resampling_percentile"
+  },
+  "reference_variant": "tool_wrapper",
+  "metric_intervals": [
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "file_hit_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 250000,
+      "lower_bound_ppm": 125000,
+      "upper_bound_ppm": 400000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "file_hit_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 300000,
+      "lower_bound_ppm": 150000,
+      "upper_bound_ppm": 450000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "file_hit_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 300000,
+      "lower_bound_ppm": 150000,
+      "upper_bound_ppm": 450000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "file_recall_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 250000,
+      "lower_bound_ppm": 125000,
+      "upper_bound_ppm": 375000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "file_recall_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 287500,
+      "lower_bound_ppm": 162500,
+      "upper_bound_ppm": 450000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "file_recall_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 287500,
+      "lower_bound_ppm": 150000,
+      "upper_bound_ppm": 425000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "mean_reciprocal_rank",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 275000,
+      "lower_bound_ppm": 150000,
+      "upper_bound_ppm": 425000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "symbol_hit_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 0,
+      "lower_bound_ppm": 0,
+      "upper_bound_ppm": 0,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "symbol_hit_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 0,
+      "lower_bound_ppm": 0,
+      "upper_bound_ppm": 0,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "symbol_hit_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 0,
+      "lower_bound_ppm": 0,
+      "upper_bound_ppm": 0,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "evidence_validity",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 145833,
+      "lower_bound_ppm": 91666,
+      "upper_bound_ppm": 206249,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "unsupported_relation_rate",
+      "total_case_count": 40,
+      "eligible_case_count": 0,
+      "point_estimate_ppm": null,
+      "lower_bound_ppm": null,
+      "upper_bound_ppm": null,
+      "unavailable_reason": "no_eligible_cases"
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "file_hit_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 425000,
+      "lower_bound_ppm": 275000,
+      "upper_bound_ppm": 575000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "file_hit_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 550000,
+      "lower_bound_ppm": 400000,
+      "upper_bound_ppm": 700000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "file_hit_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 550000,
+      "lower_bound_ppm": 400000,
+      "upper_bound_ppm": 700000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "file_recall_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 375000,
+      "lower_bound_ppm": 237500,
+      "upper_bound_ppm": 512500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "file_recall_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 525000,
+      "lower_bound_ppm": 375000,
+      "upper_bound_ppm": 675000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "file_recall_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 525000,
+      "lower_bound_ppm": 375000,
+      "upper_bound_ppm": 675000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "mean_reciprocal_rank",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 487500,
+      "lower_bound_ppm": 350000,
+      "upper_bound_ppm": 637500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "symbol_hit_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 275000,
+      "lower_bound_ppm": 150000,
+      "upper_bound_ppm": 425000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "symbol_hit_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 275000,
+      "lower_bound_ppm": 150000,
+      "upper_bound_ppm": 425000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "symbol_hit_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 275000,
+      "lower_bound_ppm": 125000,
+      "upper_bound_ppm": 400000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "evidence_validity",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 616249,
+      "lower_bound_ppm": 565833,
+      "upper_bound_ppm": 667499,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "unsupported_relation_rate",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 250000,
+      "lower_bound_ppm": 125000,
+      "upper_bound_ppm": 400000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "file_hit_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 600000,
+      "lower_bound_ppm": 450000,
+      "upper_bound_ppm": 750000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "file_hit_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 750000,
+      "lower_bound_ppm": 625000,
+      "upper_bound_ppm": 875000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "file_hit_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 750000,
+      "lower_bound_ppm": 600000,
+      "upper_bound_ppm": 875000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "file_recall_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 525000,
+      "lower_bound_ppm": 375000,
+      "upper_bound_ppm": 662500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "file_recall_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 750000,
+      "lower_bound_ppm": 625000,
+      "upper_bound_ppm": 875000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "file_recall_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 750000,
+      "lower_bound_ppm": 600000,
+      "upper_bound_ppm": 875000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "mean_reciprocal_rank",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 675000,
+      "lower_bound_ppm": 550000,
+      "upper_bound_ppm": 800000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "symbol_hit_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 750000,
+      "lower_bound_ppm": 600000,
+      "upper_bound_ppm": 875000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "symbol_hit_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 750000,
+      "lower_bound_ppm": 625000,
+      "upper_bound_ppm": 875000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "symbol_hit_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 750000,
+      "lower_bound_ppm": 625000,
+      "upper_bound_ppm": 875000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "evidence_validity",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 946666,
+      "lower_bound_ppm": 914166,
+      "upper_bound_ppm": 974166,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "unsupported_relation_rate",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 41666,
+      "lower_bound_ppm": 8333,
+      "upper_bound_ppm": 87499,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "file_hit_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 700000,
+      "lower_bound_ppm": 550000,
+      "upper_bound_ppm": 850000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "file_hit_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 875000,
+      "lower_bound_ppm": 750000,
+      "upper_bound_ppm": 975000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "file_hit_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 875000,
+      "lower_bound_ppm": 775000,
+      "upper_bound_ppm": 975000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "file_recall_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 612500,
+      "lower_bound_ppm": 475000,
+      "upper_bound_ppm": 750000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "file_recall_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 875000,
+      "lower_bound_ppm": 775000,
+      "upper_bound_ppm": 975000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "file_recall_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 875000,
+      "lower_bound_ppm": 775000,
+      "upper_bound_ppm": 975000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "mean_reciprocal_rank",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 787500,
+      "lower_bound_ppm": 675000,
+      "upper_bound_ppm": 887500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "symbol_hit_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 875000,
+      "lower_bound_ppm": 775000,
+      "upper_bound_ppm": 975000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "symbol_hit_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 875000,
+      "lower_bound_ppm": 775000,
+      "upper_bound_ppm": 975000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "symbol_hit_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 875000,
+      "lower_bound_ppm": 750000,
+      "upper_bound_ppm": 975000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "evidence_validity",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 977261,
+      "lower_bound_ppm": 957261,
+      "upper_bound_ppm": 995000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "unsupported_relation_rate",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 0,
+      "lower_bound_ppm": 0,
+      "upper_bound_ppm": 0,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_hit_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 725000,
+      "lower_bound_ppm": 600000,
+      "upper_bound_ppm": 850000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_hit_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 925000,
+      "lower_bound_ppm": 825000,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_hit_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 925000,
+      "lower_bound_ppm": 825000,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_recall_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 637500,
+      "lower_bound_ppm": 500000,
+      "upper_bound_ppm": 762500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_recall_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 925000,
+      "lower_bound_ppm": 825000,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_recall_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 925000,
+      "lower_bound_ppm": 850000,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "mean_reciprocal_rank",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 825000,
+      "lower_bound_ppm": 725000,
+      "upper_bound_ppm": 912500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "symbol_hit_at_1",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 925000,
+      "lower_bound_ppm": 850000,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "symbol_hit_at_3",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 925000,
+      "lower_bound_ppm": 825000,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "symbol_hit_at_5",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 925000,
+      "lower_bound_ppm": 825000,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "evidence_validity",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 989136,
+      "lower_bound_ppm": 975595,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "unsupported_relation_rate",
+      "total_case_count": 40,
+      "eligible_case_count": 40,
+      "point_estimate_ppm": 0,
+      "lower_bound_ppm": 0,
+      "upper_bound_ppm": 0,
+      "unavailable_reason": null
+    }
+  ],
+  "paired_deltas": [
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "file_hit_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 175000,
+      "lower_bound_ppm": 0,
+      "upper_bound_ppm": 350000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "file_hit_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 250000,
+      "lower_bound_ppm": 125000,
+      "upper_bound_ppm": 375000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "file_hit_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 250000,
+      "lower_bound_ppm": 125000,
+      "upper_bound_ppm": 400000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "file_recall_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 125000,
+      "lower_bound_ppm": -37500,
+      "upper_bound_ppm": 275000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "file_recall_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 237500,
+      "lower_bound_ppm": 112500,
+      "upper_bound_ppm": 375000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "file_recall_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 237500,
+      "lower_bound_ppm": 112500,
+      "upper_bound_ppm": 375000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "mean_reciprocal_rank",
+      "paired_case_count": 40,
+      "point_delta_ppm": 212500,
+      "lower_bound_ppm": 75000,
+      "upper_bound_ppm": 362500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "symbol_hit_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 275000,
+      "lower_bound_ppm": 150000,
+      "upper_bound_ppm": 425000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "symbol_hit_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 275000,
+      "lower_bound_ppm": 150000,
+      "upper_bound_ppm": 425000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "symbol_hit_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 275000,
+      "lower_bound_ppm": 150000,
+      "upper_bound_ppm": 425000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "evidence_validity",
+      "paired_case_count": 40,
+      "point_delta_ppm": 470416,
+      "lower_bound_ppm": 424583,
+      "upper_bound_ppm": 518749,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop",
+      "metric": "unsupported_relation_rate",
+      "paired_case_count": 0,
+      "point_delta_ppm": null,
+      "lower_bound_ppm": null,
+      "upper_bound_ppm": null,
+      "unavailable_reason": "no_eligible_cases"
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "file_hit_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 350000,
+      "lower_bound_ppm": 175000,
+      "upper_bound_ppm": 525000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "file_hit_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 450000,
+      "lower_bound_ppm": 300000,
+      "upper_bound_ppm": 600000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "file_hit_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 450000,
+      "lower_bound_ppm": 300000,
+      "upper_bound_ppm": 600000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "file_recall_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 275000,
+      "lower_bound_ppm": 112500,
+      "upper_bound_ppm": 437500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "file_recall_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 462500,
+      "lower_bound_ppm": 312500,
+      "upper_bound_ppm": 612500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "file_recall_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 462500,
+      "lower_bound_ppm": 312500,
+      "upper_bound_ppm": 625000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "mean_reciprocal_rank",
+      "paired_case_count": 40,
+      "point_delta_ppm": 400000,
+      "lower_bound_ppm": 250000,
+      "upper_bound_ppm": 550000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "symbol_hit_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 750000,
+      "lower_bound_ppm": 600000,
+      "upper_bound_ppm": 875000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "symbol_hit_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 750000,
+      "lower_bound_ppm": 625000,
+      "upper_bound_ppm": 875000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "symbol_hit_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 750000,
+      "lower_bound_ppm": 625000,
+      "upper_bound_ppm": 875000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "evidence_validity",
+      "paired_case_count": 40,
+      "point_delta_ppm": 800833,
+      "lower_bound_ppm": 746666,
+      "upper_bound_ppm": 853333,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_symbol_tools",
+      "metric": "unsupported_relation_rate",
+      "paired_case_count": 0,
+      "point_delta_ppm": null,
+      "lower_bound_ppm": null,
+      "upper_bound_ppm": null,
+      "unavailable_reason": "no_eligible_cases"
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "file_hit_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 450000,
+      "lower_bound_ppm": 275000,
+      "upper_bound_ppm": 625000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "file_hit_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 575000,
+      "lower_bound_ppm": 425000,
+      "upper_bound_ppm": 725000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "file_hit_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 575000,
+      "lower_bound_ppm": 425000,
+      "upper_bound_ppm": 725000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "file_recall_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 362500,
+      "lower_bound_ppm": 187500,
+      "upper_bound_ppm": 525000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "file_recall_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 587500,
+      "lower_bound_ppm": 425000,
+      "upper_bound_ppm": 737500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "file_recall_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 587500,
+      "lower_bound_ppm": 425000,
+      "upper_bound_ppm": 737500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "mean_reciprocal_rank",
+      "paired_case_count": 40,
+      "point_delta_ppm": 512500,
+      "lower_bound_ppm": 362500,
+      "upper_bound_ppm": 662500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "symbol_hit_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 875000,
+      "lower_bound_ppm": 775000,
+      "upper_bound_ppm": 975000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "symbol_hit_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 875000,
+      "lower_bound_ppm": 775000,
+      "upper_bound_ppm": 975000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "symbol_hit_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 875000,
+      "lower_bound_ppm": 750000,
+      "upper_bound_ppm": 975000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "evidence_validity",
+      "paired_case_count": 40,
+      "point_delta_ppm": 831428,
+      "lower_bound_ppm": 773095,
+      "upper_bound_ppm": 885000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder",
+      "metric": "unsupported_relation_rate",
+      "paired_case_count": 0,
+      "point_delta_ppm": null,
+      "lower_bound_ppm": null,
+      "upper_bound_ppm": null,
+      "unavailable_reason": "no_eligible_cases"
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_hit_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 475000,
+      "lower_bound_ppm": 275000,
+      "upper_bound_ppm": 650000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_hit_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 625000,
+      "lower_bound_ppm": 475000,
+      "upper_bound_ppm": 775000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_hit_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 625000,
+      "lower_bound_ppm": 475000,
+      "upper_bound_ppm": 775000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_recall_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 387500,
+      "lower_bound_ppm": 200000,
+      "upper_bound_ppm": 562500,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_recall_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 637500,
+      "lower_bound_ppm": 487500,
+      "upper_bound_ppm": 775000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "file_recall_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 637500,
+      "lower_bound_ppm": 487500,
+      "upper_bound_ppm": 775000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "mean_reciprocal_rank",
+      "paired_case_count": 40,
+      "point_delta_ppm": 550000,
+      "lower_bound_ppm": 387500,
+      "upper_bound_ppm": 700000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "symbol_hit_at_1",
+      "paired_case_count": 40,
+      "point_delta_ppm": 925000,
+      "lower_bound_ppm": 825000,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "symbol_hit_at_3",
+      "paired_case_count": 40,
+      "point_delta_ppm": 925000,
+      "lower_bound_ppm": 825000,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "symbol_hit_at_5",
+      "paired_case_count": 40,
+      "point_delta_ppm": 925000,
+      "lower_bound_ppm": 825000,
+      "upper_bound_ppm": 1000000,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "evidence_validity",
+      "paired_case_count": 40,
+      "point_delta_ppm": 843303,
+      "lower_bound_ppm": 782291,
+      "upper_bound_ppm": 899107,
+      "unavailable_reason": null
+    },
+    {
+      "schema_version": 1,
+      "reference_variant": "tool_wrapper",
+      "candidate_variant": "evaluator_loop_context_builder_memory",
+      "metric": "unsupported_relation_rate",
+      "paired_case_count": 0,
+      "point_delta_ppm": null,
+      "lower_bound_ppm": null,
+      "upper_bound_ppm": null,
+      "unavailable_reason": "no_eligible_cases"
+    }
+  ],
+  "case_errors": [
+    {
+      "schema_version": 1,
+      "observation_id": "93a9b59980e3ba53ac4913b0b164c8babbf73354660f44b456fa80511202a0b4",
+      "case_id": "0574e15eeef1f554fffa0c0e8cc6c19cb02e4425d04902e5e326285e85dc2d1a",
+      "task_id": "2f7bc00448ce97488b7940c89cc3712ff310a0959fcb2f226da5eac638ebc497",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "4f5616531b8bbcddad261b6718c3dcc852b1ca06d9cb6b19d598536ec1ed2904",
+      "case_id": "0be3dc5ee22f92c5e5ce2d7b976fb335ff081eae8162d778c8cb2d67b1dab5ca",
+      "task_id": "2b57ba2f699616d5bf748ee37e58c2425d176874dff2e42576faddac7954d259",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "c34d810c839fb47b5c2a794a971ac8bcd8edcb00428b20e1e1bc73ec89cdd8b9",
+      "case_id": "176cb72d19c1f5b3000363904e6e14ff2786b90ba3fe079b5fedba785200d6b1",
+      "task_id": "686170463cc245006aa7419488d0604d76ec50c3e11a176b91cdb16faaf863f9",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "009695793fe2ae3cdee86a713b9aa0a958529f1aaf1716a9e22583c0f0b3c5d1",
+      "case_id": "2ac61c92dc7413a7004c4dbea593f72aa56504727df5917cb66419369c966fd7",
+      "task_id": "97f71ae5afa5a2ee8a641ce55bf032e1285735d283122b657fd5d6b67db0fa05",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "4ead98da7e551a5649079ae54c3c8eb2cb16c0587af98739f14d67348c9a0ce4",
+      "case_id": "31fd1686f366f645fad2289cba781b024b77b627e69b0940b2f72cbc228ea7d0",
+      "task_id": "5eb576a802a42b3f5cdbaa183b2b46bfd45c8c14c6a80e68d74175c906a375f4",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "fb14a37c2ace5a7831938dbf0918f44ab1ddffc0d4616b6b57bbb744ebe9f84d",
+      "case_id": "3a6b0018b6a5cfaa453a132e463abaea12543baf0b69e6fa2bdca5047084b797",
+      "task_id": "c1947ef0acd9baf5522c742dc53d8b34bd869479ae81dfb2df99567c300c215e",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "0737f7896210f538491d8302571b6eaaba3988cb323b1c14b29a8fa825a46f4e",
+      "case_id": "3ec04b2dd99653395d16e3b9b2a543aff0b2ef021dc9fb13f08d9cc293e46774",
+      "task_id": "3e368d9d6764639d2ce258a79d3dbad5c622dd32e14eed7bab5c4b42a5de048e",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "3838a4f216c6eb81f648b9d11542bd1c94f51624d75410a5c7a3d5de1cedb0f8",
+      "case_id": "448a366d8c5669ec775856c7b6ab84f319f630adf491b8d2e659782acecf85ec",
+      "task_id": "082e081604bccb620cd54c58c7067aa373cdb2d73cda8eb6a9ac5855765a19e4",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "a5caf8fcc1723fd2167e6c7da7287ee748e1d9735715eca59ae5ecb3fae46aed",
+      "case_id": "45c05555ff47d434b3e2a547a54bea462caf9e985a6cbf3cbcf737e1281fd7c2",
+      "task_id": "ec07557070242be4604e29990baf7c478de3cdea5532d984d9b55d4b8de202bb",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "54d6419f4e7209de3d42f67b38266677e1fcd405255e462fd847c8f0c00ea70d",
+      "case_id": "470e36a519650fec3a14cd274034a98155604583d3148d968ad8583f43623942",
+      "task_id": "65c10428faf47ff93216bdfea3737aa5fc2b22fb60124b96a03db6ea53f182f5",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "caa5fcb21aa25b75b320b4e031c12ace8bc08dd3bdd23ebca8beb01f93a44a27",
+      "case_id": "4c98375bf5e6317daeb160f2dda23dcd22f6108c88b92aee1c5fa698b095e242",
+      "task_id": "b6eb33e06521333b52526f475aec147abc88fa0d6839ef304039e4c89ed8dcef",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "3cbb482647035c3fd468afa2c095be14167567bb03ab7f1077d42c3ed38b38f5",
+      "case_id": "51545930399d33000b1d913d047da714674c5af61bb9e6ddadc0344051fd0ec1",
+      "task_id": "4010e074306070a41ec562b141a03a563b6a1942b5bf3dc2df454ad6cc2ef0d1",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "384ab4d7083245f122b4f8490ccfdee58a913fc51e2c97dd4fd8405bc5e3fdca",
+      "case_id": "52e2b67cca966157bd1822b909472db16a2cce5f60a603b199570c8dcbe1b984",
+      "task_id": "7ecb882961e7aa9a6971ee7b412774e347d981a89eeab222b8e6d56ee7abd68c",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "91b145b5f35f52e886f17e66924933f86eeb159fb33f954303ad56426a3fb527",
+      "case_id": "580f05292439a3520f30a87539a57c63ab9ca50d13ca516b6cc9483c5ff0a92e",
+      "task_id": "e21d9406207276471032c034c119a4953f58313be757a84a25957b48f0be407e",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b2c5cc17d42a7c8827b9d1c5e212547b80c75aca59cddb32550d95d822f71bbb",
+      "case_id": "61b107ca149401eabeb3336649da55775fcc1b8ea877c366b728891b13b310c2",
+      "task_id": "f8069700e78508744f588c5f486b46f927c9a0cb31d872bc721c5d90540767c8",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "fe54bac2c9f6aa2dd18a69042000fdf9a18ca859fa12a3d107cc12f5f76b4830",
+      "case_id": "6daa355b106885ba23fda4e236e58c47a8f654e8573237789ef7d269ae1b1618",
+      "task_id": "c2d9dcaaa61eab69ce2831377632488f83e4f7a015249c3b52c98c197627836d",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8b9447fd9f3b89fb4a2157f044b5fbcfe32fe9b0b91e7cc2840f3ec1227a4208",
+      "case_id": "6f5d70c0d62ebebe570bd5f03e093d58f761014a9f589dfaac599604f5784b53",
+      "task_id": "6bf6fb6df730622b32c90744d5a2924ac95e541d1c630a77df39c8893b14ad99",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "fc0ba8b052a44803340d78a7adbddafdd87c47339823ceb2582ab72277dfb4cd",
+      "case_id": "79496832d6929a4fa8671188c97aa02e12107c4651afb9eb533c997e79d3b8ce",
+      "task_id": "fe347b1c38093334b5c047e4dda567168b71e83e1fd412a3d99d416ea9aae269",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f2e1fd3e5472b1d91dbb5b12e1dbb3a6cd4459c497835cfc536190ba88a6ed00",
+      "case_id": "82ead899f1e39750a9eb0fb45fb360cdccd92afd8f4c946ccfa82478bd0b844f",
+      "task_id": "0abe6a38766d5c7614773689e5897298a9c3293cf3b4bcb40e40e6cf7d6fd9ab",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "69d8f3ebd19245d716d10fcd17d8b0b77b59138dba6d19cf8f685bf11327ecd8",
+      "case_id": "878c720ac5f01f71e088f77ec6b891f4351b6ad2043a848914dc5c7d823acb04",
+      "task_id": "ef72a71216523af4dd2bd9501af42aec4264f9646da660d55ab041e391b69a4a",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "892357817474fa4c31bce0aabe180773d79b5b6dab0735cad68220509c075180",
+      "case_id": "8dae27cf45947ec1874d1d3f4268cecdca94349a1448b72a2c153e3e6e32c9bb",
+      "task_id": "e629047c8a922b5032c61bf3ed5486b2e70870a2c7fa096a4d6021330c2ecf14",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b41cda4b2adc893112b08809d4ad94179ffc260ab7fab1937cc1b9711f03d6b3",
+      "case_id": "8e53c1fe1b7f2b7620139bf529729f3063d32a45ba14b7f031afe70e537c5c9e",
+      "task_id": "cd14f2646118bde764afdc514494001f78ad8eff15dcfaf0b00c9343b1965388",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "d3abd3544f234c66f2b93593f440a85990af992b544468707d0dd8db2b524979",
+      "case_id": "96427f87c8e19fc301458be8bd3ff5b4d1f9c81e716e8128bdd3c42d74da6b73",
+      "task_id": "7160e8765596370463204d3da91e0264ddb20278b11b97fe46c8d385f4ce79ad",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f7e803098c5b3db1ffbaedf499c66a608896463874ae608871745329a7965c7d",
+      "case_id": "a3585918171708d08b6d0adcb8eabbea3f84bc4f14ca74979761d2696d1e5ca2",
+      "task_id": "cda158af00523cda35d266c82a7cdc58e2f8c69163057f3ede32b97fa18313ff",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "3f1340e26dc225da2e31fde491e8716d252422b4bf339befe2f2ef08d5540b80",
+      "case_id": "a49e4291123abd903c0081bb56db672f4e20f71207afcbfc042fb8bdf5ee1adf",
+      "task_id": "d81fdd0b8ad8256b242f40306755b772594628b8644daaf94f614e1ee2f62fd0",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "1bb6b9a9d200e91717eb18fc33c9ddab12ac2fc972d84b3a1e613c37b3918a10",
+      "case_id": "b251233244f883ed9492381fdb35c61378a91f315995659b472e3728fad0d846",
+      "task_id": "7f5faea6ae2578e959ce2597b5cbe0845c86813aa557251cff8483ca38431e50",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "bc6f6f32f902fbce34787e0927281eb53fcd600af9be069075f79d1710acb32f",
+      "case_id": "b48b7f2c05fe5baa2209c03e8528b03d4e9357dcae8e179a4cbdd2f02ce2eb12",
+      "task_id": "9511a7a3a1012cc6a1954625ccc024d9e37cb63803061d9a40745201bd49e608",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "bfcdbf15ac0161653b1c0e82570c3fec24303b10a8661753a4e2dc6157a123ba",
+      "case_id": "ba57ec2d44e55c403686514d64701b89f20abf1dc866d71b6de4cb28c2195303",
+      "task_id": "6c39233b67710c1a492f61f717ac52ea49d5ede501691dfce36509acf1ee6db5",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "c625fd6488121653c45b2fa77808258fd6c55a16e56417c7330a20593cd49ca0",
+      "case_id": "bbb937475928497df5e0018b2bf1cf092f857aa408621bc3befbfc20c4b344b8",
+      "task_id": "b1aa69503fab13c2c5b793a327138a6615478f9e3b03f95ccb5d714c3b18cb1b",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "506a9e1e73219250382bf656fffa92d0d643ce9351ed2fde1bdc7dda0c38487e",
+      "case_id": "be43ab410d7e5239cc7d304dcd5ca1151578d7ceb3798a6102b4a244ec3391b3",
+      "task_id": "e8d1f30139bf26faab7cf12d605559e8be6f6ee94ac3f752bf3be170f6ebe4cb",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "ee60a9a223cb663df9ed6e49b0e5716b5d1552172a42d1563b838424ba486d73",
+      "case_id": "c462c96c15cb7ef219d9f34a47ee7185b3f1a677b53c5ba51e89bdc271352a3c",
+      "task_id": "2db5e885faf1c43aa6615696cfbd77092e4aed2cbc868f3c805fc1becbca407b",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b4b359dc873ac2d79c6181c86598f41d2087e11d4293e641ec20166441e47502",
+      "case_id": "c534378b389a4b9fa79686c3a5fd245f401445101fac22f7dd185dcf3c059e8f",
+      "task_id": "7946d2abe8e3dd5a66933e6157fdcb1d39ee7f3d109ea92aad9ccbdec39d4650",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "2ac9645e3812fc2065c55562f5c29fdc9a038cc2747bc0b35f4c0a238d023fe2",
+      "case_id": "c5f02511c58f2933ff40f78b972dae3e25568b830cf92b08c51987535400af42",
+      "task_id": "5d0194db456abc1af80a74b6c57a3c1030c4747339cd2795c1fdb3a8a3324216",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "partial_file_recall_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "4c193a7543e9e67cb8c2be8730b0326945633fc89cf7af42f5e5bca16b17c55a",
+      "case_id": "d3457abc8a606147f4652886e1e5c57653f1d04ad913254f0b11e8b3cf25e909",
+      "task_id": "3febd4246c9627b6a37dcd38a99cf889235c75239411ca364e46427944403c75",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "c8ba580f43d6236bc8c2571087f41ce6413c05a32472c726becbde6707b60332",
+      "case_id": "d82f1ccbc630209699eefdc12ebe84383fdb148aa0d8ee9d9ea4441b2faf0cfb",
+      "task_id": "4a9b543983e61947b846e96a3dd470572208af264eeb942c0a6cbe58b1f4e9f0",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "490dc263e477a0a53551d2ad9563192787af527ab2f864d777c9113110bf0ee8",
+      "case_id": "db3321c903ef31a469097022ab6c80e50c17be66ae7eb90085b7e4dd093cd883",
+      "task_id": "6087a32e8e6a82742359ad229afb548c97157cc88d2aa463dda260842acb7c0d",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "1e88a57010816f73fb8df2ff6f7d29ea5d289aebe66f34b94914e4f71249cb3c",
+      "case_id": "dbf11d44e78c0811bf7436e119bbbd36ed0bc3170e29dc0524b76f57991ff1d7",
+      "task_id": "1e1e887807789d0ce105be8ce072aa8ea0951001e18dcc39f5e2509c21f50581",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "1a64d5c4e8eb41eb5dc6d4b8cc01c04b54d483cd87c50485badec3b6d233241a",
+      "case_id": "dc4c07cce32b3a9400e691b4387743ab1e5d8e965c7aa76c2773510d135dad6f",
+      "task_id": "8f13437f2534f39cb1a934986eb078832026a898871ced8ae9fe67d30075cd45",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f5939162b36a085d0278755e8924122a55d994316dc251912db14301b5500a1c",
+      "case_id": "e633490acb6d8d063b099cedc6c4d00159c96cfcf5c1d8d79fadb00c0d043fbc",
+      "task_id": "5050206e0134207e49d921e46156f264d30878e28921dafb230e9224f9544156",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "e03256f530b2e4638c8681a6c351f425b1d074482974ab8c1fb02a7b5c364d50",
+      "case_id": "ee13a470f5639dccf38af2259cf6cb2b6c6e55f27b31d52ae5b71ebd88460d27",
+      "task_id": "cdd5746574a223a9580d64b9a840037f8d281e38d35916ca88efb4ec9a9d99bd",
+      "variant": "tool_wrapper",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "1290e3b92384b68f07d08d9df56b8f125283e0d3ef4d44eff45c17896ee2abf8",
+      "case_id": "0574e15eeef1f554fffa0c0e8cc6c19cb02e4425d04902e5e326285e85dc2d1a",
+      "task_id": "2f7bc00448ce97488b7940c89cc3712ff310a0959fcb2f226da5eac638ebc497",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b6cfa14f72c8200a015440caa0e4a643a7eeb987cc79a45c8752ea58b9099296",
+      "case_id": "0be3dc5ee22f92c5e5ce2d7b976fb335ff081eae8162d778c8cb2d67b1dab5ca",
+      "task_id": "2b57ba2f699616d5bf748ee37e58c2425d176874dff2e42576faddac7954d259",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "partial_file_recall_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "dabddb73bd82c432533712fb054dd333a48e5f23d2d8e6531a715bd7f37b0fc9",
+      "case_id": "176cb72d19c1f5b3000363904e6e14ff2786b90ba3fe079b5fedba785200d6b1",
+      "task_id": "686170463cc245006aa7419488d0604d76ec50c3e11a176b91cdb16faaf863f9",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "559ec6f01453eac7d10064f464bd55d86b490946be9e1ac288ac4bdfbc74364f",
+      "case_id": "2ac61c92dc7413a7004c4dbea593f72aa56504727df5917cb66419369c966fd7",
+      "task_id": "97f71ae5afa5a2ee8a641ce55bf032e1285735d283122b657fd5d6b67db0fa05",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "91edb1a8960e473c17741a1571b1bcbd5743cd567fdbf7095d1d42e0cf1f47c8",
+      "case_id": "31fd1686f366f645fad2289cba781b024b77b627e69b0940b2f72cbc228ea7d0",
+      "task_id": "5eb576a802a42b3f5cdbaa183b2b46bfd45c8c14c6a80e68d74175c906a375f4",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence",
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "74503ee483ca77253ec5d2315b86fc72bf8e1add4decb99e3c1288170a712291",
+      "case_id": "3a6b0018b6a5cfaa453a132e463abaea12543baf0b69e6fa2bdca5047084b797",
+      "task_id": "c1947ef0acd9baf5522c742dc53d8b34bd869479ae81dfb2df99567c300c215e",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "6ac1792263b5258f746bde51705cf6896b270248b1c9dfd20fab9e6ddf67bf49",
+      "case_id": "3ec04b2dd99653395d16e3b9b2a543aff0b2ef021dc9fb13f08d9cc293e46774",
+      "task_id": "3e368d9d6764639d2ce258a79d3dbad5c622dd32e14eed7bab5c4b42a5de048e",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "48aa8d46bed1c8208bb8ae49443c980069661ad2df9326b30f003c5efa1889de",
+      "case_id": "448a366d8c5669ec775856c7b6ab84f319f630adf491b8d2e659782acecf85ec",
+      "task_id": "082e081604bccb620cd54c58c7067aa373cdb2d73cda8eb6a9ac5855765a19e4",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "abcd728e300ae41129bba72d083519698bd84acdab022a71f34bcd065ca0058f",
+      "case_id": "45c05555ff47d434b3e2a547a54bea462caf9e985a6cbf3cbcf737e1281fd7c2",
+      "task_id": "ec07557070242be4604e29990baf7c478de3cdea5532d984d9b55d4b8de202bb",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "9ef1e59b8ed42315fc31f15b2cfd58552f9bfb72534a0aae39e32511330070b1",
+      "case_id": "470e36a519650fec3a14cd274034a98155604583d3148d968ad8583f43623942",
+      "task_id": "65c10428faf47ff93216bdfea3737aa5fc2b22fb60124b96a03db6ea53f182f5",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "56222b736478cbdf3165f5bb74e7a6c4531c2e45886d30477f8ac1801327cfba",
+      "case_id": "4c98375bf5e6317daeb160f2dda23dcd22f6108c88b92aee1c5fa698b095e242",
+      "task_id": "b6eb33e06521333b52526f475aec147abc88fa0d6839ef304039e4c89ed8dcef",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f906de003c04ea50c81a59382e27bbba4a815b8008eb6c59b33adbe2ad1721b3",
+      "case_id": "51545930399d33000b1d913d047da714674c5af61bb9e6ddadc0344051fd0ec1",
+      "task_id": "4010e074306070a41ec562b141a03a563b6a1942b5bf3dc2df454ad6cc2ef0d1",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b5cc18a208587d59c1aea719808ce1448fb5f9d65e17ab2fc66d2a7856e7625c",
+      "case_id": "52e2b67cca966157bd1822b909472db16a2cce5f60a603b199570c8dcbe1b984",
+      "task_id": "7ecb882961e7aa9a6971ee7b412774e347d981a89eeab222b8e6d56ee7abd68c",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "fcbbcf7ee1c4276d01bca3d50bde0b57e03367a2a9c9ba36934d7a2fdf4bcd7d",
+      "case_id": "580f05292439a3520f30a87539a57c63ab9ca50d13ca516b6cc9483c5ff0a92e",
+      "task_id": "e21d9406207276471032c034c119a4953f58313be757a84a25957b48f0be407e",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "e1430b5bc00d9f8e7f4a9bee8d9d70026e5afffb623071e92dea44fe188fb4cc",
+      "case_id": "61b107ca149401eabeb3336649da55775fcc1b8ea877c366b728891b13b310c2",
+      "task_id": "f8069700e78508744f588c5f486b46f927c9a0cb31d872bc721c5d90540767c8",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence",
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "37f6c6f89732742be99b754a0570bb35e9d42fc4a74edb9fc6ee83134219b4c2",
+      "case_id": "6daa355b106885ba23fda4e236e58c47a8f654e8573237789ef7d269ae1b1618",
+      "task_id": "c2d9dcaaa61eab69ce2831377632488f83e4f7a015249c3b52c98c197627836d",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "02fe52cbb0f31a068e6a21edd9facf6d7d95ffe401430bc5b28690836d2622b7",
+      "case_id": "6f5d70c0d62ebebe570bd5f03e093d58f761014a9f589dfaac599604f5784b53",
+      "task_id": "6bf6fb6df730622b32c90744d5a2924ac95e541d1c630a77df39c8893b14ad99",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "7fa0ff35af2ef8fca8a0f6bd95f86dc6f9a3a720fb0b4b3fa07dac04b8358d91",
+      "case_id": "79496832d6929a4fa8671188c97aa02e12107c4651afb9eb533c997e79d3b8ce",
+      "task_id": "fe347b1c38093334b5c047e4dda567168b71e83e1fd412a3d99d416ea9aae269",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "4c8788b48b7f9a9217bb47a18331703d62f673d72e7e5ba169c7b04394826c8e",
+      "case_id": "82ead899f1e39750a9eb0fb45fb360cdccd92afd8f4c946ccfa82478bd0b844f",
+      "task_id": "0abe6a38766d5c7614773689e5897298a9c3293cf3b4bcb40e40e6cf7d6fd9ab",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "768350bf6b1e5ebab3f57a7246f9c274d99a6f294e5a453bcab265917c47b65a",
+      "case_id": "878c720ac5f01f71e088f77ec6b891f4351b6ad2043a848914dc5c7d823acb04",
+      "task_id": "ef72a71216523af4dd2bd9501af42aec4264f9646da660d55ab041e391b69a4a",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence",
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "4cf50ed666e22539d8fa73d888970276804b13c69ecb5ab2ccaa70c6393f1ead",
+      "case_id": "8dae27cf45947ec1874d1d3f4268cecdca94349a1448b72a2c153e3e6e32c9bb",
+      "task_id": "e629047c8a922b5032c61bf3ed5486b2e70870a2c7fa096a4d6021330c2ecf14",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "515c7cf1591ac996ccdef2e0d8e4d95c38b8b9ab205a60807a3ab0519c5f33e2",
+      "case_id": "8e53c1fe1b7f2b7620139bf529729f3063d32a45ba14b7f031afe70e537c5c9e",
+      "task_id": "cd14f2646118bde764afdc514494001f78ad8eff15dcfaf0b00c9343b1965388",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence",
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "16bb526e720063d5943072028f11780e619a523ad08969517d43982f9568ba22",
+      "case_id": "96427f87c8e19fc301458be8bd3ff5b4d1f9c81e716e8128bdd3c42d74da6b73",
+      "task_id": "7160e8765596370463204d3da91e0264ddb20278b11b97fe46c8d385f4ce79ad",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence",
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8e2d393b21c1c492c7fc871d25f19ddc5f5b8af6a1d91743e419cabcc6ef29e8",
+      "case_id": "a3585918171708d08b6d0adcb8eabbea3f84bc4f14ca74979761d2696d1e5ca2",
+      "task_id": "cda158af00523cda35d266c82a7cdc58e2f8c69163057f3ede32b97fa18313ff",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "18c3ee349efa83c5814e80d1053030022fa54ac7ba4bf37babf9b13d24f77abd",
+      "case_id": "a49e4291123abd903c0081bb56db672f4e20f71207afcbfc042fb8bdf5ee1adf",
+      "task_id": "d81fdd0b8ad8256b242f40306755b772594628b8644daaf94f614e1ee2f62fd0",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "c1c939758d2e5b813c62285ecce7320fee6a3cc0a3ce0270f83b81dcc56fe326",
+      "case_id": "b251233244f883ed9492381fdb35c61378a91f315995659b472e3728fad0d846",
+      "task_id": "7f5faea6ae2578e959ce2597b5cbe0845c86813aa557251cff8483ca38431e50",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f7747318d0c50f59ad80802e3dad381710abf831cd2828a3e23ce2f6a95e1840",
+      "case_id": "b48b7f2c05fe5baa2209c03e8528b03d4e9357dcae8e179a4cbdd2f02ce2eb12",
+      "task_id": "9511a7a3a1012cc6a1954625ccc024d9e37cb63803061d9a40745201bd49e608",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "invalid_evidence",
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "951045c04c480bdc514203b06086696dd36e1a59461964a2e8f60c9db90e4d2f",
+      "case_id": "ba57ec2d44e55c403686514d64701b89f20abf1dc866d71b6de4cb28c2195303",
+      "task_id": "6c39233b67710c1a492f61f717ac52ea49d5ede501691dfce36509acf1ee6db5",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "459c4a97e9c344d365a95b908c0d308a22476b55b547d725100824d575bfdcff",
+      "case_id": "bbb937475928497df5e0018b2bf1cf092f857aa408621bc3befbfc20c4b344b8",
+      "task_id": "b1aa69503fab13c2c5b793a327138a6615478f9e3b03f95ccb5d714c3b18cb1b",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "d7db2dd50e9b5abcd67a910fd9de07fa55e1974459147f81e203a2adf90c0c83",
+      "case_id": "be43ab410d7e5239cc7d304dcd5ca1151578d7ceb3798a6102b4a244ec3391b3",
+      "task_id": "e8d1f30139bf26faab7cf12d605559e8be6f6ee94ac3f752bf3be170f6ebe4cb",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "13b8ea39e5288e7ba156b9b18075eed0d74d77b2d8226a69d04f4a0aa1b92531",
+      "case_id": "c462c96c15cb7ef219d9f34a47ee7185b3f1a677b53c5ba51e89bdc271352a3c",
+      "task_id": "2db5e885faf1c43aa6615696cfbd77092e4aed2cbc868f3c805fc1becbca407b",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "572cf45a2df61aed10affb4ce9eb3a917d982105fb801166ed3d66ca6607be5b",
+      "case_id": "c534378b389a4b9fa79686c3a5fd245f401445101fac22f7dd185dcf3c059e8f",
+      "task_id": "7946d2abe8e3dd5a66933e6157fdcb1d39ee7f3d109ea92aad9ccbdec39d4650",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "6479b476afe454188c44ad4700f77694e99b9de0cb4a096af84c70b39fa106ea",
+      "case_id": "c5f02511c58f2933ff40f78b972dae3e25568b830cf92b08c51987535400af42",
+      "task_id": "5d0194db456abc1af80a74b6c57a3c1030c4747339cd2795c1fdb3a8a3324216",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "partial_file_recall_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "5fc046a9a55b46c51a11907da4a89c00b4192945e5894a569c46f35b939bcfa2",
+      "case_id": "d3457abc8a606147f4652886e1e5c57653f1d04ad913254f0b11e8b3cf25e909",
+      "task_id": "3febd4246c9627b6a37dcd38a99cf889235c75239411ca364e46427944403c75",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "6962e9220da97e5257a81cb8ee64699ae14b291a7e9e873594e4a4ae3eccc560",
+      "case_id": "d82f1ccbc630209699eefdc12ebe84383fdb148aa0d8ee9d9ea4441b2faf0cfb",
+      "task_id": "4a9b543983e61947b846e96a3dd470572208af264eeb942c0a6cbe58b1f4e9f0",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence",
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "82a74fdc12cab813ce91d46686f39f92f163367b4534171837ac3b9b01849fdd",
+      "case_id": "db3321c903ef31a469097022ab6c80e50c17be66ae7eb90085b7e4dd093cd883",
+      "task_id": "6087a32e8e6a82742359ad229afb548c97157cc88d2aa463dda260842acb7c0d",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "a31f09a5c81ab00ab82f0b38bb9aab875bbbac287e34ebde109234a4b0f3926f",
+      "case_id": "dbf11d44e78c0811bf7436e119bbbd36ed0bc3170e29dc0524b76f57991ff1d7",
+      "task_id": "1e1e887807789d0ce105be8ce072aa8ea0951001e18dcc39f5e2509c21f50581",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence",
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "95097c7be3e8d666ebd38f2256017918162b0a2a0447f27dc207106ba5932f21",
+      "case_id": "dc4c07cce32b3a9400e691b4387743ab1e5d8e965c7aa76c2773510d135dad6f",
+      "task_id": "8f13437f2534f39cb1a934986eb078832026a898871ced8ae9fe67d30075cd45",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence",
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "843b09fd5f95e1b37de800c7f7cd22e8b40d9e206c30493fc6a8f9b02a7dae6c",
+      "case_id": "e633490acb6d8d063b099cedc6c4d00159c96cfcf5c1d8d79fadb00c0d043fbc",
+      "task_id": "5050206e0134207e49d921e46156f264d30878e28921dafb230e9224f9544156",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence",
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "35450325086d0a7168d97454a9f0d658f72e35c87c586b8be99d4a3385fb4075",
+      "case_id": "ee13a470f5639dccf38af2259cf6cb2b6c6e55f27b31d52ae5b71ebd88460d27",
+      "task_id": "cdd5746574a223a9580d64b9a840037f8d281e38d35916ca88efb4ec9a9d99bd",
+      "variant": "evaluator_loop",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "85ed0431e708e1dbfbbf2dea175b422bc6546dce278de73fbf017a164eb0a8e1",
+      "case_id": "0574e15eeef1f554fffa0c0e8cc6c19cb02e4425d04902e5e326285e85dc2d1a",
+      "task_id": "2f7bc00448ce97488b7940c89cc3712ff310a0959fcb2f226da5eac638ebc497",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "ccf6e76a4acd8ceecedccdf9dd859c0521ebd3af500452506420c7e5f79ad954",
+      "case_id": "0be3dc5ee22f92c5e5ce2d7b976fb335ff081eae8162d778c8cb2d67b1dab5ca",
+      "task_id": "2b57ba2f699616d5bf748ee37e58c2425d176874dff2e42576faddac7954d259",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "7446a01252bf01f52e96b3f6fc02297046caac49283c0466a64f6d68cf7fbc81",
+      "case_id": "176cb72d19c1f5b3000363904e6e14ff2786b90ba3fe079b5fedba785200d6b1",
+      "task_id": "686170463cc245006aa7419488d0604d76ec50c3e11a176b91cdb16faaf863f9",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "5c678516eb63603edfcf0666fa7e1e8ac5f263421d977e5fabfe3bcf40123276",
+      "case_id": "2ac61c92dc7413a7004c4dbea593f72aa56504727df5917cb66419369c966fd7",
+      "task_id": "97f71ae5afa5a2ee8a641ce55bf032e1285735d283122b657fd5d6b67db0fa05",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "2dd087e2c7519167c1466419c5eccab6a8eb3a0a72c4125abc84d236b6eb0217",
+      "case_id": "31fd1686f366f645fad2289cba781b024b77b627e69b0940b2f72cbc228ea7d0",
+      "task_id": "5eb576a802a42b3f5cdbaa183b2b46bfd45c8c14c6a80e68d74175c906a375f4",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "3e78ccc545419fb1fd2047054f37c441c8a0a3a4ba1c31db671c6fe2be590c2e",
+      "case_id": "3a6b0018b6a5cfaa453a132e463abaea12543baf0b69e6fa2bdca5047084b797",
+      "task_id": "c1947ef0acd9baf5522c742dc53d8b34bd869479ae81dfb2df99567c300c215e",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8a130647b63401136a552b4e1f5890aea7e19be72b37977ea1172c5331eb07c8",
+      "case_id": "3ec04b2dd99653395d16e3b9b2a543aff0b2ef021dc9fb13f08d9cc293e46774",
+      "task_id": "3e368d9d6764639d2ce258a79d3dbad5c622dd32e14eed7bab5c4b42a5de048e",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "5ab6d3d3c4b1556f198b2c32d4fe0239aea7b3b100d6b3a3e940da8656d3ae99",
+      "case_id": "448a366d8c5669ec775856c7b6ab84f319f630adf491b8d2e659782acecf85ec",
+      "task_id": "082e081604bccb620cd54c58c7067aa373cdb2d73cda8eb6a9ac5855765a19e4",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b636b2a19707c673e56aabade7d601ecad81502cc549abead2fd091464e633ff",
+      "case_id": "45c05555ff47d434b3e2a547a54bea462caf9e985a6cbf3cbcf737e1281fd7c2",
+      "task_id": "ec07557070242be4604e29990baf7c478de3cdea5532d984d9b55d4b8de202bb",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "900658f9bee49a3716f69818c7a4b57f2322fd4f03a21265972f391112ad9efb",
+      "case_id": "470e36a519650fec3a14cd274034a98155604583d3148d968ad8583f43623942",
+      "task_id": "65c10428faf47ff93216bdfea3737aa5fc2b22fb60124b96a03db6ea53f182f5",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "ef4ad909c7b852e01be2f7f23e1b831fa8dfc4bea374dd8bedd20d62bfb2bb1b",
+      "case_id": "4c98375bf5e6317daeb160f2dda23dcd22f6108c88b92aee1c5fa698b095e242",
+      "task_id": "b6eb33e06521333b52526f475aec147abc88fa0d6839ef304039e4c89ed8dcef",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "81fa03f74fd4cc4038531ce1f4017200cf084ddd0b4d28ccef92c1814d590daf",
+      "case_id": "51545930399d33000b1d913d047da714674c5af61bb9e6ddadc0344051fd0ec1",
+      "task_id": "4010e074306070a41ec562b141a03a563b6a1942b5bf3dc2df454ad6cc2ef0d1",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8ed6251f4df0d1dedf75aaa685aa88d9fcac58cd20b631eb0c9755f04bac37a2",
+      "case_id": "52e2b67cca966157bd1822b909472db16a2cce5f60a603b199570c8dcbe1b984",
+      "task_id": "7ecb882961e7aa9a6971ee7b412774e347d981a89eeab222b8e6d56ee7abd68c",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "2fd48440f3d7a4306bb3a1b54d672e7a45e3cbb6fb2c06904cbd0c765727d92e",
+      "case_id": "580f05292439a3520f30a87539a57c63ab9ca50d13ca516b6cc9483c5ff0a92e",
+      "task_id": "e21d9406207276471032c034c119a4953f58313be757a84a25957b48f0be407e",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "169b4e4ee7b04bc89e8c19c21a9e5116dd0f0fdc32554055f994fb1f2750190c",
+      "case_id": "61b107ca149401eabeb3336649da55775fcc1b8ea877c366b728891b13b310c2",
+      "task_id": "f8069700e78508744f588c5f486b46f927c9a0cb31d872bc721c5d90540767c8",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "96438a3200c5e5bbfe70af237650cac67a521d4231b3716f1a01ed37dea37e44",
+      "case_id": "6daa355b106885ba23fda4e236e58c47a8f654e8573237789ef7d269ae1b1618",
+      "task_id": "c2d9dcaaa61eab69ce2831377632488f83e4f7a015249c3b52c98c197627836d",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "dadfcad97017b6e66b55fbaa75426e241f8e13e831a075619e50c0a6f7caada9",
+      "case_id": "6f5d70c0d62ebebe570bd5f03e093d58f761014a9f589dfaac599604f5784b53",
+      "task_id": "6bf6fb6df730622b32c90744d5a2924ac95e541d1c630a77df39c8893b14ad99",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "5634c2d335d6c51ecf3a9302de23b15ac4b643a73b8f593eb71aaa3ce68325c5",
+      "case_id": "79496832d6929a4fa8671188c97aa02e12107c4651afb9eb533c997e79d3b8ce",
+      "task_id": "fe347b1c38093334b5c047e4dda567168b71e83e1fd412a3d99d416ea9aae269",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "34a17de92bdeacca18d023c196b8b2141fde69e1777354b13f86b5f078a7dbbd",
+      "case_id": "82ead899f1e39750a9eb0fb45fb360cdccd92afd8f4c946ccfa82478bd0b844f",
+      "task_id": "0abe6a38766d5c7614773689e5897298a9c3293cf3b4bcb40e40e6cf7d6fd9ab",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "158a46261b101f3f544709e16dd5541bf2ebc02d96a69a64c25f4dd926b0afe1",
+      "case_id": "878c720ac5f01f71e088f77ec6b891f4351b6ad2043a848914dc5c7d823acb04",
+      "task_id": "ef72a71216523af4dd2bd9501af42aec4264f9646da660d55ab041e391b69a4a",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "cb6da344888dcbce89f230a4fd02bffd4796dd8ce60c47923c7ff76528b113e5",
+      "case_id": "8dae27cf45947ec1874d1d3f4268cecdca94349a1448b72a2c153e3e6e32c9bb",
+      "task_id": "e629047c8a922b5032c61bf3ed5486b2e70870a2c7fa096a4d6021330c2ecf14",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "9685ac99ea078c8ee0e15917ab20a808474ea3656572c8af290bad60a1553e60",
+      "case_id": "8e53c1fe1b7f2b7620139bf529729f3063d32a45ba14b7f031afe70e537c5c9e",
+      "task_id": "cd14f2646118bde764afdc514494001f78ad8eff15dcfaf0b00c9343b1965388",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "84264fb98a682434f16394ac153a3d3a95bd811d1fc8ba4054daebc6d5728629",
+      "case_id": "96427f87c8e19fc301458be8bd3ff5b4d1f9c81e716e8128bdd3c42d74da6b73",
+      "task_id": "7160e8765596370463204d3da91e0264ddb20278b11b97fe46c8d385f4ce79ad",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "618d5e1182878f719ce416f7a4cbcb05330eabbbe4d671d983519b31ab6fa41c",
+      "case_id": "a3585918171708d08b6d0adcb8eabbea3f84bc4f14ca74979761d2696d1e5ca2",
+      "task_id": "cda158af00523cda35d266c82a7cdc58e2f8c69163057f3ede32b97fa18313ff",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "d20bc780aaefceb6c2f2a426a747792525fed7e1f4d466269bf73423c5fe8c04",
+      "case_id": "a49e4291123abd903c0081bb56db672f4e20f71207afcbfc042fb8bdf5ee1adf",
+      "task_id": "d81fdd0b8ad8256b242f40306755b772594628b8644daaf94f614e1ee2f62fd0",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "5f1799b048aa9cc7d98e0d96359e778196c9a5034f2dbc19a88d035c6e261302",
+      "case_id": "b251233244f883ed9492381fdb35c61378a91f315995659b472e3728fad0d846",
+      "task_id": "7f5faea6ae2578e959ce2597b5cbe0845c86813aa557251cff8483ca38431e50",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "38b1ba8211129a00eb0442b28b91aa54a315e6c59ac7cec14cab547a7bad1c89",
+      "case_id": "b48b7f2c05fe5baa2209c03e8528b03d4e9357dcae8e179a4cbdd2f02ce2eb12",
+      "task_id": "9511a7a3a1012cc6a1954625ccc024d9e37cb63803061d9a40745201bd49e608",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "c87771d8db9b332b5ba6f0be6a294b4720bcf4958aa562d93d39ee4ed214bb80",
+      "case_id": "ba57ec2d44e55c403686514d64701b89f20abf1dc866d71b6de4cb28c2195303",
+      "task_id": "6c39233b67710c1a492f61f717ac52ea49d5ede501691dfce36509acf1ee6db5",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "dde6ae502eb2e9ed11971ddaa7dc2d3f675bbffadc54ab2fa3a37774c557724d",
+      "case_id": "bbb937475928497df5e0018b2bf1cf092f857aa408621bc3befbfc20c4b344b8",
+      "task_id": "b1aa69503fab13c2c5b793a327138a6615478f9e3b03f95ccb5d714c3b18cb1b",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "ade545ecf9f3e7a3c2ea49eeb422ad3bab345d422cd519ae428187457ec44673",
+      "case_id": "be43ab410d7e5239cc7d304dcd5ca1151578d7ceb3798a6102b4a244ec3391b3",
+      "task_id": "e8d1f30139bf26faab7cf12d605559e8be6f6ee94ac3f752bf3be170f6ebe4cb",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "74fbc8b09bcd5dbfd125af1c71a584f5a869bfe89c3210c9da96f592afa69477",
+      "case_id": "c462c96c15cb7ef219d9f34a47ee7185b3f1a677b53c5ba51e89bdc271352a3c",
+      "task_id": "2db5e885faf1c43aa6615696cfbd77092e4aed2cbc868f3c805fc1becbca407b",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "5fd89d7c504e22cb7d3fd473d96346b88dfa2d2d42d2ed6c7242932c9c515690",
+      "case_id": "c534378b389a4b9fa79686c3a5fd245f401445101fac22f7dd185dcf3c059e8f",
+      "task_id": "7946d2abe8e3dd5a66933e6157fdcb1d39ee7f3d109ea92aad9ccbdec39d4650",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8db825476322a9450459cf3e3100b5c052e519bf868f6181e251719e7a9ac709",
+      "case_id": "c5f02511c58f2933ff40f78b972dae3e25568b830cf92b08c51987535400af42",
+      "task_id": "5d0194db456abc1af80a74b6c57a3c1030c4747339cd2795c1fdb3a8a3324216",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "9475c37f58060a4681f5e8286f27f1cbe1f91026ceba5f6d2381487ca3fe11c9",
+      "case_id": "d3457abc8a606147f4652886e1e5c57653f1d04ad913254f0b11e8b3cf25e909",
+      "task_id": "3febd4246c9627b6a37dcd38a99cf889235c75239411ca364e46427944403c75",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "bda58da63b20e09a0a6e763c6de6fbf172d73e4e493bffe67ee9a85949f58654",
+      "case_id": "d82f1ccbc630209699eefdc12ebe84383fdb148aa0d8ee9d9ea4441b2faf0cfb",
+      "task_id": "4a9b543983e61947b846e96a3dd470572208af264eeb942c0a6cbe58b1f4e9f0",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "76dcdd25d21ac1bca025c5d29bbf8dc9c0143675c137298f8390a1d488cd26b0",
+      "case_id": "db3321c903ef31a469097022ab6c80e50c17be66ae7eb90085b7e4dd093cd883",
+      "task_id": "6087a32e8e6a82742359ad229afb548c97157cc88d2aa463dda260842acb7c0d",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b25f9c8831c5f2e32418476dfd52a546c761204ef4fd68a44b5380c81a82c5d0",
+      "case_id": "dbf11d44e78c0811bf7436e119bbbd36ed0bc3170e29dc0524b76f57991ff1d7",
+      "task_id": "1e1e887807789d0ce105be8ce072aa8ea0951001e18dcc39f5e2509c21f50581",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "bf19d03fe9ac22dbfb00ab9db99a3eba3976927315c3c4d0010693c226b7ef6b",
+      "case_id": "dc4c07cce32b3a9400e691b4387743ab1e5d8e965c7aa76c2773510d135dad6f",
+      "task_id": "8f13437f2534f39cb1a934986eb078832026a898871ced8ae9fe67d30075cd45",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "0d3b86e28483dc9cbb15b15e69665712bec053d09bc7993182b7f9cf254dc2d1",
+      "case_id": "e633490acb6d8d063b099cedc6c4d00159c96cfcf5c1d8d79fadb00c0d043fbc",
+      "task_id": "5050206e0134207e49d921e46156f264d30878e28921dafb230e9224f9544156",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "2ddea8b441f27538ff11e7a98c96d2fb76578832d0b576ccf341b7394941bf5f",
+      "case_id": "ee13a470f5639dccf38af2259cf6cb2b6c6e55f27b31d52ae5b71ebd88460d27",
+      "task_id": "cdd5746574a223a9580d64b9a840037f8d281e38d35916ca88efb4ec9a9d99bd",
+      "variant": "evaluator_loop_symbol_tools",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "unsupported_relation"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "635ba5904b5b219c83ae01ec72970e20fbce053c0fec802809a476d9f2ca581a",
+      "case_id": "0574e15eeef1f554fffa0c0e8cc6c19cb02e4425d04902e5e326285e85dc2d1a",
+      "task_id": "2f7bc00448ce97488b7940c89cc3712ff310a0959fcb2f226da5eac638ebc497",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8a77c023e6a3d7c502408e8f64a522e02a490be38407ae5bef28878f7449020a",
+      "case_id": "0be3dc5ee22f92c5e5ce2d7b976fb335ff081eae8162d778c8cb2d67b1dab5ca",
+      "task_id": "2b57ba2f699616d5bf748ee37e58c2425d176874dff2e42576faddac7954d259",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "61f826250504d9eafac06b59fd365a28e8b28c53377f46eb64272d348d3ec095",
+      "case_id": "176cb72d19c1f5b3000363904e6e14ff2786b90ba3fe079b5fedba785200d6b1",
+      "task_id": "686170463cc245006aa7419488d0604d76ec50c3e11a176b91cdb16faaf863f9",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8d6cfd9af389bfde3e37c1bffc47e39eb08057eb43286386edf0de9d7e13e87b",
+      "case_id": "2ac61c92dc7413a7004c4dbea593f72aa56504727df5917cb66419369c966fd7",
+      "task_id": "97f71ae5afa5a2ee8a641ce55bf032e1285735d283122b657fd5d6b67db0fa05",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "11f05077fdd416f14534dd41555f9205ae62c89e6f2e6ac94729c33813b013ea",
+      "case_id": "31fd1686f366f645fad2289cba781b024b77b627e69b0940b2f72cbc228ea7d0",
+      "task_id": "5eb576a802a42b3f5cdbaa183b2b46bfd45c8c14c6a80e68d74175c906a375f4",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "65fea2e66242b95e2e24f707bbac908a2c0a1dd9228b4d6d88936e7f7b50ae1a",
+      "case_id": "3a6b0018b6a5cfaa453a132e463abaea12543baf0b69e6fa2bdca5047084b797",
+      "task_id": "c1947ef0acd9baf5522c742dc53d8b34bd869479ae81dfb2df99567c300c215e",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "0bc10bd8dbf42a0da801a14821df0c6e524be1f8572e69bfecb97a8778cc1c98",
+      "case_id": "3ec04b2dd99653395d16e3b9b2a543aff0b2ef021dc9fb13f08d9cc293e46774",
+      "task_id": "3e368d9d6764639d2ce258a79d3dbad5c622dd32e14eed7bab5c4b42a5de048e",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "a7ab992e1635e766761cbb6918f5e5f86bff35498b852cb15e856e53203e7e94",
+      "case_id": "448a366d8c5669ec775856c7b6ab84f319f630adf491b8d2e659782acecf85ec",
+      "task_id": "082e081604bccb620cd54c58c7067aa373cdb2d73cda8eb6a9ac5855765a19e4",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "1660262e4dbd63c030058445260f95d0dd6fea400467da067b4702efc3f7f362",
+      "case_id": "45c05555ff47d434b3e2a547a54bea462caf9e985a6cbf3cbcf737e1281fd7c2",
+      "task_id": "ec07557070242be4604e29990baf7c478de3cdea5532d984d9b55d4b8de202bb",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "3b8c69c649df92a034c1379dccd9cf07cdc28fc341c2b796058d5d8bab77ea4a",
+      "case_id": "470e36a519650fec3a14cd274034a98155604583d3148d968ad8583f43623942",
+      "task_id": "65c10428faf47ff93216bdfea3737aa5fc2b22fb60124b96a03db6ea53f182f5",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "edb0c942ba4a55dc9e199a8e8610f180e6593ba56734c08c549d0dd8b4f87eb9",
+      "case_id": "4c98375bf5e6317daeb160f2dda23dcd22f6108c88b92aee1c5fa698b095e242",
+      "task_id": "b6eb33e06521333b52526f475aec147abc88fa0d6839ef304039e4c89ed8dcef",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "e35d14439230dc1e0cdb67f5800a23ce23f134be2bfdbeba86cd7d22838cc592",
+      "case_id": "51545930399d33000b1d913d047da714674c5af61bb9e6ddadc0344051fd0ec1",
+      "task_id": "4010e074306070a41ec562b141a03a563b6a1942b5bf3dc2df454ad6cc2ef0d1",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "e7867beadc028b79e7b3fd06e29024c9496ef5707577b7ecbdcedef3f067f9ef",
+      "case_id": "52e2b67cca966157bd1822b909472db16a2cce5f60a603b199570c8dcbe1b984",
+      "task_id": "7ecb882961e7aa9a6971ee7b412774e347d981a89eeab222b8e6d56ee7abd68c",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "18d9fcd4a5c8565e99352c53152d6d3a6a70c40a47c7a0522693cf2cc81f6b60",
+      "case_id": "580f05292439a3520f30a87539a57c63ab9ca50d13ca516b6cc9483c5ff0a92e",
+      "task_id": "e21d9406207276471032c034c119a4953f58313be757a84a25957b48f0be407e",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "6a96d56bb12386967aa40b3dfd2fcffbf1e32a8f0fe0d08debe84dfa0e2a6d7b",
+      "case_id": "61b107ca149401eabeb3336649da55775fcc1b8ea877c366b728891b13b310c2",
+      "task_id": "f8069700e78508744f588c5f486b46f927c9a0cb31d872bc721c5d90540767c8",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f16ea0b515f7507aec8641ba3141b6292ddbd8232538962faf892b96ab9e5bfa",
+      "case_id": "6daa355b106885ba23fda4e236e58c47a8f654e8573237789ef7d269ae1b1618",
+      "task_id": "c2d9dcaaa61eab69ce2831377632488f83e4f7a015249c3b52c98c197627836d",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "42727ce58ed6db824c41d02f71cd6df7b207bef172fc2511ec59c8b1d8cabf1c",
+      "case_id": "6f5d70c0d62ebebe570bd5f03e093d58f761014a9f589dfaac599604f5784b53",
+      "task_id": "6bf6fb6df730622b32c90744d5a2924ac95e541d1c630a77df39c8893b14ad99",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "7f804698112c0f06a53873827e7fd40cb23548fcff63debaf143bbe9501604f8",
+      "case_id": "79496832d6929a4fa8671188c97aa02e12107c4651afb9eb533c997e79d3b8ce",
+      "task_id": "fe347b1c38093334b5c047e4dda567168b71e83e1fd412a3d99d416ea9aae269",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "3982d80ea7710bfec2089ce154c8cb3de2e09cbd4952c76e1cd2b8783d78d59b",
+      "case_id": "82ead899f1e39750a9eb0fb45fb360cdccd92afd8f4c946ccfa82478bd0b844f",
+      "task_id": "0abe6a38766d5c7614773689e5897298a9c3293cf3b4bcb40e40e6cf7d6fd9ab",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "a3367ea520c84415030ea3dcb7a5895105897bfa0200259820fa1979339f3e54",
+      "case_id": "878c720ac5f01f71e088f77ec6b891f4351b6ad2043a848914dc5c7d823acb04",
+      "task_id": "ef72a71216523af4dd2bd9501af42aec4264f9646da660d55ab041e391b69a4a",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "462db9d32ddef4b3f933fd4d80436ff85bc622e213ee54d12ec58795c26f118c",
+      "case_id": "8dae27cf45947ec1874d1d3f4268cecdca94349a1448b72a2c153e3e6e32c9bb",
+      "task_id": "e629047c8a922b5032c61bf3ed5486b2e70870a2c7fa096a4d6021330c2ecf14",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b6df30cd2b26237fb9c7d7d5dd7cedd80240206182a1e98ad297f6346632b826",
+      "case_id": "8e53c1fe1b7f2b7620139bf529729f3063d32a45ba14b7f031afe70e537c5c9e",
+      "task_id": "cd14f2646118bde764afdc514494001f78ad8eff15dcfaf0b00c9343b1965388",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "972ee89c1422f5fa3ae75cab8efa3f70a8b7ea81f0ed03c115351cf41ae2e9a0",
+      "case_id": "96427f87c8e19fc301458be8bd3ff5b4d1f9c81e716e8128bdd3c42d74da6b73",
+      "task_id": "7160e8765596370463204d3da91e0264ddb20278b11b97fe46c8d385f4ce79ad",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "06bc05d6d9420644a8009f4558884381399fb73390f6a5a86a76211cbdbe1c3c",
+      "case_id": "a3585918171708d08b6d0adcb8eabbea3f84bc4f14ca74979761d2696d1e5ca2",
+      "task_id": "cda158af00523cda35d266c82a7cdc58e2f8c69163057f3ede32b97fa18313ff",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "9d15f1e2caeb1a19ad010ae5d3330730e6f2cec104cc5013a60de2765376cedb",
+      "case_id": "a49e4291123abd903c0081bb56db672f4e20f71207afcbfc042fb8bdf5ee1adf",
+      "task_id": "d81fdd0b8ad8256b242f40306755b772594628b8644daaf94f614e1ee2f62fd0",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "6739dfcd31d4101db6689473fbac413fd99e9979878c21a8f336df361177235c",
+      "case_id": "b251233244f883ed9492381fdb35c61378a91f315995659b472e3728fad0d846",
+      "task_id": "7f5faea6ae2578e959ce2597b5cbe0845c86813aa557251cff8483ca38431e50",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "022906ddd496c94cd94faea767cdecab55b69d2f6ab8f93c7c6beb8cc23f34a8",
+      "case_id": "b48b7f2c05fe5baa2209c03e8528b03d4e9357dcae8e179a4cbdd2f02ce2eb12",
+      "task_id": "9511a7a3a1012cc6a1954625ccc024d9e37cb63803061d9a40745201bd49e608",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "26163f69374164c03106d20f21e29d5a62a7b4e596a6de41656a99a1d978d8b7",
+      "case_id": "ba57ec2d44e55c403686514d64701b89f20abf1dc866d71b6de4cb28c2195303",
+      "task_id": "6c39233b67710c1a492f61f717ac52ea49d5ede501691dfce36509acf1ee6db5",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8c4602392fb7a617b7bcde22ff90ee95b41bc9940f40650aea71f8a072e498e1",
+      "case_id": "bbb937475928497df5e0018b2bf1cf092f857aa408621bc3befbfc20c4b344b8",
+      "task_id": "b1aa69503fab13c2c5b793a327138a6615478f9e3b03f95ccb5d714c3b18cb1b",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "a9d8cdece05bfacd293a3fedbb4bb9bf5837d893bfcb5a6e36234dd9700fd60e",
+      "case_id": "be43ab410d7e5239cc7d304dcd5ca1151578d7ceb3798a6102b4a244ec3391b3",
+      "task_id": "e8d1f30139bf26faab7cf12d605559e8be6f6ee94ac3f752bf3be170f6ebe4cb",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b18ba0ddb4aa4f3e45a70d6e20b26ec8b167bf5728723bb1b408821df48e86a9",
+      "case_id": "c462c96c15cb7ef219d9f34a47ee7185b3f1a677b53c5ba51e89bdc271352a3c",
+      "task_id": "2db5e885faf1c43aa6615696cfbd77092e4aed2cbc868f3c805fc1becbca407b",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "3ecc8953653a1f7f036a3286cd57f14515ff649882f5c4f40a3bcf9ad959c8fd",
+      "case_id": "c534378b389a4b9fa79686c3a5fd245f401445101fac22f7dd185dcf3c059e8f",
+      "task_id": "7946d2abe8e3dd5a66933e6157fdcb1d39ee7f3d109ea92aad9ccbdec39d4650",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "e5a0eca25be948ee90c73b07b0ae8ab277fa2b416805bbaf8c10d4741058eba0",
+      "case_id": "c5f02511c58f2933ff40f78b972dae3e25568b830cf92b08c51987535400af42",
+      "task_id": "5d0194db456abc1af80a74b6c57a3c1030c4747339cd2795c1fdb3a8a3324216",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f530a0758e8e0da836993d00de815ce9dfa32a07c27dd6d49dbb18ed1bf71b9d",
+      "case_id": "d3457abc8a606147f4652886e1e5c57653f1d04ad913254f0b11e8b3cf25e909",
+      "task_id": "3febd4246c9627b6a37dcd38a99cf889235c75239411ca364e46427944403c75",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f7ebee380787f77b7f884fba8cb1812c083dc1e670fb83ab87d755f67585bab7",
+      "case_id": "d82f1ccbc630209699eefdc12ebe84383fdb148aa0d8ee9d9ea4441b2faf0cfb",
+      "task_id": "4a9b543983e61947b846e96a3dd470572208af264eeb942c0a6cbe58b1f4e9f0",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "93d06cf0bf0e484198c05053feea067ec314f35d74adf4e62ec66610a08189f2",
+      "case_id": "db3321c903ef31a469097022ab6c80e50c17be66ae7eb90085b7e4dd093cd883",
+      "task_id": "6087a32e8e6a82742359ad229afb548c97157cc88d2aa463dda260842acb7c0d",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "c5f7f15e5f4edda43cccdef68520714f1526403ea0b6af6c54169036cf9169e9",
+      "case_id": "dbf11d44e78c0811bf7436e119bbbd36ed0bc3170e29dc0524b76f57991ff1d7",
+      "task_id": "1e1e887807789d0ce105be8ce072aa8ea0951001e18dcc39f5e2509c21f50581",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "3f5497f10a0ccfcbdfd8e987922a19a2519566a76a704ad9dac4e5d085cbfd4d",
+      "case_id": "dc4c07cce32b3a9400e691b4387743ab1e5d8e965c7aa76c2773510d135dad6f",
+      "task_id": "8f13437f2534f39cb1a934986eb078832026a898871ced8ae9fe67d30075cd45",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "cf636d405e84b5d5ef3b36f7a7cee86f99eea6f7f1ff7471938fe12f5335cad5",
+      "case_id": "e633490acb6d8d063b099cedc6c4d00159c96cfcf5c1d8d79fadb00c0d043fbc",
+      "task_id": "5050206e0134207e49d921e46156f264d30878e28921dafb230e9224f9544156",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "523a4d0d5accb8e8cb2e381ff1b60ecc0569e06723df0f2ed0e3122cace4fdaf",
+      "case_id": "ee13a470f5639dccf38af2259cf6cb2b6c6e55f27b31d52ae5b71ebd88460d27",
+      "task_id": "cdd5746574a223a9580d64b9a840037f8d281e38d35916ca88efb4ec9a9d99bd",
+      "variant": "evaluator_loop_context_builder",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "4c53029d5938d02972574e100d888ee3ce9274b9ae8416964b2ba4cddd49400b",
+      "case_id": "0574e15eeef1f554fffa0c0e8cc6c19cb02e4425d04902e5e326285e85dc2d1a",
+      "task_id": "2f7bc00448ce97488b7940c89cc3712ff310a0959fcb2f226da5eac638ebc497",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "c4f98336bf8c1acdab5d93076a3f70514b2d6b674423e1d74a9c74ca9f1c5c3e",
+      "case_id": "0be3dc5ee22f92c5e5ce2d7b976fb335ff081eae8162d778c8cb2d67b1dab5ca",
+      "task_id": "2b57ba2f699616d5bf748ee37e58c2425d176874dff2e42576faddac7954d259",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b9f7958af0db30d91ce8b542c6d8203cc4a293dc6bf8597a0e54bdbe34b82cc8",
+      "case_id": "176cb72d19c1f5b3000363904e6e14ff2786b90ba3fe079b5fedba785200d6b1",
+      "task_id": "686170463cc245006aa7419488d0604d76ec50c3e11a176b91cdb16faaf863f9",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "aa8cfc525ff4755083ae230bbdd632ccd1c463d565fbdc9426c01a42eadb2698",
+      "case_id": "2ac61c92dc7413a7004c4dbea593f72aa56504727df5917cb66419369c966fd7",
+      "task_id": "97f71ae5afa5a2ee8a641ce55bf032e1285735d283122b657fd5d6b67db0fa05",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "0f0b7217c6e16a54f45e882e54dcd91a6b84ad22fb28ab501fa780f7e0d7c9a0",
+      "case_id": "31fd1686f366f645fad2289cba781b024b77b627e69b0940b2f72cbc228ea7d0",
+      "task_id": "5eb576a802a42b3f5cdbaa183b2b46bfd45c8c14c6a80e68d74175c906a375f4",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "65a763af920c505064d5c95121ade6f4c355a5820ad89c86b22e5cab76260690",
+      "case_id": "3a6b0018b6a5cfaa453a132e463abaea12543baf0b69e6fa2bdca5047084b797",
+      "task_id": "c1947ef0acd9baf5522c742dc53d8b34bd869479ae81dfb2df99567c300c215e",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "09a49bb5541685b6c9aaf51b71fd2f92c9a688604956d9c146a6e1ca4f4c7643",
+      "case_id": "3ec04b2dd99653395d16e3b9b2a543aff0b2ef021dc9fb13f08d9cc293e46774",
+      "task_id": "3e368d9d6764639d2ce258a79d3dbad5c622dd32e14eed7bab5c4b42a5de048e",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "fa57733cf2ce700e2e9a9209c6140c2a4e917401ca0ea077e555ec48823d5d42",
+      "case_id": "448a366d8c5669ec775856c7b6ab84f319f630adf491b8d2e659782acecf85ec",
+      "task_id": "082e081604bccb620cd54c58c7067aa373cdb2d73cda8eb6a9ac5855765a19e4",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "81614f17383ee4d97f52d237f43fe7082cd96ad15dd1d618d9baefed535c81f4",
+      "case_id": "45c05555ff47d434b3e2a547a54bea462caf9e985a6cbf3cbcf737e1281fd7c2",
+      "task_id": "ec07557070242be4604e29990baf7c478de3cdea5532d984d9b55d4b8de202bb",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "4fc2b1552bfede2241f828f5eeea7f575504b5ca7c66159fc5054ff5475e1d60",
+      "case_id": "470e36a519650fec3a14cd274034a98155604583d3148d968ad8583f43623942",
+      "task_id": "65c10428faf47ff93216bdfea3737aa5fc2b22fb60124b96a03db6ea53f182f5",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "d79c1e32c2c08cb0f39f3643a8be46a7f869915a1be90da466fd88a727d634c7",
+      "case_id": "4c98375bf5e6317daeb160f2dda23dcd22f6108c88b92aee1c5fa698b095e242",
+      "task_id": "b6eb33e06521333b52526f475aec147abc88fa0d6839ef304039e4c89ed8dcef",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "5cca004b9fa806ea56b1ba150434cdb35e82511e4051e3e543e392e283228dca",
+      "case_id": "51545930399d33000b1d913d047da714674c5af61bb9e6ddadc0344051fd0ec1",
+      "task_id": "4010e074306070a41ec562b141a03a563b6a1942b5bf3dc2df454ad6cc2ef0d1",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "439a6f739eb27b24ee756e687e4f4815f961499a0ce8969c3b761b6e0019fa1f",
+      "case_id": "52e2b67cca966157bd1822b909472db16a2cce5f60a603b199570c8dcbe1b984",
+      "task_id": "7ecb882961e7aa9a6971ee7b412774e347d981a89eeab222b8e6d56ee7abd68c",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "14d82a5cd17de4baaab2f66aff0edab86048cef404e8a5b8e8bf70e72a8e0c8f",
+      "case_id": "580f05292439a3520f30a87539a57c63ab9ca50d13ca516b6cc9483c5ff0a92e",
+      "task_id": "e21d9406207276471032c034c119a4953f58313be757a84a25957b48f0be407e",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "92631f532bc3b205160de3bc816fa5618e6360e21372096478d6b63596d3d3d2",
+      "case_id": "61b107ca149401eabeb3336649da55775fcc1b8ea877c366b728891b13b310c2",
+      "task_id": "f8069700e78508744f588c5f486b46f927c9a0cb31d872bc721c5d90540767c8",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f868962e66968536739c674052a785816a009921d81bf1d6d1d11a466bc86be1",
+      "case_id": "6daa355b106885ba23fda4e236e58c47a8f654e8573237789ef7d269ae1b1618",
+      "task_id": "c2d9dcaaa61eab69ce2831377632488f83e4f7a015249c3b52c98c197627836d",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "82e1a48dc8cdcb3ee45ef644fb0e168654c074e9504675a46f72dcaf32e8d357",
+      "case_id": "6f5d70c0d62ebebe570bd5f03e093d58f761014a9f589dfaac599604f5784b53",
+      "task_id": "6bf6fb6df730622b32c90744d5a2924ac95e541d1c630a77df39c8893b14ad99",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "f102359b22f936fb67640c73568e2764864593ee9b9d02586bffc61fdb39330d",
+      "case_id": "79496832d6929a4fa8671188c97aa02e12107c4651afb9eb533c997e79d3b8ce",
+      "task_id": "fe347b1c38093334b5c047e4dda567168b71e83e1fd412a3d99d416ea9aae269",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "04d10bfaaaecd6a54330c660e7f1fe67977d00d65269acb0ef52c0e7964bc97b",
+      "case_id": "82ead899f1e39750a9eb0fb45fb360cdccd92afd8f4c946ccfa82478bd0b844f",
+      "task_id": "0abe6a38766d5c7614773689e5897298a9c3293cf3b4bcb40e40e6cf7d6fd9ab",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "6df629b4a695f662830aeb7ba39cf523202bd209bef9586ad169e66d97181ed8",
+      "case_id": "878c720ac5f01f71e088f77ec6b891f4351b6ad2043a848914dc5c7d823acb04",
+      "task_id": "ef72a71216523af4dd2bd9501af42aec4264f9646da660d55ab041e391b69a4a",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "5e268ea848eb4f316bdfeb8839bdfdaa532bd3d00eca8200af77f26bc7319e4c",
+      "case_id": "8dae27cf45947ec1874d1d3f4268cecdca94349a1448b72a2c153e3e6e32c9bb",
+      "task_id": "e629047c8a922b5032c61bf3ed5486b2e70870a2c7fa096a4d6021330c2ecf14",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "7a2aebfac0d7a4bcf3ff453d15672a4d3a802b0ac3339a47cc05baa849d371ba",
+      "case_id": "8e53c1fe1b7f2b7620139bf529729f3063d32a45ba14b7f031afe70e537c5c9e",
+      "task_id": "cd14f2646118bde764afdc514494001f78ad8eff15dcfaf0b00c9343b1965388",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "1b1efc21652b75be66159ca0983725020d8af6ae741ba66eec5cae5245b3f006",
+      "case_id": "96427f87c8e19fc301458be8bd3ff5b4d1f9c81e716e8128bdd3c42d74da6b73",
+      "task_id": "7160e8765596370463204d3da91e0264ddb20278b11b97fe46c8d385f4ce79ad",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "34922203ddb5e3262ac02361660f17ba84813e51bc7bc5e262303b598b2370e2",
+      "case_id": "a3585918171708d08b6d0adcb8eabbea3f84bc4f14ca74979761d2696d1e5ca2",
+      "task_id": "cda158af00523cda35d266c82a7cdc58e2f8c69163057f3ede32b97fa18313ff",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "fa9983e813906d28a15357d284a89426c1306c653e94298c0813e8e4e62fe08b",
+      "case_id": "a49e4291123abd903c0081bb56db672f4e20f71207afcbfc042fb8bdf5ee1adf",
+      "task_id": "d81fdd0b8ad8256b242f40306755b772594628b8644daaf94f614e1ee2f62fd0",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8c9560a572d9f4b684377fb317d5142d5c2cb8cf3b663be6b2cc442b058805b2",
+      "case_id": "b251233244f883ed9492381fdb35c61378a91f315995659b472e3728fad0d846",
+      "task_id": "7f5faea6ae2578e959ce2597b5cbe0845c86813aa557251cff8483ca38431e50",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "8b6c0f7ffb49178749cdc2f4e58b35f36275c766060b466d00aa8a675f0061b6",
+      "case_id": "b48b7f2c05fe5baa2209c03e8528b03d4e9357dcae8e179a4cbdd2f02ce2eb12",
+      "task_id": "9511a7a3a1012cc6a1954625ccc024d9e37cb63803061d9a40745201bd49e608",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "82203fc60dc005faf960df6cbf6813523d0e9a181d585805ddeb6e6895b19fb5",
+      "case_id": "ba57ec2d44e55c403686514d64701b89f20abf1dc866d71b6de4cb28c2195303",
+      "task_id": "6c39233b67710c1a492f61f717ac52ea49d5ede501691dfce36509acf1ee6db5",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "0bc40ba24a8d336ead790e4c2ec58b7ea6cc909f8dd27a05a74f705fdc8ad2bf",
+      "case_id": "bbb937475928497df5e0018b2bf1cf092f857aa408621bc3befbfc20c4b344b8",
+      "task_id": "b1aa69503fab13c2c5b793a327138a6615478f9e3b03f95ccb5d714c3b18cb1b",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "36636c42fc8bfc119143ac5da35c88fa83feb6df3e197b69d600b5d6adced531",
+      "case_id": "be43ab410d7e5239cc7d304dcd5ca1151578d7ceb3798a6102b4a244ec3391b3",
+      "task_id": "e8d1f30139bf26faab7cf12d605559e8be6f6ee94ac3f752bf3be170f6ebe4cb",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "040d0ab751171cd8aadca5b72bf65d88fe83c3407ec7063b81698bc695458f79",
+      "case_id": "c462c96c15cb7ef219d9f34a47ee7185b3f1a677b53c5ba51e89bdc271352a3c",
+      "task_id": "2db5e885faf1c43aa6615696cfbd77092e4aed2cbc868f3c805fc1becbca407b",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "9b00114e99ca22fdeb6337238efa310297a5298afa74ade5b11ce0e619944932",
+      "case_id": "c534378b389a4b9fa79686c3a5fd245f401445101fac22f7dd185dcf3c059e8f",
+      "task_id": "7946d2abe8e3dd5a66933e6157fdcb1d39ee7f3d109ea92aad9ccbdec39d4650",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "37c5d075f5de0b39fe0d38138f313f25092fd17bc65dd8f6f877d2fa4c1d520c",
+      "case_id": "c5f02511c58f2933ff40f78b972dae3e25568b830cf92b08c51987535400af42",
+      "task_id": "5d0194db456abc1af80a74b6c57a3c1030c4747339cd2795c1fdb3a8a3324216",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "2e9c38f3b28c68d0d7cb03af71ccf14c0dbccdb73e349c3e477b5e85ea23d7f8",
+      "case_id": "d3457abc8a606147f4652886e1e5c57653f1d04ad913254f0b11e8b3cf25e909",
+      "task_id": "3febd4246c9627b6a37dcd38a99cf889235c75239411ca364e46427944403c75",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "6b0a43f08f30d0a15542d3b7852efdb92327207fb20f5546757058ad62e4e428",
+      "case_id": "d82f1ccbc630209699eefdc12ebe84383fdb148aa0d8ee9d9ea4441b2faf0cfb",
+      "task_id": "4a9b543983e61947b846e96a3dd470572208af264eeb942c0a6cbe58b1f4e9f0",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b881220e12cff13174848a5c7207d5ead3517b9459675a2e22caef304c1221bc",
+      "case_id": "db3321c903ef31a469097022ab6c80e50c17be66ae7eb90085b7e4dd093cd883",
+      "task_id": "6087a32e8e6a82742359ad229afb548c97157cc88d2aa463dda260842acb7c0d",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "c6046859ca8ad2ce9c8031ce15aa949f20cc2848bd7b21ea4d5de4098f0ac523",
+      "case_id": "dbf11d44e78c0811bf7436e119bbbd36ed0bc3170e29dc0524b76f57991ff1d7",
+      "task_id": "1e1e887807789d0ce105be8ce072aa8ea0951001e18dcc39f5e2509c21f50581",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "292f5de94819c6862b598c50cade165a18fe5505efd1a0792ad4cfb98d3dc5f4",
+      "case_id": "dc4c07cce32b3a9400e691b4387743ab1e5d8e965c7aa76c2773510d135dad6f",
+      "task_id": "8f13437f2534f39cb1a934986eb078832026a898871ced8ae9fe67d30075cd45",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "b9652caa01569d25f7f9e8803c9d2c76ffc7d5fb3238f89cb1364dde569c1843",
+      "case_id": "e633490acb6d8d063b099cedc6c4d00159c96cfcf5c1d8d79fadb00c0d043fbc",
+      "task_id": "5050206e0134207e49d921e46156f264d30878e28921dafb230e9224f9544156",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": [
+        "no_file_hit_at_5",
+        "no_symbol_hit_at_5",
+        "invalid_evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "observation_id": "a76155cfc59a97fb122e8f6da7842b7bd3bba068255e9a2514582619c08f02bd",
+      "case_id": "ee13a470f5639dccf38af2259cf6cb2b6c6e55f27b31d52ae5b71ebd88460d27",
+      "task_id": "cdd5746574a223a9580d64b9a840037f8d281e38d35916ca88efb4ec9a9d99bd",
+      "variant": "evaluator_loop_context_builder_memory",
+      "repeat_index": 0,
+      "run_status": "accepted",
+      "error_kinds": []
+    }
+  ],
+  "resource_aggregates": [
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "context_lines",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 17434,
+      "mean_numerator": 17434,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "context_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 316580,
+      "mean_numerator": 316580,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "tool_calls",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 500,
+      "mean_numerator": 500,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "latency_ms",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 39140,
+      "mean_numerator": 39140,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "evaluator_iterations",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 0,
+      "mean_numerator": 0,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "input_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 329460,
+      "mean_numerator": 329460,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "metric": "output_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 29087,
+      "mean_numerator": 29087,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "context_lines",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 16034,
+      "mean_numerator": 16034,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "context_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 290580,
+      "mean_numerator": 290580,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "tool_calls",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 460,
+      "mean_numerator": 460,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "latency_ms",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 49140,
+      "mean_numerator": 49140,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "evaluator_iterations",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 80,
+      "mean_numerator": 80,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "input_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 373460,
+      "mean_numerator": 373460,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "metric": "output_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 41087,
+      "mean_numerator": 41087,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "context_lines",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 14034,
+      "mean_numerator": 14034,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "context_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 254580,
+      "mean_numerator": 254580,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "tool_calls",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 380,
+      "mean_numerator": 380,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "latency_ms",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 45940,
+      "mean_numerator": 45940,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "evaluator_iterations",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 80,
+      "mean_numerator": 80,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "input_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 345460,
+      "mean_numerator": 345460,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "metric": "output_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 37087,
+      "mean_numerator": 37087,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "context_lines",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 8434,
+      "mean_numerator": 8434,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "context_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 146580,
+      "mean_numerator": 146580,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "tool_calls",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 340,
+      "mean_numerator": 340,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "latency_ms",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 41940,
+      "mean_numerator": 41940,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "evaluator_iterations",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 40,
+      "mean_numerator": 40,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "input_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 211460,
+      "mean_numerator": 211460,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "metric": "output_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 31087,
+      "mean_numerator": 31087,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "context_lines",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 9034,
+      "mean_numerator": 9034,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "context_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 156580,
+      "mean_numerator": 156580,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "tool_calls",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 260,
+      "mean_numerator": 260,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "latency_ms",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 39540,
+      "mean_numerator": 39540,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "evaluator_iterations",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 40,
+      "mean_numerator": 40,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "input_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 223460,
+      "mean_numerator": 223460,
+      "mean_denominator": 40
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "metric": "output_tokens",
+      "total_observations": 40,
+      "observed_observations": 40,
+      "total_value": 29087,
+      "mean_numerator": 29087,
+      "mean_denominator": 40
+    }
+  ],
+  "cost_aggregates": [
+    {
+      "schema_version": 1,
+      "variant": "tool_wrapper",
+      "total_observations": 40,
+      "estimated_observations": 40,
+      "unavailable_observations": 0,
+      "total_estimated_cost_usd": "0.387634",
+      "disclaimer": "estimate_not_invoice"
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop",
+      "total_observations": 40,
+      "estimated_observations": 40,
+      "unavailable_observations": 0,
+      "total_estimated_cost_usd": "0.455634",
+      "disclaimer": "estimate_not_invoice"
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_symbol_tools",
+      "total_observations": 40,
+      "estimated_observations": 40,
+      "unavailable_observations": 0,
+      "total_estimated_cost_usd": "0.419634",
+      "disclaimer": "estimate_not_invoice"
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder",
+      "total_observations": 40,
+      "estimated_observations": 40,
+      "unavailable_observations": 0,
+      "total_estimated_cost_usd": "0.273634",
+      "disclaimer": "estimate_not_invoice"
+    },
+    {
+      "schema_version": 1,
+      "variant": "evaluator_loop_context_builder_memory",
+      "total_observations": 40,
+      "estimated_observations": 40,
+      "unavailable_observations": 0,
+      "total_estimated_cost_usd": "0.281634",
+      "disclaimer": "estimate_not_invoice"
+    }
+  ],
+  "evaluation_scope": "localization_only",
+  "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+}
