@@ -27,6 +27,7 @@ repocompass-localization-analyze = "repocompass.evaluation.localization_analysis
 repocompass-localization-regression = "repocompass.evaluation.localization_analysis_cli:regression_main"
 repocompass-mcp = "repocompass.mcp_server:main"
 repocompass-dashboard = "repocompass.dashboard.runtime:main"
+repocompass-improve = "repocompass.improve.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]

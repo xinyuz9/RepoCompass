@@ -67,6 +67,7 @@ def test_scope_and_proposal_ids_are_stable_and_strict(tmp_path: Path) -> None:
     )
 
     assert first == second
+    assert type(first).model_validate(first.model_dump(mode="json")) == first
     assert first.scope_id == second.scope_id
     assert first.targets[0].line_start == 1
     assert first.targets[0].line_end == 2

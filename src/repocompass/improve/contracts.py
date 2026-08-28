@@ -118,6 +118,11 @@ class VerificationSpec(_ImproveContractModel):
     timeout_seconds: int = Field(default=60, ge=1, le=300)
     required: bool = True
 
+    @field_validator("profile", mode="before")
+    @classmethod
+    def restore_profile_enum(cls, value: object) -> object:
+        return PythonVerificationProfile(value) if isinstance(value, str) else value
+
     @field_validator("arguments", mode="before")
     @classmethod
     def canonicalize_arguments(cls, value: object) -> object:

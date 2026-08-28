@@ -1,5 +1,11 @@
 """Optional, explicitly scoped code-improvement boundary."""
 
+from repocompass.improve.apply import (
+    FocusedApplyError,
+    FocusedApplyErrorReason,
+    FocusedApplyResult,
+    apply_verified_proposal,
+)
 from repocompass.improve.contracts import (
     FocusedChangeProposal,
     FocusedImproveScope,
@@ -40,6 +46,9 @@ from repocompass.improve.sandbox import (
 __all__ = [
     "BubblewrapVerifier",
     "FocusedChangeProposal",
+    "FocusedApplyError",
+    "FocusedApplyErrorReason",
+    "FocusedApplyResult",
     "FocusedImproveEngine",
     "FocusedImproveRunReport",
     "FocusedImproveScope",
@@ -61,6 +70,7 @@ __all__ = [
     "VerificationSpec",
     "VerificationDecisionReason",
     "VerificationStatus",
+    "apply_verified_proposal",
     "create_change_proposal",
     "create_focused_improve_scope",
     "validate_focused_change_proposal",
