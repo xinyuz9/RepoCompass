@@ -17,6 +17,12 @@ dependencies = [
     "uvicorn>=0.51.0",
 ]
 
+[project.optional-dependencies]
+improve = [
+    "pytest>=9.1.1",
+    "ruff>=0.15.21",
+]
+
 [project.scripts]
 repocompass = "repocompass.cli:main"
 repocompass-benchmark = "repocompass.evaluation.cli:main"
@@ -43,6 +49,12 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+norecursedirs = [
+    ".git",
+    ".venv",
+    "node_modules",
+    "benchmarks/cases",
+]
 markers = [
     "live_api: explicitly enabled tests that spend real provider credits",
 ]

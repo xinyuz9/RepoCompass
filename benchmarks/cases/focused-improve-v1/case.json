@@ -2,6 +2,11 @@
   "schema_version": 1,
   "case_id": "focused-improve-v1",
   "objective": "Return two from the explicitly selected function.",
+  "repository_files": [
+    "pkg/__init__.py",
+    "pkg/example.py",
+    "tests/test_change.py"
+  ],
   "target": {
     "path": "pkg/example.py",
     "symbol": "pkg.example.allowed"

@@ -36,6 +36,7 @@ _REPORT_ID_PREFIX = b"repocompass:focused-improve-portable-fixture:v1\0"
 class FocusedImproveFixtureCase:
     case_id: str
     objective: str
+    repository_files: tuple[str, ...]
     target_path: str
     target_symbol: str
     verification_profile: PythonVerificationProfile
@@ -58,7 +59,11 @@ def build_report(
     case = load_case(case_path)
     workspace_root.mkdir(parents=True, exist_ok=False)
     repository = workspace_root / "repository"
-    shutil.copytree(case_path.parent / "repository", repository)
+    _copy_repository_fixture(
+        case_path.parent / "repository",
+        repository,
+        case.repository_files,
+    )
     commit_sha = _initialize_repository(repository)
     scope = create_focused_improve_scope(
         repository,
@@ -216,6 +221,7 @@ def load_case(path: Path) -> FocusedImproveFixtureCase:
             "schema_version",
             "case_id",
             "objective",
+            "repository_files",
             "target",
             "verification",
             "proposal",
@@ -242,9 +248,20 @@ def load_case(path: Path) -> FocusedImproveFixtureCase:
         isinstance(item, str) for item in arguments
     ):
         raise ValueError("verification arguments must be a string list")
+    repository_files_value = case["repository_files"]
+    if not isinstance(repository_files_value, list) or not all(
+        isinstance(item, str) for item in repository_files_value
+    ):
+        raise ValueError("repository_files must be a string list")
+    repository_files = tuple(
+        validate_improve_path(item) for item in repository_files_value
+    )
+    if repository_files != tuple(sorted(set(repository_files))):
+        raise ValueError("repository_files must be unique and sorted")
     return FocusedImproveFixtureCase(
         case_id=_text(case["case_id"], "case_id"),
         objective=_text(case["objective"], "objective"),
+        repository_files=repository_files,
         target_path=validate_improve_path(_text(target["path"], "target path")),
         target_symbol=_text(target["symbol"], "target symbol"),
         verification_profile=PythonVerificationProfile(
@@ -298,6 +315,24 @@ def _initialize_repository(repository: Path) -> str:
         "HEAD",
         environment=environment,
     ).stdout.strip()
+
+
+def _copy_repository_fixture(
+    source_root: Path,
+    destination_root: Path,
+    relative_paths: tuple[str, ...],
+) -> None:
+    destination_root.mkdir()
+    for relative_path in relative_paths:
+        source = source_root / Path(relative_path)
+        source_stat = source.lstat()
+        if not source.is_file() or source.is_symlink():
+            raise ValueError("fixture repository entries must be regular files")
+        destination = destination_root / Path(relative_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        if destination.stat().st_size != source_stat.st_size:
+            raise RuntimeError("fixture repository copy did not preserve file bytes")
 
 
 def _git(
