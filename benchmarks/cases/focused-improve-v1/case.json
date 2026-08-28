@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "case_id": "focused-improve-v1",
+  "objective": "Return two from the explicitly selected function.",
+  "target": {
+    "path": "pkg/example.py",
+    "symbol": "pkg.example.allowed"
+  },
+  "verification": {
+    "profile": "pytest",
+    "arguments": [
+      "tests/test_change.py"
+    ],
+    "timeout_seconds": 15
+  },
+  "proposal": {
+    "replacement_path": "replacement/pkg/example.py",
+    "rationale": "Change only the selected function and satisfy its focused test.",
+    "revision_number": 1
+  },
+  "max_changed_lines": 20,
+  "max_revision_count": 3
+}

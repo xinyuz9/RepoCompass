@@ -1,7 +1,7 @@
 [project]
 name = "repocompass"
 version = "0.1.0"
-description = "Evidence-grounded repository investigation agent with bounded tools, memory, evaluation, MCP, and a local observability dashboard"
+description = "Evidence-grounded repository investigation agent with bounded tools, memory, evaluation, MCP, observability, and opt-in sandboxed focused improvements"
 readme = "README.md"
 authors = [
     { name = "xinyuz9", email = "152044466+xinyuz9@users.noreply.github.com" }

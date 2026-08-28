@@ -1,0 +1,87 @@
+{
+  "case_id": "focused-improve-v1",
+  "cost_semantics": {
+    "host_compute_cost_included": false,
+    "model_calls": 0,
+    "provider_cost_status": "not_applicable",
+    "provider_tokens": 0,
+    "sandbox_command_count": 1
+  },
+  "execution": {
+    "accepted": true,
+    "apply_performed": false,
+    "checks": [
+      {
+        "arguments": [
+          "tests/test_change.py"
+        ],
+        "exit_code": 0,
+        "output_truncated": false,
+        "profile": "pytest",
+        "required": true,
+        "status": "passed"
+      }
+    ],
+    "decision_reasons": [
+      "accepted"
+    ],
+    "dry_run_source_unchanged": true,
+    "iteration_count": 1,
+    "side_effect_paths": [],
+    "stop_reason": "accepted"
+  },
+  "fixture_commit_sha": "7f3b09922dbc385630ebd2f1aac18c10c1b6cd20",
+  "portability": {
+    "omitted_raw_fields": [
+      "repository_id",
+      "scope_id",
+      "proposal_id",
+      "verification_report_id",
+      "run_report_id",
+      "duration_ms",
+      "output",
+      "output_sha256"
+    ],
+    "reason": "Raw identities bind the absolute trusted repository and command output; duration is host-dependent. The portable projection keeps deterministic admission, sandbox, decision, side-effect, and cost facts."
+  },
+  "portable_report_id": "8ca50b4a550629aadf656a0f2f0de27e4fcbe67d68cb8d95abec25329db9dd45",
+  "proposal": {
+    "changed_line_count": 2,
+    "changed_paths": [
+      "pkg/example.py"
+    ],
+    "replacement_byte_count": 101,
+    "replacement_sha256": [
+      "16e8a0a4b85dd582717caf72acc66f56fe030e3c062334728444de43b6c16b16"
+    ],
+    "revision_number": 1
+  },
+  "sandbox": {
+    "address_space_limit_bytes": 4294967296,
+    "backend": "bubblewrap",
+    "cpu_limit_seconds": 17,
+    "environment_scrubbed": true,
+    "network_access": false,
+    "output_limit_bytes": 262144,
+    "process_limit": 128,
+    "runtime_read_only": true,
+    "workspace_mount": "/workspace",
+    "workspace_writable": true
+  },
+  "schema_version": 1,
+  "scope": {
+    "max_changed_lines": 20,
+    "max_revision_count": 3,
+    "target": {
+      "base_sha256": "145767de5b256858b88aa1e51eb2f6c150c70b45571f20c736bb6ed70952ffda",
+      "line_end": 5,
+      "line_start": 4,
+      "path": "pkg/example.py",
+      "symbol": "pkg.example.allowed"
+    },
+    "target_count": 1,
+    "verification_profiles": [
+      "pytest"
+    ]
+  }
+}

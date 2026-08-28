@@ -26,6 +26,13 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
+      - name: Install Linux sandbox runtime
+        run: |
+          if ! command -v bwrap >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes bubblewrap
+          fi
+          bwrap --version
       - name: Install locked dependencies
         run: uv sync --locked --all-groups
       - name: Ruff
@@ -47,6 +54,7 @@ jobs:
           uv pip install --python .wheel-smoke/bin/python dist/*.whl
           .wheel-smoke/bin/repocompass-dashboard --help
           .wheel-smoke/bin/repocompass-mcp --help
+          .wheel-smoke/bin/repocompass-improve --help
 
   ui:
     name: Node 24 · tests, axe, lint, build
