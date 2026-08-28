@@ -20,6 +20,7 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from repocompass.agent.domain_model import CheckpointSafeModel
 from repocompass.improve.contracts import FocusedChangeProposal, FocusedImproveScope
 from repocompass.improve.engine import FocusedImproveRunReport
+from repocompass.improve.git_runtime import safe_git_command, safe_git_environment
 from repocompass.improve.proposal import (
     ProposalValidationError,
     validate_focused_change_proposal,
@@ -264,8 +265,27 @@ def _require_post_apply_state(
         (prefix / Path(*PurePosixPath(edit.path).parts)).as_posix()
         for edit in proposal.edits
     }
-    changed = set(_git_z_paths(top_level, "diff", "--name-only", "-z"))
-    staged = set(_git_z_paths(top_level, "diff", "--cached", "--name-only", "-z"))
+    changed = set(
+        _git_z_paths(
+            top_level,
+            "diff",
+            "--name-only",
+            "--no-ext-diff",
+            "--no-textconv",
+            "-z",
+        )
+    )
+    staged = set(
+        _git_z_paths(
+            top_level,
+            "diff",
+            "--cached",
+            "--name-only",
+            "--no-ext-diff",
+            "--no-textconv",
+            "-z",
+        )
+    )
     if changed != expected or staged:
         raise FocusedApplyError(FocusedApplyErrorReason.POST_APPLY_MISMATCH)
     for edit in proposal.edits:
@@ -324,15 +344,16 @@ def _git_apply(
     *,
     check_only: bool,
 ) -> subprocess.CompletedProcess[bytes]:
-    arguments = ["git", "apply", "--whitespace=nowarn"]
+    arguments = ["apply", "--whitespace=nowarn"]
     if check_only:
         arguments.append("--check")
     try:
         return subprocess.run(
-            arguments,
+            safe_git_command(*arguments),
             cwd=top_level,
             input=patch,
             capture_output=True,
+            env=safe_git_environment(),
             timeout=_GIT_TIMEOUT_SECONDS,
             check=False,
             shell=False,
@@ -369,9 +390,10 @@ def _git_z_paths(cwd: Path, *arguments: str) -> tuple[str, ...]:
 def _git(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[bytes]:
     try:
         completed = subprocess.run(
-            ("git", *arguments),
+            safe_git_command(*arguments),
             cwd=cwd,
             capture_output=True,
+            env=safe_git_environment(),
             timeout=_GIT_TIMEOUT_SECONDS,
             check=False,
             shell=False,

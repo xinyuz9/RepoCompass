@@ -19,6 +19,7 @@ from repocompass.improve.contracts import (
     create_focused_scope_contract,
     validate_improve_path,
 )
+from repocompass.improve.git_runtime import safe_git_command, safe_git_environment
 from repocompass.structure.contracts import PythonSymbolKind
 from repocompass.structure.python_index import PythonIndexError, build_python_file_index
 from repocompass.tools.gateway import ToolExecutionContext
@@ -334,9 +335,10 @@ def _git(
 ) -> subprocess.CompletedProcess[bytes]:
     try:
         completed = subprocess.run(
-            ("git", *arguments),
+            safe_git_command(*arguments),
             cwd=cwd,
             capture_output=True,
+            env=safe_git_environment(),
             timeout=_GIT_TIMEOUT_SECONDS,
             check=False,
             shell=False,

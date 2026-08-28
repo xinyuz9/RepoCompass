@@ -250,26 +250,77 @@ def _load_model(path: Path, model_type):
 
 
 def _load_json(path: Path) -> object:
-    path = path.expanduser()
-    item_stat = path.lstat()
-    if stat.S_ISLNK(item_stat.st_mode) or not stat.S_ISREG(item_stat.st_mode):
-        raise ValueError("JSON artifact must be a regular file")
-    if item_stat.st_size > MAX_JSON_ARTIFACT_BYTES:
-        raise ValueError("JSON artifact exceeds the byte limit")
-    text = path.read_text(encoding="utf-8")
+    raw = _read_regular_file(
+        path,
+        maximum_bytes=MAX_JSON_ARTIFACT_BYTES,
+        description="JSON artifact",
+    )
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError("JSON artifact must be UTF-8") from error
     return json.loads(text, object_pairs_hook=_unique_object)
 
 
 def _read_replacement(path: Path) -> str:
-    item_stat = path.lstat()
-    if stat.S_ISLNK(item_stat.st_mode) or not stat.S_ISREG(item_stat.st_mode):
-        raise ValueError("replacement must be a regular file")
-    if item_stat.st_size > MAX_IMPROVE_FILE_BYTES:
-        raise ValueError("replacement exceeds the byte limit")
-    value = path.read_text(encoding="utf-8")
-    if "\x00" in value or len(value.encode("utf-8")) > MAX_IMPROVE_FILE_BYTES:
+    raw = _read_regular_file(
+        path,
+        maximum_bytes=MAX_IMPROVE_FILE_BYTES,
+        description="replacement",
+    )
+    try:
+        value = raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError("replacement must be UTF-8") from error
+    if "\x00" in value:
         raise ValueError("replacement is not bounded UTF-8 text")
     return value
+
+
+def _read_regular_file(
+    path: Path,
+    *,
+    maximum_bytes: int,
+    description: str,
+) -> bytes:
+    candidate = path.expanduser()
+    before = candidate.lstat()
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise ValueError(f"{description} must be a regular file")
+    if before.st_size > maximum_bytes:
+        raise ValueError(f"{description} exceeds the byte limit")
+    flags = os.O_RDONLY
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(candidate, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or _file_snapshot(opened) != _file_snapshot(
+            before
+        ):
+            raise ValueError(f"{description} changed before it was opened")
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = os.read(descriptor, min(65_536, maximum_bytes + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > maximum_bytes:
+                raise ValueError(f"{description} exceeds the byte limit")
+        after = os.fstat(descriptor)
+        if _file_snapshot(after) != _file_snapshot(opened) or total != after.st_size:
+            raise ValueError(f"{description} changed while it was read")
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def _file_snapshot(value: os.stat_result) -> tuple[int, int, int, int]:
+    return (value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns)
 
 
 def _emit_json(value: object, output: Path | None) -> int:

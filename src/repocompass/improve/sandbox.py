@@ -30,6 +30,7 @@ from repocompass.improve.contracts import (
     VerificationSpec,
     validate_improve_path,
 )
+from repocompass.improve.git_runtime import safe_git_command, safe_git_environment
 from repocompass.improve.proposal import validate_focused_change_proposal
 from repocompass.tools.contracts import Sha256Digest
 
@@ -584,6 +585,7 @@ def _mount_parent_directories(mounts: Sequence[Path]) -> tuple[Path, ...]:
 
 @contextmanager
 def _detached_worktree(top_level: Path, commit_sha: str) -> Iterator[Path]:
+    _require_no_checkout_filters(top_level)
     worktree = Path(tempfile.mkdtemp(prefix=_WORKTREE_PREFIX)).resolve(strict=True)
     added = False
     try:
@@ -616,6 +618,22 @@ def _detached_worktree(top_level: Path, commit_sha: str) -> Iterator[Path]:
                 _git(top_level, "worktree", "prune", check=False)
         else:
             _safe_remove_temporary_worktree(worktree)
+
+
+def _require_no_checkout_filters(top_level: Path) -> None:
+    result = _git(
+        top_level,
+        "config",
+        "--local",
+        "--name-only",
+        "--get-regexp",
+        r"^filter\..*\.(clean|smudge|process)$",
+        check=False,
+    )
+    if result.returncode not in (0, 1) or result.stdout:
+        raise SandboxExecutionError(
+            "repository checkout filters are unsupported by focused verification"
+        )
 
 
 def _safe_remove_temporary_worktree(worktree: Path) -> None:
@@ -687,7 +705,16 @@ def _side_effect_paths(
         (repository_prefix / Path(*PurePosixPath(edit.path).parts)).as_posix(): edit
         for edit in proposal.edits
     }
-    changed = set(_git_z_paths(worktree, "diff", "--name-only", "--no-ext-diff", "-z"))
+    changed = set(
+        _git_z_paths(
+            worktree,
+            "diff",
+            "--name-only",
+            "--no-ext-diff",
+            "--no-textconv",
+            "-z",
+        )
+    )
     staged = set(
         _git_z_paths(
             worktree,
@@ -695,6 +722,7 @@ def _side_effect_paths(
             "--cached",
             "--name-only",
             "--no-ext-diff",
+            "--no-textconv",
             "-z",
         )
     )
@@ -799,9 +827,10 @@ def _git(
 ) -> subprocess.CompletedProcess[bytes]:
     try:
         completed = subprocess.run(
-            ("git", *arguments),
+            safe_git_command(*arguments),
             cwd=cwd,
             capture_output=True,
+            env=safe_git_environment(),
             timeout=_GIT_TIMEOUT_SECONDS,
             check=False,
             shell=False,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import shlex
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ from repocompass.improve.contracts import (
 )
 from repocompass.improve.sandbox import (
     BubblewrapVerifier,
+    SandboxExecutionError,
     SandboxUnavailableError,
     VerificationDecisionReason,
     VerificationStatus,
@@ -193,6 +195,42 @@ def test_workspace_side_effect_outside_proposal_is_detected(tmp_path: Path) -> N
     assert VerificationDecisionReason.SIDE_EFFECT_DETECTED in report.decision_reasons
     assert report.side_effect_paths == ("outside.txt",)
     assert not (repository / "outside.txt").exists()
+    assert _worktree_count(repository) == 1
+
+
+def test_host_hooks_and_fsmonitor_are_disabled_before_sandbox_setup(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path, test_source="def test_ok():\n    pass\n")
+    scope = _scope(repository)
+    proposal = _proposal(repository, scope)
+    marker = tmp_path / "host-command-ran"
+    command = f"#!/bin/sh\nprintf ran > {shlex.quote(marker.as_posix())}\n"
+    post_checkout = repository / ".git/hooks/post-checkout"
+    fsmonitor = repository / ".git/hooks/test-fsmonitor"
+    for hook in (post_checkout, fsmonitor):
+        hook.write_text(command, encoding="utf-8")
+        hook.chmod(0o700)
+    _git(repository, "config", "core.fsmonitor", fsmonitor.as_posix())
+
+    report = BubblewrapVerifier().verify(repository, scope, proposal)
+
+    assert report.accepted is True
+    assert not marker.exists()
+    assert _worktree_count(repository) == 1
+
+
+def test_local_checkout_process_filters_fail_closed_before_worktree(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path, test_source="def test_ok():\n    pass\n")
+    scope = _scope(repository)
+    proposal = _proposal(repository, scope)
+    _git(repository, "config", "filter.host-command.process", "/bin/false")
+
+    with pytest.raises(SandboxExecutionError, match="checkout filters"):
+        BubblewrapVerifier().verify(repository, scope, proposal)
+
     assert _worktree_count(repository) == 1
 
 
