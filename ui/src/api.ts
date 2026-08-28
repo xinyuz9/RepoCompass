@@ -1,5 +1,8 @@
 import type {
+  DashboardMemoryAudit,
+  DashboardMemoryCatalog,
   DashboardProblemDetail,
+  DashboardRunDetail,
   DashboardSystemInfo,
   DashboardThreadCatalog,
   DashboardThreadDetail,
@@ -52,6 +55,24 @@ export const dashboardQueries = {
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       getJson<DashboardThreadDetail>(
         `/threads/${encodeURIComponent(threadId)}`,
+        signal,
+      ),
+  }),
+  run: (runId: string) => ({
+    queryKey: ["dashboard", "runs", runId] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      getJson<DashboardRunDetail>(`/runs/${encodeURIComponent(runId)}`, signal),
+  }),
+  memory: {
+    queryKey: ["dashboard", "memory"] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      getJson<DashboardMemoryCatalog>("/memory", signal),
+  },
+  memoryAudit: (memoryId: string) => ({
+    queryKey: ["dashboard", "memory", memoryId, "audit"] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      getJson<DashboardMemoryAudit>(
+        `/memory/${encodeURIComponent(memoryId)}/audit`,
         signal,
       ),
   }),

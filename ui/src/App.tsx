@@ -14,19 +14,20 @@ import {
 import { useMemo, useState } from "react";
 
 import { DashboardApiError, dashboardQueries } from "./api";
+import { ObservabilityPanel } from "./ObservabilityPanel";
 import { TaskGraph } from "./TaskGraph";
 import { ThreadList } from "./ThreadList";
 import type { DashboardThreadDetail } from "./types";
 
 type Lens = "topology" | "plan" | "trace" | "context" | "memory" | "cost";
 
-const LENSES: { id: Lens; label: string; icon: typeof Network; stage?: string }[] = [
+const LENSES: { id: Lens; label: string; icon: typeof Network }[] = [
   { id: "topology", label: "Topology", icon: Network },
-  { id: "plan", label: "Plan", icon: ListChecks, stage: "M8.3" },
-  { id: "trace", label: "Run trace", icon: Activity, stage: "M8.3" },
-  { id: "context", label: "Context", icon: Layers3, stage: "M8.3" },
-  { id: "memory", label: "Memory", icon: BrainCircuit, stage: "M8.3" },
-  { id: "cost", label: "Cost", icon: CircleDollarSign, stage: "M8.3" },
+  { id: "plan", label: "Plan", icon: ListChecks },
+  { id: "trace", label: "Run trace", icon: Activity },
+  { id: "context", label: "Context", icon: Layers3 },
+  { id: "memory", label: "Memory", icon: BrainCircuit },
+  { id: "cost", label: "Cost", icon: CircleDollarSign },
 ];
 
 export function App() {
@@ -67,18 +68,17 @@ export function App() {
           <Compass size={23} strokeWidth={1.7} />
         </div>
         <nav>
-          {LENSES.map(({ id, label, icon: Icon, stage }) => (
+          {LENSES.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
               className={lens === id ? "is-active" : ""}
               onClick={() => setLens(id)}
               aria-label={label}
-              title={stage ? `${label} · ${stage}` : label}
+              title={label}
             >
               <Icon size={19} />
               <span>{label}</span>
-              {stage ? <i /> : null}
             </button>
           ))}
         </nav>
@@ -175,7 +175,7 @@ function InvestigationStage({ lens, detail }: { lens: Lens; detail: DashboardThr
       {lens === "topology" ? (
         thread.structure ? <TaskGraph structure={thread.structure} /> : <StructureEmpty />
       ) : (
-        <LensPreview lens={lens} />
+        <ObservabilityPanel lens={lens} detail={detail} />
       )}
     </div>
   );
@@ -183,20 +183,6 @@ function InvestigationStage({ lens, detail }: { lens: Lens; detail: DashboardThr
 
 function Metric({ label, value, detail }: { label: string; value: number; detail: string }) {
   return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>;
-}
-
-function LensPreview({ lens }: { lens: Exclude<Lens, "topology"> }) {
-  const descriptor = LENSES.find((item) => item.id === lens);
-  const Icon = descriptor?.icon ?? Activity;
-  return (
-    <section className="lens-preview">
-      <div className="lens-preview__orb"><Icon size={28} /></div>
-      <p className="eyebrow">observability lens</p>
-      <h2>{descriptor?.label}</h2>
-      <p>The shell and data boundary are ready. This evidence lens is populated in M8.3.</p>
-      <span>M8.3 · contract already available</span>
-    </section>
-  );
 }
 
 function EmptyWorkspace() {

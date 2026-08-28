@@ -202,8 +202,8 @@ export interface DashboardThreadDetail {
   schema_version: 1;
   thread: ThreadInvestigationView;
   attempts: DashboardRunSummary[];
-  plan_timeline: unknown[];
-  evaluator_timeline: unknown[];
+  plan_timeline: PlanReplayFrame[];
+  evaluator_timeline: EvaluatorReplayFrame[];
 }
 
 export interface DashboardProblemDetail {
@@ -213,4 +213,297 @@ export interface DashboardProblemDetail {
   status: number;
   detail: string;
   instance: string;
+}
+
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+export interface PlanReplayFrame {
+  schema_version: 1;
+  run_id: string;
+  turn_number: number;
+  sequence: number;
+  node: string;
+  revision_count: number;
+  plan: InvestigationPlan;
+}
+
+export interface ValidationIssue {
+  code: string;
+  message: string;
+  path: string | null;
+  evidence_index: number | null;
+  relation_index: number | null;
+}
+
+export interface SemanticAssessment {
+  active_step_completed: boolean;
+  answers_objective: boolean;
+  evidence_supports_summary: boolean;
+  has_critical_omissions: boolean;
+  missing_evidence: string[];
+  recommended_focus: string[];
+  summary: string;
+}
+
+export interface EvaluationReport {
+  deterministic_issues: ValidationIssue[];
+  semantic_assessment: SemanticAssessment;
+  passed: boolean;
+}
+
+export interface EvaluatorReplayFrame {
+  schema_version: 1;
+  run_id: string;
+  turn_number: number;
+  sequence: number;
+  node: string;
+  report: EvaluationReport;
+}
+
+export interface PublicTraceEvent {
+  schema_version: 1;
+  run_id: string;
+  sequence: number;
+  kind: "run_started" | "node_completed" | "run_interrupted" | "run_finished";
+  node: string | null;
+  payload: Record<string, JsonValue>;
+}
+
+export type ContextSection = "objective" | "plan" | "feedback" | "evidence" | "memory" | "history";
+export type ContextSelectionOutcome = "selected" | "excluded";
+
+export interface ContextMemoryMetadata {
+  schema_version: 1;
+  memory_id: string;
+  retrieval_id: string;
+  query_digest: string;
+  repository_key: string;
+  source_repository_id: string;
+  source_commit_sha: string | null;
+  scope: "repository" | "episodic";
+  freshness: "current" | "revalidation_required" | "stale" | "observed";
+  staleness_reason: string | null;
+}
+
+export interface ContextSource {
+  schema_version: 1;
+  source_id: string;
+  kind: "objective" | "plan_step" | "tool_result" | "source_excerpt" | "evaluator_request" | "human_feedback" | "candidate" | "memory" | "summary";
+  raw_artifact_id: string | null;
+  location: (SourceLocation & { repository_id: string; commit_sha: string | null }) | null;
+  provenance: { schema_version: 1; kind: string; id: string }[];
+  memory: ContextMemoryMetadata | null;
+}
+
+export interface ContextItem {
+  schema_version: 1;
+  item_id: string;
+  source: ContextSource;
+  section: ContextSection;
+  verification_status: "verified" | "human_approved" | "inferred" | "unverified" | "rejected";
+  content: string;
+  content_digest: string;
+  estimated_tokens: number;
+  priority: number;
+  pinned: boolean;
+}
+
+export interface ContextSelectionDecision {
+  schema_version: 1;
+  item_id: string;
+  outcome: ContextSelectionOutcome;
+  reason: string;
+  estimated_tokens: number;
+  selected_position: number | null;
+}
+
+export interface ContextBuildReport {
+  schema_version: 1;
+  build_id: string;
+  budget_tokens: number;
+  candidate_count: number;
+  selected_count: number;
+  excluded_count: number;
+  selected_tokens: number;
+  decisions: ContextSelectionDecision[];
+}
+
+export interface ContextPack {
+  schema_version: 1;
+  pack_id: string;
+  build_report: ContextBuildReport;
+  estimated_tokens: number;
+  items: ContextItem[];
+}
+
+export interface UsageRecord {
+  schema_version: 1;
+  availability: "reported" | "unavailable";
+  input_tokens: number | null;
+  output_tokens: number | null;
+  total_tokens: number | null;
+  cached_input_tokens: number | null;
+  reasoning_output_tokens: number | null;
+}
+
+export interface ModelInvocationRecord {
+  schema_version: 1;
+  invocation_id: string;
+  run_id: string;
+  thread_id: string;
+  turn_number: number;
+  sequence: number;
+  node_name: string;
+  role: "planner" | "explorer" | "candidate_builder" | "evaluator" | "replanner";
+  provider: string;
+  model: string;
+  status: "succeeded" | "failed";
+  latency_ms: number;
+  usage: UsageRecord;
+  plan_step_id: string | null;
+  context_pack_id: string;
+  input_artifact_id: string;
+  output_artifact_id: string | null;
+  error_code: string | null;
+}
+
+export interface UsageMetricSummary {
+  schema_version: 1;
+  coverage: "complete" | "partial" | "unavailable";
+  value: number | null;
+  contributing_invocations: number;
+  total_invocations: number;
+}
+
+export interface CostSummary {
+  schema_version: 1;
+  coverage: "complete" | "partial" | "unavailable";
+  estimated_cost_usd: string | null;
+  estimated_invocations: number;
+  unavailable_invocations: number;
+  unavailable_reasons: string[];
+  disclaimer: "estimate_not_invoice";
+}
+
+export interface UsageCostBreakdown {
+  schema_version: 1;
+  dimension: "attempt" | "role" | "node" | "model";
+  key: string;
+  invocation_count: number;
+  succeeded_count: number;
+  failed_count: number;
+  latency_ms: number;
+  input_tokens: UsageMetricSummary;
+  output_tokens: UsageMetricSummary;
+  total_tokens: UsageMetricSummary;
+  cached_input_tokens: UsageMetricSummary;
+  reasoning_output_tokens: UsageMetricSummary;
+  cost: CostSummary;
+}
+
+export interface InvocationCostEstimate {
+  schema_version: 1;
+  invocation_id: string;
+  pricing_table_id: string;
+  provider: string;
+  model: string;
+  availability: "estimated" | "unavailable";
+  input_cost_usd: string | null;
+  output_cost_usd: string | null;
+  estimated_cost_usd: string | null;
+  unavailable_reason: string | null;
+  disclaimer: "estimate_not_invoice";
+}
+
+export interface AttemptCostBudgetSummary {
+  schema_version: 1;
+  limit_usd: string;
+  status: "not_started" | "within_budget" | "exhausted" | "overshot" | "unavailable";
+  reason: string;
+  confirmed_cost_usd: string | null;
+  remaining_cost_usd: string | null;
+  overshoot_usd: string | null;
+  next_invocation_allowed: boolean;
+}
+
+export interface AttemptUsageCostReport {
+  schema_version: 1;
+  report_id: string;
+  run_id: string;
+  thread_id: string;
+  turn_number: number;
+  pricing_table_id: string;
+  pricing_version: string;
+  pricing_effective_from: string;
+  currency: "USD";
+  unit_tokens: 1000000;
+  invocation_costs: InvocationCostEstimate[];
+  breakdowns: UsageCostBreakdown[];
+  budget: AttemptCostBudgetSummary | null;
+  disclaimer: "estimate_not_invoice";
+}
+
+export interface DashboardRunDetail {
+  schema_version: 1;
+  attempt: RawRunAttempt;
+  trace_availability: Availability;
+  trace_events: PublicTraceEvent[];
+  plan_timeline: PlanReplayFrame[];
+  evaluator_timeline: EvaluatorReplayFrame[];
+  context_packs: ContextPack[];
+  model_invocations: ModelInvocationRecord[];
+  cost_availability: Availability;
+  usage_cost_report: AttemptUsageCostReport | null;
+}
+
+export interface MemoryEntryMetadata {
+  schema_version: 1;
+  memory_id: string;
+  repository_key: string;
+  source_repository_id: string;
+  memory_scope: "repository" | "episodic";
+  commit_sha: string | null;
+  verification_status: "verified" | "human_approved" | "observed";
+  write_authority: "validated_evidence" | "human_approval" | "terminal_consolidation";
+  created_at_ms: number;
+  source_count: number;
+  audit_event_count: number;
+}
+
+export interface MemoryTombstone {
+  schema_version: 1;
+  tombstone_id: string;
+  memory_id: string;
+  repository_key: string;
+  memory_scope: "repository" | "episodic";
+  deletion_event_id: string;
+  reason: "user_request" | "retention_policy";
+  deleted_at_ms: number;
+}
+
+export interface MemoryAuditEvent {
+  schema_version: 1;
+  event_id: string;
+  memory_id: string;
+  repository_key: string;
+  action: "created" | "reverified" | "retrieved" | "marked_stale" | "deleted";
+  reason: string;
+  created_at_ms: number;
+  run_id: string | null;
+  actor_digest: string | null;
+}
+
+export interface DashboardMemoryCatalog {
+  schema_version: 1;
+  availability: Availability;
+  entries: MemoryEntryMetadata[];
+  tombstones: MemoryTombstone[];
+}
+
+export interface DashboardMemoryAudit {
+  schema_version: 1;
+  memory_id: string;
+  metadata: MemoryEntryMetadata | null;
+  tombstone: MemoryTombstone | null;
+  events: MemoryAuditEvent[];
 }

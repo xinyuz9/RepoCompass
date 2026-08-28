@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -22,7 +22,10 @@ const catalog = {
   truncated: false,
 };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("App query shell", () => {
   it("deduplicates cached bootstrap reads and renders the first-run empty state", async () => {
@@ -59,5 +62,103 @@ describe("App query shell", () => {
       </QueryClientProvider>,
     );
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("lazy-loads observability resources and reuses the cached run across lenses", async () => {
+    const attempt = {
+      schema_version: 1,
+      run_id: "run-1",
+      thread_id: "thread-1",
+      turn_number: 1,
+      execution_mode: "start",
+      repository_id: "a".repeat(64),
+      commit_sha: "b".repeat(40),
+      objective_digest: "c".repeat(64),
+      status: "completed",
+      started_at_ms: 1_000,
+      finished_at_ms: 1_250,
+    };
+    const populatedCatalog = {
+      ...catalog,
+      threads: [{
+        schema_version: 1,
+        thread_id: "thread-1",
+        checkpoint_availability: "available",
+        objective: "Trace the authentication flow.",
+        execution_state: "completed",
+        turn_number: 1,
+        termination_status: "accepted",
+        latest_attempt: attempt,
+        attempt_count: 1,
+      }],
+      scanned_attempt_count: 1,
+    };
+    const thread = {
+      schema_version: 1,
+      thread: {
+        schema_version: 1,
+        thread_id: "thread-1",
+        execution_state: "completed",
+        turn_number: 1,
+        objective: "Trace the authentication flow.",
+        plan: { steps: [] },
+        plan_revision_count: 0,
+        max_plan_revisions: 2,
+        next_nodes: [],
+        termination_status: "accepted",
+        step_stop_reason: null,
+        structure: null,
+        interrupt_id: null,
+      },
+      attempts: [{ schema_version: 1, attempt, trace_availability: "available", cost_availability: "not_configured" }],
+      plan_timeline: [],
+      evaluator_timeline: [],
+    };
+    const run = {
+      schema_version: 1,
+      attempt,
+      trace_availability: "available",
+      trace_events: [],
+      plan_timeline: [],
+      evaluator_timeline: [],
+      context_packs: [],
+      model_invocations: [],
+      cost_availability: "not_configured",
+      usage_cost_report: null,
+    };
+    const memory = { schema_version: 1, availability: "not_configured", entries: [], tombstones: [] };
+    const requestedPaths: string[] = [];
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const path = new URL(String(input), "http://dashboard.local").pathname;
+      requestedPaths.push(path);
+      const body = path.endsWith("/system")
+        ? system
+        : path.endsWith("/threads")
+          ? populatedCatalog
+          : path.endsWith("/threads/thread-1")
+            ? thread
+            : path.endsWith("/runs/run-1")
+              ? run
+              : memory;
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 60_000 } } });
+
+    render(<QueryClientProvider client={client}><App /></QueryClientProvider>);
+    expect(await screen.findByRole("heading", { name: "Trace the authentication flow." })).toBeVisible();
+    expect(requestedPaths.filter((path) => path.includes("/runs/")).length).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Context" }));
+    expect(await screen.findByRole("heading", { name: "No ContextPack persisted" })).toBeVisible();
+    expect(requestedPaths.filter((path) => path.endsWith("/runs/run-1")).length).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cost" }));
+    expect(await screen.findByRole("heading", { name: "Pricing not configured" })).toBeVisible();
+    expect(requestedPaths.filter((path) => path.endsWith("/runs/run-1")).length).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Memory" }));
+    expect(await screen.findByRole("heading", { name: "Memory store not configured" })).toBeVisible();
+    expect(requestedPaths.filter((path) => path.endsWith("/memory")).length).toBe(1);
   });
 });
