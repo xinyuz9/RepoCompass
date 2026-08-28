@@ -20,6 +20,8 @@ repocompass-benchmark = "repocompass.evaluation.cli:main"
 repocompass-memory-benchmark = "repocompass.evaluation.memory_cli:main"
 repocompass-live-smoke = "repocompass.evaluation.live_smoke:main"
 repocompass-localization-benchmark = "repocompass.evaluation.localization_cli:main"
+repocompass-localization-analyze = "repocompass.evaluation.localization_analysis_cli:analysis_main"
+repocompass-localization-regression = "repocompass.evaluation.localization_analysis_cli:regression_main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]

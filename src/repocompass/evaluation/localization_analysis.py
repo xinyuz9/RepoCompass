@@ -8,6 +8,7 @@ import random
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
+from pathlib import Path
 from typing import Literal
 
 from pydantic import ConfigDict, Field, model_validator
@@ -317,6 +318,22 @@ class LocalizationAnalysisReport(_AnalysisModel):
         return self
 
 
+class LocalizationAnalysisReportSink:
+    """Persist one immutable machine-readable analysis."""
+
+    def write(self, report: LocalizationAnalysisReport, destination: Path) -> Path:
+        if not isinstance(report, LocalizationAnalysisReport):
+            raise TypeError("report must be a LocalizationAnalysisReport")
+        if not isinstance(destination, Path):
+            raise TypeError("destination must be a Path")
+        resolved = destination.expanduser().resolve()
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        with resolved.open("x", encoding="utf-8", newline="\n") as stream:
+            stream.write(report.model_dump_json(indent=2, exclude_computed_fields=True))
+            stream.write("\n")
+        return resolved
+
+
 def create_localization_bootstrap_config(
     *,
     confidence_level_ppm: int = 950_000,
@@ -419,6 +436,125 @@ def analyze_localization_evaluation(
     )
 
 
+def render_localization_analysis_summary(
+    report: LocalizationAnalysisReport,
+) -> str:
+    """Render a deterministic provenance-explicit Markdown summary."""
+
+    if not isinstance(report, LocalizationAnalysisReport):
+        raise TypeError("report must be a LocalizationAnalysisReport")
+    provenance_note = {
+        LocalizationAnalysisProvenance.SYNTHETIC_FIXTURE: (
+            "Synthetic fixture: validates harness behavior, not model quality."
+        ),
+        LocalizationAnalysisProvenance.DETERMINISTIC_REPLAY: (
+            "Deterministic replay: validates reproducibility, not live-provider quality."
+        ),
+        LocalizationAnalysisProvenance.LIVE_PROVIDER: (
+            "Live-provider observations; cost remains an estimate, not an invoice."
+        ),
+        LocalizationAnalysisProvenance.EXTERNAL_IMPORT: (
+            "External import: audit the source provenance before comparison."
+        ),
+    }[report.provenance]
+    lines = [
+        "# RepoCompass localization analysis",
+        "",
+        f"Analysis {report.analysis_id} of report {report.source_report_id}.",
+        "",
+        provenance_note,
+        "",
+        (
+            "Scope: localization-only, SWE-bench-derived evidence. This is not a "
+            "SWE-bench resolved rate."
+        ),
+        "",
+        (
+            f"Intervals: {_format_ppm(report.bootstrap_config.confidence_level_ppm)} "
+            f"case-resampling percentile bootstrap, "
+            f"{report.bootstrap_config.resamples} resamples, "
+            f"seed {report.bootstrap_config.random_seed}."
+        ),
+        "",
+        "| Variant | File Hit@1 | File Hit@5 | Recall@5 | MRR | Symbol Hit@5 |",
+        "|---|---:|---:|---:|---:|---:|",
+    ]
+    selected = (
+        LocalizationAnalysisMetric.FILE_HIT_AT_1,
+        LocalizationAnalysisMetric.FILE_HIT_AT_5,
+        LocalizationAnalysisMetric.FILE_RECALL_AT_5,
+        LocalizationAnalysisMetric.MEAN_RECIPROCAL_RANK,
+        LocalizationAnalysisMetric.SYMBOL_HIT_AT_5,
+    )
+    for variant in LocalizationVariant:
+        lookup = {
+            item.metric: item
+            for item in report.metric_intervals
+            if item.variant is variant
+        }
+        if lookup:
+            lines.append(
+                "| "
+                + " | ".join(
+                    (
+                        variant.value,
+                        *(_format_interval(lookup[metric]) for metric in selected),
+                    )
+                )
+                + " |"
+            )
+    lines.extend(
+        (
+            "",
+            "| Variant | Context tokens | Tool calls | Latency ms | Input tokens | Output tokens | Estimated cost USD |",
+            "|---|---:|---:|---:|---:|---:|---:|",
+        )
+    )
+    for cost in report.cost_aggregates:
+        resources = {
+            item.metric: item
+            for item in report.resource_aggregates
+            if item.variant is cost.variant
+        }
+        lines.append(
+            "| "
+            + " | ".join(
+                (
+                    cost.variant.value,
+                    _format_resource(
+                        resources[LocalizationResourceMetric.CONTEXT_TOKENS]
+                    ),
+                    _format_resource(resources[LocalizationResourceMetric.TOOL_CALLS]),
+                    _format_resource(resources[LocalizationResourceMetric.LATENCY_MS]),
+                    _format_resource(
+                        resources[LocalizationResourceMetric.INPUT_TOKENS]
+                    ),
+                    _format_resource(
+                        resources[LocalizationResourceMetric.OUTPUT_TOKENS]
+                    ),
+                    cost.total_estimated_cost_usd or "n/a",
+                )
+            )
+            + " |"
+        )
+    flagged = sum(bool(item.error_kinds) for item in report.case_errors)
+    lines.extend(
+        (
+            "",
+            (
+                f"Deterministic error taxonomy flags {flagged}/"
+                f"{len(report.case_errors)} logical observations."
+            ),
+            "",
+            (
+                "Estimated costs appear only when provider usage and matching "
+                "pricing were available; missing cost is never treated as zero."
+            ),
+        )
+    )
+    return "\n".join(lines)
+
+
 def _validate_inputs(
     report: LocalizationEvaluationReport,
     observation_set: LocalizationObservationSet,
@@ -451,6 +587,31 @@ def _validate_inputs(
         raise ValueError("synthetic provenance must match synthetic dataset kind")
     if reference_variant not in tuple(item.variant for item in report.aggregates):
         raise ValueError("reference variant is absent from source report")
+
+
+def _format_interval(item: LocalizationMetricConfidenceInterval) -> str:
+    if item.point_estimate_ppm is None:
+        return "n/a"
+    point = _format_ppm(item.point_estimate_ppm)
+    if item.lower_bound_ppm is None or item.upper_bound_ppm is None:
+        return f"{point} (CI n/a)"
+    return (
+        f"{point} [{_format_ppm(item.lower_bound_ppm)}, "
+        f"{_format_ppm(item.upper_bound_ppm)}]"
+    )
+
+
+def _format_resource(item: LocalizationResourceAggregate) -> str:
+    if item.mean_numerator is None or item.mean_denominator is None:
+        return "n/a"
+    mean = Decimal(item.mean_numerator) / Decimal(item.mean_denominator)
+    return f"{mean:.2f} ({item.observed_observations}/{item.total_observations})"
+
+
+def _format_ppm(value: int) -> str:
+    sign = "-" if value < 0 else ""
+    absolute = abs(value)
+    return f"{sign}{absolute // 10_000}.{absolute % 10_000:04d}%"
 
 
 def _case_balanced_scores(

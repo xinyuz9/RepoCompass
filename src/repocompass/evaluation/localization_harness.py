@@ -22,6 +22,7 @@ from repocompass.evaluation.localization_metrics import (
 from repocompass.tools.contracts import Sha256Digest
 
 MAX_LOCALIZATION_OBSERVATION_SET_FILE_BYTES = 16_777_216
+MAX_LOCALIZATION_EVALUATION_REPORT_FILE_BYTES = 33_554_432
 MAX_LOCALIZATION_OBSERVATIONS = 5_000
 
 
@@ -174,6 +175,54 @@ def load_localization_observation_set_file(path: Path) -> LocalizationObservatio
             raise
         raise ValueError(
             f"Invalid localization observation file {path}: {error}"
+        ) from error
+
+
+def load_localization_evaluation_report_file(
+    path: Path,
+) -> LocalizationEvaluationReport:
+    """Load a bounded duplicate-key-free content-addressed evaluation report."""
+
+    if not isinstance(path, Path):
+        raise TypeError("localization evaluation report path must be a Path")
+    if path.stat().st_size > MAX_LOCALIZATION_EVALUATION_REPORT_FILE_BYTES:
+        raise ValueError(
+            "Localization evaluation report exceeds "
+            f"{MAX_LOCALIZATION_EVALUATION_REPORT_FILE_BYTES} bytes: {path}"
+        )
+    raw = path.read_bytes()
+    if len(raw) > MAX_LOCALIZATION_EVALUATION_REPORT_FILE_BYTES:
+        raise ValueError(
+            "Localization evaluation report exceeds "
+            f"{MAX_LOCALIZATION_EVALUATION_REPORT_FILE_BYTES} bytes: {path}"
+        )
+    try:
+        payload = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_unique_json_object,
+        )
+        canonical = json.dumps(
+            payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return LocalizationEvaluationReport.model_validate_json(canonical)
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        ValidationError,
+    ) as error:
+        raise ValueError(
+            f"Invalid localization evaluation report {path}: {error}"
+        ) from error
+    except ValueError as error:
+        if str(error).startswith("duplicate JSON key"):
+            raise
+        raise ValueError(
+            f"Invalid localization evaluation report {path}: {error}"
         ) from error
 
 

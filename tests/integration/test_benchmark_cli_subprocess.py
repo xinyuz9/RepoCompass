@@ -6,7 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from repocompass.evaluation import ContextAblationReport
+from repocompass.evaluation import (
+    ContextAblationReport,
+    LocalizationAnalysisReport,
+    LocalizationRegressionReport,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -49,3 +53,73 @@ def test_installed_benchmark_entry_point_publishes_report(tmp_path: Path) -> Non
     )
     assert "Context ablation context-pressure-v1" in completed.stderr
     assert f"Report: {output.resolve()}" in completed.stderr
+
+
+def test_installed_localization_statistical_entry_points(
+    tmp_path: Path,
+) -> None:
+    suffix = ".exe" if os.name == "nt" else ""
+    executable_root = Path(sys.executable).parent
+    source_report = (
+        PROJECT_ROOT / "benchmarks/results/localization-fixture-v1.example.json"
+    )
+    observations = PROJECT_ROOT / "benchmarks/observations/localization-fixture-v1.json"
+    analysis_output = tmp_path / "analysis.json"
+    analysis = subprocess.run(
+        [
+            str(executable_root / f"repocompass-localization-analyze{suffix}"),
+            str(source_report),
+            str(observations),
+            "--provenance",
+            "synthetic_fixture",
+            "--resamples",
+            "100",
+            "--random-seed",
+            "17",
+            "--output",
+            str(analysis_output),
+        ],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert analysis.returncode == 0, analysis.stderr
+    assert LocalizationAnalysisReport.model_validate_json(analysis.stdout) == (
+        LocalizationAnalysisReport.model_validate_json(
+            analysis_output.read_text(encoding="utf-8")
+        )
+    )
+    assert "not model quality" in analysis.stderr
+
+    regression_output = tmp_path / "regression.json"
+    regression = subprocess.run(
+        [
+            str(executable_root / f"repocompass-localization-regression{suffix}"),
+            str(source_report),
+            str(source_report),
+            "--minimum-paired-cases",
+            "2",
+            "--resamples",
+            "100",
+            "--random-seed",
+            "17",
+            "--output",
+            str(regression_output),
+        ],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert regression.returncode == 0, regression.stderr
+    parsed = LocalizationRegressionReport.model_validate_json(regression.stdout)
+    assert parsed.passed is True
+    assert parsed == LocalizationRegressionReport.model_validate_json(
+        regression_output.read_text(encoding="utf-8")
+    )
+    assert "Decision: PASS" in regression.stderr

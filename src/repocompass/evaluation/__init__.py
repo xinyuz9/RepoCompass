@@ -29,6 +29,7 @@ from repocompass.evaluation.localization_analysis import (
     LocalizationAnalysisMetric,
     LocalizationAnalysisProvenance,
     LocalizationAnalysisReport,
+    LocalizationAnalysisReportSink,
     LocalizationAnalysisUnavailableReason,
     LocalizationBootstrapConfig,
     LocalizationCaseErrorAnalysis,
@@ -40,6 +41,7 @@ from repocompass.evaluation.localization_analysis import (
     LocalizationResourceMetric,
     analyze_localization_evaluation,
     create_localization_bootstrap_config,
+    render_localization_analysis_summary,
 )
 from repocompass.evaluation.localization_adapter import (
     AgentRunnerVariantExecutor,
@@ -90,10 +92,12 @@ from repocompass.evaluation.localization_gold import (
     derive_gold_patch_localization,
 )
 from repocompass.evaluation.localization_harness import (
+    MAX_LOCALIZATION_EVALUATION_REPORT_FILE_BYTES,
     MAX_LOCALIZATION_OBSERVATION_SET_FILE_BYTES,
     LocalizationEvaluationReportSink,
     LocalizationObservationSet,
     create_localization_observation_set,
+    load_localization_evaluation_report_file,
     load_localization_observation_set_file,
     render_localization_summary,
 )
@@ -161,6 +165,7 @@ __all__ = [
     "MAX_BOOTSTRAP_RESAMPLES",
     "MAX_CONTEXT_ABLATION_CASE_FILE_BYTES",
     "MAX_LOCALIZATION_DATASET_FILE_BYTES",
+    "MAX_LOCALIZATION_EVALUATION_REPORT_FILE_BYTES",
     "MAX_LOCALIZATION_OBSERVATION_SET_FILE_BYTES",
     "MAX_MEMORY_ABLATION_CASE_FILE_BYTES",
     "MEMORY_ABLATION_SCHEMA_VERSION",
@@ -177,6 +182,7 @@ __all__ = [
     "LocalizationAnalysisMetric",
     "LocalizationAnalysisProvenance",
     "LocalizationAnalysisReport",
+    "LocalizationAnalysisReportSink",
     "LocalizationAnalysisUnavailableReason",
     "LocalizationBenchmarkRunner",
     "LocalizationBootstrapConfig",
@@ -244,10 +250,12 @@ __all__ = [
     "create_memory_ablation_case",
     "load_context_ablation_case_file",
     "load_localization_dataset_file",
+    "load_localization_evaluation_report_file",
     "load_localization_observation_set_file",
     "load_memory_ablation_case_file",
     "localization_architecture_profile",
     "render_context_ablation_summary",
+    "render_localization_analysis_summary",
     "render_localization_summary",
     "render_localization_regression_summary",
     "render_memory_ablation_summary",
