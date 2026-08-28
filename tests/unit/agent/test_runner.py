@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, ResumeRequest, RunRequest
+from repocompass.agent.thread_view import ThreadExecutionState
 from repocompass.agent.trace import TraceEventKind
 from repocompass.tools.contracts import ToolDecisionReason
 from tests.model_doubles import candidate_from_final_result, with_scripted_planner
@@ -64,6 +65,7 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
 
     outcome = runner.run(request)
     events = outcome.trace.events
+    thread_view = runner.inspect_thread(ResumeRequest(thread_id=outcome.thread_id))
 
     assert outcome.final_result is not None
     assert (
@@ -77,6 +79,17 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
     assert outcome.step_stop_reason is None
     assert outcome.thread_id == "fixed-thread"
     assert outcome.trace.run_id == "fixed-run"
+    assert thread_view.thread_id == "fixed-thread"
+    assert thread_view.execution_state is ThreadExecutionState.COMPLETED
+    assert thread_view.final_result == outcome.final_result
+    assert thread_view.evaluation_report is not None
+    assert thread_view.context_pack is not None
+    assert thread_view.structure == outcome.final_result.structure
+    assert thread_view.pending_review is None
+    assert thread_view.interrupt_id is None
+    assert thread_view.next_nodes == ()
+    assert "messages" not in type(thread_view).model_fields
+    assert "repo_path" not in type(thread_view).model_fields
     assert [event.kind for event in events] == [
         TraceEventKind.RUN_STARTED,
         TraceEventKind.NODE_COMPLETED,
@@ -200,6 +213,22 @@ def test_runner_omits_hidden_reasoning_and_secret_metadata_from_trace(
     serialized_trace = "\n".join(event.model_dump_json() for event in outcome.trace)
     assert "private chain of thought" not in serialized_trace
     assert "private-token" not in serialized_trace
+
+
+def test_runner_inspect_rejects_unknown_thread(tmp_path: Path) -> None:
+    final_result = FinalResult(
+        relevant_files=[],
+        evidence=[],
+        summary="No result should be produced.",
+        unresolved_questions=[],
+    )
+    runner = AgentRunner(
+        with_scripted_planner(_create_scripted_model([], final_result)),
+        checkpointer=InMemorySaver(),
+    )
+
+    with pytest.raises(ValueError, match="Checkpoint thread does not exist"):
+        runner.inspect_thread(ResumeRequest(thread_id="missing-thread"))
 
 
 def test_runner_records_tool_loop_updates_without_extra_event_kinds(

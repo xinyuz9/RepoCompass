@@ -46,6 +46,10 @@ from repocompass.agent.lifecycle import (
 from repocompass.agent.result import FinalResult, revalidate_final_result
 from repocompass.agent.routing import TerminationStatus
 from repocompass.agent.structural_artifacts import InvestigationStructure
+from repocompass.agent.thread_view import (
+    ThreadInvestigationView,
+    build_thread_investigation_view,
+)
 from repocompass.agent.state import (
     RepoCompassState,
     create_continuation_update,
@@ -743,6 +747,26 @@ class AgentRunner:
         """Return the immutable graph feature profile used by this Runner."""
 
         return self._architecture_profile
+
+    def inspect_thread(self, request: ResumeRequest) -> ThreadInvestigationView:
+        """Read the latest safe public view without executing any graph node."""
+
+        thread_id = _normalize_identifier(request.thread_id, name="thread_id")
+        graph = create_agent_graph(
+            self._models,
+            architecture_profile=self._architecture_profile,
+            checkpointer=self._checkpointer,
+            raw_run_recorder=self._raw_run_recorder,
+            memory_store=self._memory_store,
+            memory_clock=self._episode_clock_factory,
+        )
+        snapshot = graph.get_state(_thread_config(thread_id))
+        if not snapshot.values:
+            raise ValueError(f"Checkpoint thread does not exist: {thread_id}")
+        return build_thread_investigation_view(
+            thread_id=thread_id,
+            snapshot=snapshot,
+        )
 
     def run(self, request: RunRequest) -> RunOutcome:
         """Start one new repository investigation.

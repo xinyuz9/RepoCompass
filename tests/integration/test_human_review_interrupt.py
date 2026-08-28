@@ -18,6 +18,7 @@ from repocompass.agent.lifecycle import (
 )
 from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, ResumeRequest, RunRequest
+from repocompass.agent.thread_view import ThreadExecutionState
 from repocompass.agent.trace import TraceEventKind
 from repocompass.models import WorkflowModels
 from tests.model_doubles import candidate_from_final_result, with_scripted_planner
@@ -81,6 +82,7 @@ def test_runner_returns_structured_interrupt_before_terminal_nodes(
             thread_id_factory=lambda: "review-thread",
         )
         outcome = runner.run(_request(tmp_path))
+        thread_view = runner.inspect_thread(ResumeRequest(thread_id=outcome.thread_id))
         snapshot = create_agent_graph(models, checkpointer=checkpointer).get_state(
             {"configurable": {"thread_id": outcome.thread_id}}
         )
@@ -91,6 +93,15 @@ def test_runner_returns_structured_interrupt_before_terminal_nodes(
     assert outcome.termination_status is None
     assert outcome.interrupt_id is not None
     assert outcome.human_review_request is not None
+    assert thread_view.execution_state is ThreadExecutionState.INTERRUPTED
+    assert thread_view.pending_review == outcome.human_review_request
+    assert thread_view.interrupt_id == outcome.interrupt_id
+    assert thread_view.final_result is None
+    assert thread_view.next_nodes == ("review_final_candidate",)
+    assert thread_view.candidate_result == outcome.human_review_request.candidate_result
+    assert (
+        thread_view.evaluation_report == outcome.human_review_request.evaluation_report
+    )
     assert outcome.human_review_request.turn_number == 1
     assert outcome.human_review_request.candidate_result == candidate_from_final_result(
         result
@@ -170,3 +181,31 @@ def test_runner_reads_same_interrupt_after_reopening_sqlite_without_reexecution(
         "interrupt_id": first_outcome.interrupt_id,
         "turn_number": 1,
     }
+
+
+def test_runner_inspects_interrupt_after_reopening_sqlite_without_reexecution(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "example.py").write_text("value = True\n", encoding="utf-8")
+    result = _result()
+    database_path = tmp_path / "state" / "checkpoints.sqlite"
+
+    with open_sqlite_checkpointer(database_path) as checkpointer:
+        outcome = AgentRunner(
+            _models_for(result),
+            checkpointer=checkpointer,
+            thread_id_factory=lambda: "inspect-review-thread",
+        ).run(_request(tmp_path))
+
+    with catch_warnings():
+        simplefilter("error")
+        with open_sqlite_checkpointer(database_path) as checkpointer:
+            view = AgentRunner(
+                _models_that_must_not_run(result),
+                checkpointer=checkpointer,
+            ).inspect_thread(ResumeRequest(thread_id=outcome.thread_id))
+
+    assert view.execution_state is ThreadExecutionState.INTERRUPTED
+    assert view.interrupt_id == outcome.interrupt_id
+    assert view.pending_review == outcome.human_review_request
+    assert view.final_result is None
