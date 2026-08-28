@@ -1,7 +1,7 @@
 [project]
 name = "repocompass"
 version = "0.1.0"
-description = "Add your description here"
+description = "Evidence-grounded repository investigation agent with bounded tools, memory, evaluation, MCP, and a local observability dashboard"
 readme = "README.md"
 authors = [
     { name = "xinyuz9", email = "152044466+xinyuz9@users.noreply.github.com" }
@@ -37,6 +37,7 @@ dev = [
     "httpx>=0.28.1",
     "langgraph-cli[inmem]>=0.4.31",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.21",
 ]
 

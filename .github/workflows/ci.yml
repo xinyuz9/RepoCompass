@@ -1,0 +1,77 @@
+name: quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python 3.12 · tests, coverage, package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install locked dependencies
+        run: uv sync --locked --all-groups
+      - name: Ruff
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Test with coverage floor
+        run: >-
+          uv run pytest
+          --cov=repocompass
+          --cov-report=term-missing:skip-covered
+          --cov-fail-under=85
+          -q
+      - name: Build package
+        run: uv build
+      - name: Smoke installed entry points
+        run: |
+          uv venv .wheel-smoke
+          uv pip install --python .wheel-smoke/bin/python dist/*.whl
+          .wheel-smoke/bin/repocompass-dashboard --help
+          .wheel-smoke/bin/repocompass-mcp --help
+
+  ui:
+    name: Node 24 · tests, axe, lint, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Audit dependency tree
+        run: npm audit --audit-level=high
+      - name: Test UI and accessibility contracts
+        run: npm test
+      - name: Lint UI
+        run: npm run lint
+      - name: Build packaged SPA
+        run: npm run build
+      - name: Verify committed static bundle
+        working-directory: .
+        run: git diff --exit-code -- src/repocompass/dashboard/static

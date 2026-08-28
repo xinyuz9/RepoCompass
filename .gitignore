@@ -5,9 +5,14 @@ build/
 dist/
 wheels/
 *.egg-info
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # Virtual environments
 .venv
+.wheel-smoke/
 ui/node_modules/
 
 # Local environment files
