@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 import re
-import resource
 import shutil
 import signal
 import stat
@@ -40,6 +39,16 @@ SANDBOX_MAX_PROCESSES = 128
 SANDBOX_MAX_OPEN_FILES = 256
 _GIT_TIMEOUT_SECONDS = 10
 _WORKTREE_PREFIX = "repocompass-improve-"
+_RESOURCE_LIMIT_WRAPPER = (
+    "import os,resource,sys\n"
+    "values=tuple(map(int,sys.argv[1:6]))\n"
+    "kinds=(resource.RLIMIT_CPU,resource.RLIMIT_AS,resource.RLIMIT_NPROC,"
+    "resource.RLIMIT_NOFILE,resource.RLIMIT_FSIZE)\n"
+    "for kind,value in zip(kinds,values,strict=True):"
+    " resource.setrlimit(kind,(value,value))\n"
+    "resource.setrlimit(resource.RLIMIT_CORE,(0,0))\n"
+    "os.execv(sys.argv[6],sys.argv[6:])\n"
+)
 _SECRET_ASSIGNMENT = re.compile(
     r"(?i)\b(api[_-]?key|access[_-]?token|authorization|password|secret)\b"
     r"\s*[:=]\s*[^\s]+"
@@ -280,8 +289,14 @@ class BubblewrapVerifier:
         source_root: Path,
     ) -> VerificationCommandResult:
         command = _profile_command(spec, self._python_executable)
-        bwrap_command = self._bwrap_command(
+        limited_command = _resource_limited_command(
             command,
+            python=self._python_executable,
+            timeout_seconds=spec.timeout_seconds,
+            output_limit_bytes=self._output_limit_bytes,
+        )
+        bwrap_command = self._bwrap_command(
+            limited_command,
             worktree=worktree,
             relative_root=relative_root,
         )
@@ -299,10 +314,6 @@ class BubblewrapVerifier:
                     env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
                     shell=False,
                     start_new_session=True,
-                    preexec_fn=lambda: _set_resource_limits(
-                        spec.timeout_seconds,
-                        self._output_limit_bytes,
-                    ),
                 )
             except OSError as error:
                 raise SandboxUnavailableError(
@@ -537,26 +548,26 @@ def _verification_path(argument: str) -> str:
         ) from error
 
 
-def _set_resource_limits(timeout_seconds: int, output_limit_bytes: int) -> None:
-    cpu_seconds = min(timeout_seconds + 2, 302)
-    resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
-    resource.setrlimit(
-        resource.RLIMIT_AS,
-        (SANDBOX_ADDRESS_SPACE_BYTES, SANDBOX_ADDRESS_SPACE_BYTES),
+def _resource_limited_command(
+    command: Sequence[str],
+    *,
+    python: Path,
+    timeout_seconds: int,
+    output_limit_bytes: int,
+) -> tuple[str, ...]:
+    """Apply process limits after bubblewrap has entered its new namespaces."""
+
+    return (
+        str(python),
+        "-c",
+        _RESOURCE_LIMIT_WRAPPER,
+        str(min(timeout_seconds + 2, 302)),
+        str(SANDBOX_ADDRESS_SPACE_BYTES),
+        str(SANDBOX_MAX_PROCESSES),
+        str(SANDBOX_MAX_OPEN_FILES),
+        str(output_limit_bytes),
+        *command,
     )
-    resource.setrlimit(
-        resource.RLIMIT_NPROC,
-        (SANDBOX_MAX_PROCESSES, SANDBOX_MAX_PROCESSES),
-    )
-    resource.setrlimit(
-        resource.RLIMIT_NOFILE,
-        (SANDBOX_MAX_OPEN_FILES, SANDBOX_MAX_OPEN_FILES),
-    )
-    resource.setrlimit(
-        resource.RLIMIT_FSIZE,
-        (output_limit_bytes, output_limit_bytes),
-    )
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
 def _python_runtime_mounts() -> tuple[Path, ...]:

@@ -32,10 +32,12 @@ def test_bubblewrap_verifies_in_detached_worktree_without_writing_source(
         tmp_path,
         test_source=(
             "import os\n"
+            "import resource\n"
             "import socket\n"
             "\n"
             "def test_sandbox_boundary():\n"
             "    assert 'REPOCOMPASS_API_KEY' not in os.environ\n"
+            "    assert resource.getrlimit(resource.RLIMIT_NPROC) == (128, 128)\n"
             "    with __import__('pytest').raises(OSError):\n"
             "        socket.create_connection(('1.1.1.1', 53), timeout=0.1)\n"
         ),
