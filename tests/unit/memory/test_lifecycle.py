@@ -109,6 +109,13 @@ def test_explicit_delete_cleans_indexes_is_idempotent_and_blocks_resurrection(
             context=context,
             max_results=5,
         ) == (tombstone,)
+        assert (
+            store.get_memory_tombstone(
+                memory.memory_id,
+                context=context,
+            )
+            == tombstone
+        )
         events = store.list_memory_audit_events(memory.memory_id)
         with pytest.raises(MemoryStoreConflictError, match="resurrected"):
             store.put_repository_memory(memory, context=context)

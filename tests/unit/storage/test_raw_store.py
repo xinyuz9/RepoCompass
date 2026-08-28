@@ -186,6 +186,31 @@ def test_attempt_round_trip_is_idempotent_and_conflicts_fail_closed(
             store.record_attempt(conflicting)
 
 
+def test_list_attempts_is_bounded_ordered_and_filterable(tmp_path: Path) -> None:
+    database_path = tmp_path / "raw.sqlite"
+    older = _attempt(run_id="run-a", thread_id="thread-a")
+    newer = RawRunAttempt.model_validate(
+        {
+            **_attempt(run_id="run-b", thread_id="thread-b").model_dump(mode="python"),
+            "started_at_ms": 2_000,
+        }
+    )
+
+    with open_raw_run_store(database_path) as store:
+        store.record_attempt(older)
+        store.record_attempt(newer)
+
+        assert store.list_attempts(max_results=1) == (newer,)
+        assert store.list_attempts(
+            max_results=10,
+            thread_id="thread-a",
+        ) == (older,)
+        with pytest.raises(ValueError, match="max_results"):
+            store.list_attempts(max_results=0)
+        with pytest.raises(ValueError, match="thread_id"):
+            store.list_attempts(max_results=1, thread_id="../outside")
+
+
 def test_finish_attempt_is_one_way_and_idempotent(tmp_path: Path) -> None:
     database_path = tmp_path / "raw.sqlite"
 

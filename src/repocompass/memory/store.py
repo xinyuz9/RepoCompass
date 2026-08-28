@@ -803,6 +803,26 @@ class MemoryStore:
             ).fetchall()
         return tuple(_decode_tombstone(row) for row in rows)
 
+    def get_memory_tombstone(
+        self,
+        memory_id: str,
+        *,
+        context: ToolExecutionContext,
+    ) -> MemoryTombstone | None:
+        """Load one repository-bound payload-free deletion marker by identity."""
+
+        _validate_digest(memory_id, name="memory_id")
+        if not isinstance(context, ToolExecutionContext):
+            raise TypeError("context must be a ToolExecutionContext")
+        identity = resolve_memory_repository_identity(context)
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM memory_tombstones "
+                "WHERE memory_id = ? AND repository_key = ?",
+                (memory_id, identity.repository_key),
+            ).fetchone()
+        return None if row is None else _decode_tombstone(row)
+
     def delete_memory(
         self,
         memory_id: str,

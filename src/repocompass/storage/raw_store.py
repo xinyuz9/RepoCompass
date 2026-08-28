@@ -1,6 +1,7 @@
 """Versioned transactional SQLite store for raw run artifacts and metadata."""
 
 import json
+import re
 import sqlite3
 import threading
 from collections import Counter
@@ -37,6 +38,7 @@ RAW_STORE_SCHEMA_VERSION = 1
 RAW_STORE_CONTRACT_SCHEMA_VERSION = 1
 MAX_RAW_ARTIFACT_BYTES = 4 * 1024 * 1024
 _SQLITE_TIMEOUT_SECONDS = 10.0
+_IDENTIFIER_RE = re.compile(IDENTIFIER_PATTERN)
 
 
 class RawStoreError(RuntimeError):
@@ -412,6 +414,33 @@ class RawRunStore:
                 (run_id,),
             ).fetchone()
         return None if row is None else _decode_attempt_row(row)
+
+    def list_attempts(
+        self,
+        *,
+        max_results: int,
+        thread_id: str | None = None,
+    ) -> tuple[RawRunAttempt, ...]:
+        """List bounded attempt metadata in stable reverse-chronological order."""
+
+        if type(max_results) is not int or not 1 <= max_results <= 1_000:
+            raise ValueError("max_results must be between 1 and 1000")
+        if thread_id is not None and (
+            not isinstance(thread_id, str)
+            or _IDENTIFIER_RE.fullmatch(thread_id) is None
+        ):
+            raise ValueError("thread_id is invalid")
+        predicates = "" if thread_id is None else "WHERE thread_id = ?"
+        parameters: tuple[object, ...] = (
+            (max_results,) if thread_id is None else (thread_id, max_results)
+        )
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM attempts "
+                f"{predicates} ORDER BY started_at_ms DESC, run_id DESC LIMIT ?",
+                parameters,
+            ).fetchall()
+        return tuple(_decode_attempt_row(row) for row in rows)
 
     def finish_attempt(
         self,
