@@ -1,4 +1,4 @@
-"""Build the frozen 10-case SWE-bench Lite localization manifest.
+"""Build a frozen SWE-bench Lite localization manifest.
 
 The input is an official Hugging Face datasets-server response. Gold patch
 bodies are consumed only in memory and are never written to the manifest.
@@ -12,6 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from repocompass.evaluation import (
@@ -28,6 +29,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = (
     PROJECT_ROOT / "benchmarks/cases/swe-bench-lite-localization-10-v1.json"
 )
+SCALE_OUTPUT = PROJECT_ROOT / "benchmarks/cases/swe-bench-lite-localization-40-v1.json"
 UPSTREAM_DATASET = "SWE-bench/SWE-bench_Lite"
 UPSTREAM_REVISION = "b0dde1093fe417d83b7184254edf8199c1f0dff5"
 UPSTREAM_RESPONSE_SHA256 = (
@@ -41,10 +43,39 @@ EXPECTED_CASE_COUNT = 10
 SourceLoader = Callable[[str, str, str], str | None]
 
 
+@dataclass(frozen=True, slots=True)
+class FrozenSourceProfile:
+    """One reviewed datasets-server response and its manifest destination."""
+
+    case_count: int
+    response_sha256: str
+    manifest_name: str
+    output_path: Path
+
+
+FROZEN_SOURCE_PROFILES = {
+    10: FrozenSourceProfile(
+        case_count=10,
+        response_sha256=UPSTREAM_RESPONSE_SHA256,
+        manifest_name="swe-bench-lite-localization-10",
+        output_path=DEFAULT_OUTPUT,
+    ),
+    40: FrozenSourceProfile(
+        case_count=40,
+        response_sha256=(
+            "24f401102bd0ab4e946f447106c873a9ff645317bdb8161782f59b8820da377e"
+        ),
+        manifest_name="swe-bench-lite-localization-40",
+        output_path=SCALE_OUTPUT,
+    ),
+}
+
+
 def load_upstream_rows_file(
     path: Path,
     *,
     expected_sha256: str = UPSTREAM_RESPONSE_SHA256,
+    expected_count: int = EXPECTED_CASE_COUNT,
 ) -> tuple[dict[str, str], ...]:
     """Load a bounded duplicate-key-free official rows response."""
 
@@ -65,7 +96,7 @@ def load_upstream_rows_file(
         )
     except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
         raise ValueError(f"invalid upstream rows response: {error}") from error
-    return normalize_upstream_rows(payload, expected_count=EXPECTED_CASE_COUNT)
+    return normalize_upstream_rows(payload, expected_count=expected_count)
 
 
 def normalize_upstream_rows(
@@ -109,6 +140,7 @@ def build_manifest(
     rows: Sequence[Mapping[str, str]],
     *,
     source_loader: SourceLoader,
+    name: str = "swe-bench-lite-localization-10",
     version: str = MANIFEST_VERSION,
 ):
     """Derive a label-only manifest from normalized official rows."""
@@ -151,7 +183,7 @@ def build_manifest(
         )
         cases.append(create_localization_case(task=task, labels=labels))
     return create_localization_dataset_manifest(
-        name="swe-bench-lite-localization-10",
+        name=name,
         version=version,
         kind=LocalizationDatasetKind.SWE_BENCH_LITE_DERIVED,
         cases=tuple(cases),
@@ -227,22 +259,35 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("source_file", type=Path)
     parser.add_argument("--source-cache", type=Path, required=True)
+    parser.add_argument(
+        "--case-count",
+        type=int,
+        choices=tuple(sorted(FROZEN_SOURCE_PROFILES)),
+        default=EXPECTED_CASE_COUNT,
+    )
     parser.add_argument("--allow-network", action="store_true")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--force", action="store_true")
     arguments = parser.parse_args()
 
-    rows = load_upstream_rows_file(arguments.source_file)
+    profile = FROZEN_SOURCE_PROFILES[arguments.case_count]
+    rows = load_upstream_rows_file(
+        arguments.source_file,
+        expected_sha256=profile.response_sha256,
+        expected_count=profile.case_count,
+    )
     manifest = build_manifest(
         rows,
         source_loader=BaseSourceLoader(
             arguments.source_cache,
             allow_network=arguments.allow_network,
         ),
+        name=profile.manifest_name,
     )
+    output_path = arguments.output or profile.output_path
     mode = "w" if arguments.force else "x"
-    arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    with arguments.output.open(mode, encoding="utf-8", newline="\n") as stream:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open(mode, encoding="utf-8", newline="\n") as stream:
         stream.write(manifest.model_dump_json(indent=2, exclude_computed_fields=True))
         stream.write("\n")
     return 0

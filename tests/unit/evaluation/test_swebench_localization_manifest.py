@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from benchmarks.generate_swebench_localization_manifest import (
+    FROZEN_SOURCE_PROFILES,
     MANIFEST_VERSION,
     UPSTREAM_DATASET,
     UPSTREAM_RESPONSE_SHA256,
@@ -22,6 +23,9 @@ from repocompass.evaluation import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 MANIFEST_PATH = PROJECT_ROOT / "benchmarks/cases/swe-bench-lite-localization-10-v1.json"
+MANIFEST_40_PATH = (
+    PROJECT_ROOT / "benchmarks/cases/swe-bench-lite-localization-40-v1.json"
+)
 EXPECTED_INSTANCE_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-14182",
@@ -76,6 +80,45 @@ def test_bundled_manifest_is_frozen_traceable_and_patch_body_free() -> None:
     )
 
 
+def test_frozen_source_profiles_preserve_10_case_identity_and_add_40() -> None:
+    ten = FROZEN_SOURCE_PROFILES[10]
+    forty = FROZEN_SOURCE_PROFILES[40]
+
+    assert ten.response_sha256 == UPSTREAM_RESPONSE_SHA256
+    assert ten.manifest_name == "swe-bench-lite-localization-10"
+    assert ten.output_path == MANIFEST_PATH
+    assert forty.case_count == 40
+    assert forty.response_sha256 == (
+        "24f401102bd0ab4e946f447106c873a9ff645317bdb8161782f59b8820da377e"
+    )
+    assert forty.manifest_name == "swe-bench-lite-localization-40"
+    assert forty.output_path == MANIFEST_40_PATH
+
+
+def test_bundled_40_case_manifest_is_traceable_and_patch_body_free() -> None:
+    manifest = load_localization_dataset_file(MANIFEST_40_PATH)
+    raw_payload = json.loads(MANIFEST_40_PATH.read_text(encoding="utf-8"))
+
+    assert manifest.manifest_id == (
+        "2d783f33fd5d6e7cffd81f471f8fe56e627fb9ca71255001ad100ecc4b8457a6"
+    )
+    assert manifest.name == "swe-bench-lite-localization-40"
+    assert manifest.version == MANIFEST_VERSION
+    assert len(manifest.cases) == 40
+    assert sum(len(case.labels.gold_files) for case in manifest.cases) == 40
+    assert sum(len(case.labels.gold_symbols) for case in manifest.cases) == 52
+    assert tuple(case.task.instance_id for case in manifest.cases[:10]) == (
+        EXPECTED_INSTANCE_IDS
+    )
+    assert all(
+        case.labels.source is LocalizationLabelSource.SWE_BENCH_GOLD_PATCH
+        for case in manifest.cases
+    )
+    assert _walk_keys(raw_payload).isdisjoint(
+        {"patch", "test_patch", "hints_text", "FAIL_TO_PASS", "PASS_TO_PASS"}
+    )
+
+
 def test_generator_passes_only_public_task_fields_to_agent_boundary() -> None:
     manifest = load_localization_dataset_file(MANIFEST_PATH)
     agent_payload = json.dumps(
@@ -124,6 +167,7 @@ diff --git a/src/pkg.py b/src/pkg.py
     manifest = build_manifest(
         rows,
         source_loader=source_loader,
+        name="synthetic-generator",
         version="synthetic-generator-v1",
     )
     case = manifest.cases[0]
