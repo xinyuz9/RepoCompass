@@ -1,11 +1,15 @@
 import type {
+  DashboardHumanResponseCommand,
   DashboardMemoryAudit,
   DashboardMemoryCatalog,
+  DashboardMemoryDeleteCommand,
+  DashboardMemoryDeleteResult,
   DashboardProblemDetail,
   DashboardRunDetail,
   DashboardSystemInfo,
   DashboardThreadCatalog,
   DashboardThreadDetail,
+  InvestigationOperationResult,
 } from "./types";
 
 const API_ROOT = "/api/v1";
@@ -30,13 +34,55 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
     signal,
   });
   if (!response.ok) {
-    let problem: DashboardProblemDetail | null = null;
-    if (response.headers.get("content-type")?.includes("application/problem+json")) {
-      problem = (await response.json()) as DashboardProblemDetail;
-    }
-    throw new DashboardApiError(response.status, problem);
+    throw new DashboardApiError(response.status, await readProblem(response));
   }
   return (await response.json()) as T;
+}
+
+async function mutateJson<Command extends { request_id: string }, Result>(
+  path: string,
+  method: "POST" | "DELETE",
+  command: Command,
+): Promise<Result> {
+  const response = await fetch(`${API_ROOT}${path}`, {
+    method,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "Idempotency-Key": command.request_id,
+    },
+    credentials: "same-origin",
+    body: JSON.stringify(command),
+  });
+  if (!response.ok) {
+    throw new DashboardApiError(response.status, await readProblem(response));
+  }
+  return (await response.json()) as Result;
+}
+
+async function readProblem(response: Response): Promise<DashboardProblemDetail | null> {
+  if (!response.headers.get("content-type")?.includes("application/problem+json")) {
+    return null;
+  }
+  return (await response.json()) as DashboardProblemDetail;
+}
+
+export function respondToReview(
+  threadId: string,
+  command: DashboardHumanResponseCommand,
+): Promise<InvestigationOperationResult> {
+  return mutateJson(
+    `/threads/${encodeURIComponent(threadId)}/responses`,
+    "POST",
+    command,
+  );
+}
+
+export function deleteMemory(
+  memoryId: string,
+  command: DashboardMemoryDeleteCommand,
+): Promise<DashboardMemoryDeleteResult> {
+  return mutateJson(`/memory/${encodeURIComponent(memoryId)}`, "DELETE", command);
 }
 
 export const dashboardQueries = {

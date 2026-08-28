@@ -175,6 +175,39 @@ export interface InvestigationStructure {
   reading_path: TraceableReadingPath;
 }
 
+export type HumanDecisionAction = "approve" | "revise" | "cancel";
+
+export interface CandidateEvidenceItem {
+  path: string;
+  line_start: number | null;
+  line_end: number | null;
+  symbol: string | null;
+  claim: string;
+}
+
+export interface CandidateRelation {
+  source: string;
+  relation: "contains" | "imports" | "references";
+  target: string;
+  verification_status: "inferred";
+  supporting_evidence_indices: number[];
+  explanation: string;
+}
+
+export interface CandidateResult {
+  evidence: CandidateEvidenceItem[];
+  relations: CandidateRelation[];
+  summary: string;
+  unresolved_questions: string[];
+}
+
+export interface HumanReviewRequest {
+  turn_number: number;
+  candidate_result: CandidateResult;
+  evaluation_report: EvaluationReport;
+  allowed_actions: HumanDecisionAction[];
+}
+
 export interface ThreadInvestigationView {
   schema_version: 1;
   thread_id: string;
@@ -187,7 +220,10 @@ export interface ThreadInvestigationView {
   next_nodes: string[];
   termination_status: "accepted" | "exhausted" | "cancelled" | null;
   step_stop_reason: string | null;
+  candidate_result: CandidateResult | null;
+  evaluation_report: EvaluationReport | null;
   structure: InvestigationStructure | null;
+  pending_review: HumanReviewRequest | null;
   interrupt_id: string | null;
 }
 
@@ -213,6 +249,34 @@ export interface DashboardProblemDetail {
   status: number;
   detail: string;
   instance: string;
+}
+
+export interface HumanDecision {
+  action: HumanDecisionAction;
+  feedback: string | null;
+}
+
+export interface DashboardHumanResponseCommand {
+  schema_version: 1;
+  request_id: string;
+  interrupt_id: string;
+  decision: HumanDecision;
+}
+
+export interface InvestigationOperationResult {
+  schema_version: 1;
+  request_id: string;
+  thread_id: string;
+  execution_state: ExecutionState;
+  run_id: string | null;
+  idempotent_replay: boolean;
+  recovered_from_checkpoint: boolean;
+}
+
+export interface DashboardMemoryDeleteCommand {
+  schema_version: 1;
+  request_id: string;
+  confirm_memory_id: string;
 }
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -506,4 +570,12 @@ export interface DashboardMemoryAudit {
   metadata: MemoryEntryMetadata | null;
   tombstone: MemoryTombstone | null;
   events: MemoryAuditEvent[];
+}
+
+export interface DashboardMemoryDeleteResult {
+  schema_version: 1;
+  request_id: string;
+  memory_id: string;
+  tombstone: MemoryTombstone;
+  idempotent_replay: boolean;
 }

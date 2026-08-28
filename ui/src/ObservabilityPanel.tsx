@@ -14,12 +14,12 @@ import type { DashboardThreadDetail, RawRunAttempt } from "./types";
 
 export type ObservabilityLens = "plan" | "trace" | "context" | "memory" | "cost";
 
-export function ObservabilityPanel({ lens, detail }: { lens: ObservabilityLens; detail: DashboardThreadDetail }) {
+export function ObservabilityPanel({ lens, detail, memoryMutationsEnabled }: { lens: ObservabilityLens; detail: DashboardThreadDetail; memoryMutationsEnabled: boolean }) {
   if (lens === "plan") return <PlanLens detail={detail} />;
-  return <RunObservability lens={lens} detail={detail} />;
+  return <RunObservability lens={lens} detail={detail} memoryMutationsEnabled={memoryMutationsEnabled} />;
 }
 
-function RunObservability({ lens, detail }: { lens: Exclude<ObservabilityLens, "plan">; detail: DashboardThreadDetail }) {
+function RunObservability({ lens, detail, memoryMutationsEnabled }: { lens: Exclude<ObservabilityLens, "plan">; detail: DashboardThreadDetail; memoryMutationsEnabled: boolean }) {
   const [requestedRun, setRequestedRun] = useState<string | null>(null);
   const activeRunId = detail.attempts.some((item) => item.attempt.run_id === requestedRun)
     ? requestedRun
@@ -41,7 +41,7 @@ function RunObservability({ lens, detail }: { lens: Exclude<ObservabilityLens, "
       {run.isError ? <section className="panel panel--standalone"><div className="run-error" role="alert"><AlertTriangle size={20} /><div><strong>Run replay unavailable</strong><p>{run.error.message}</p></div></div></section> : null}
       {run.data && lens === "trace" ? <TraceLens run={run.data} /> : null}
       {run.data && lens === "context" ? <ContextLens run={run.data} /> : null}
-      {run.data && lens === "memory" ? <MemoryLens run={run.data} /> : null}
+      {run.data && lens === "memory" ? <MemoryLens run={run.data} mutationsEnabled={memoryMutationsEnabled} /> : null}
       {run.data && lens === "cost" ? <CostLens run={run.data} /> : null}
     </div>
   );

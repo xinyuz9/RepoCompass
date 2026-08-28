@@ -4,10 +4,11 @@ import { useMemo, useState } from "react";
 
 import { dashboardQueries } from "./api";
 import { compactId, formatTimestamp, humanize } from "./format";
+import { MemoryDeleteControl } from "./MemoryDeleteControl";
 import { PanelEmpty, PanelHeading } from "./PlanLens";
 import type { DashboardRunDetail, MemoryEntryMetadata, MemoryTombstone } from "./types";
 
-export function MemoryLens({ run }: { run: DashboardRunDetail }) {
+export function MemoryLens({ run, mutationsEnabled }: { run: DashboardRunDetail; mutationsEnabled: boolean }) {
   const catalog = useQuery({ ...dashboardQueries.memory, staleTime: 30_000 });
   const hitIds = useMemo(
     () => new Set(run.context_packs.flatMap((pack) => pack.items.map((item) => item.source.memory?.memory_id).filter((id): id is string => Boolean(id)))),
@@ -71,6 +72,13 @@ export function MemoryLens({ run }: { run: DashboardRunDetail }) {
                 </article>
               ))}
             </div>
+            {audit.data.metadata ? (
+              <MemoryDeleteControl
+                key={audit.data.memory_id}
+                memoryId={audit.data.memory_id}
+                enabled={mutationsEnabled}
+              />
+            ) : null}
           </>
         ) : null}
       </div>

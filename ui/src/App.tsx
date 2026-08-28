@@ -14,6 +14,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { DashboardApiError, dashboardQueries } from "./api";
+import { HumanReviewPanel } from "./HumanReviewPanel";
 import { ObservabilityPanel } from "./ObservabilityPanel";
 import { TaskGraph } from "./TaskGraph";
 import { ThreadList } from "./ThreadList";
@@ -132,14 +133,29 @@ export function App() {
         ) : null}
         {!rootError && activeThreadId && thread.isPending ? <LoadingState compact /> : null}
         {!rootError && thread.data ? (
-          <InvestigationStage lens={lens} detail={thread.data} />
+          <InvestigationStage
+            lens={lens}
+            detail={thread.data}
+            lifecycleMutationsEnabled={system.data?.lifecycle_mutations_enabled ?? false}
+            memoryMutationsEnabled={system.data?.memory_mutations_enabled ?? false}
+          />
         ) : null}
       </main>
     </div>
   );
 }
 
-function InvestigationStage({ lens, detail }: { lens: Lens; detail: DashboardThreadDetail }) {
+function InvestigationStage({
+  lens,
+  detail,
+  lifecycleMutationsEnabled,
+  memoryMutationsEnabled,
+}: {
+  lens: Lens;
+  detail: DashboardThreadDetail;
+  lifecycleMutationsEnabled: boolean;
+  memoryMutationsEnabled: boolean;
+}) {
   const { thread, attempts } = detail;
   const slice = thread.structure?.reading_path.graph_slice;
   const verifiedEdges = slice?.edges.filter((edge) => edge.verification_status === "verified").length ?? 0;
@@ -172,10 +188,22 @@ function InvestigationStage({ lens, detail }: { lens: Lens; detail: DashboardThr
         <Metric label="Verified links" value={verifiedEdges} detail={`${slice?.edges.length ?? 0} total relations`} />
       </section>
 
+      {thread.pending_review ? (
+        <HumanReviewPanel
+          key={thread.interrupt_id ?? "pending-review"}
+          detail={detail}
+          enabled={lifecycleMutationsEnabled}
+        />
+      ) : null}
+
       {lens === "topology" ? (
         thread.structure ? <TaskGraph structure={thread.structure} /> : <StructureEmpty />
       ) : (
-        <ObservabilityPanel lens={lens} detail={detail} />
+        <ObservabilityPanel
+          lens={lens}
+          detail={detail}
+          memoryMutationsEnabled={memoryMutationsEnabled}
+        />
       )}
     </div>
   );
