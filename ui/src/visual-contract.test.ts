@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import conversationCss from "./conversation.css?raw";
 import mutationsCss from "./mutations.css?raw";
 import observabilityCss from "./observability.css?raw";
 import stylesCss from "./styles.css?raw";
 
-const stylesheets = [stylesCss, observabilityCss, mutationsCss];
+const stylesheets = [stylesCss, observabilityCss, mutationsCss, conversationCss];
 
 describe("portfolio visual contract", () => {
   it("does not use unreadable sub-9px typography", () => {
@@ -27,6 +28,11 @@ describe("portfolio visual contract", () => {
   it("uses fluid mobile lens navigation instead of fixed overflowing widths", () => {
     expect(stylesCss).toContain(".lens-rail nav { width: 100%; flex-direction: row; gap: 0; }");
     expect(stylesCss).toContain("width: auto; min-width: 0; height: 56px; flex: 1;");
+  });
+
+  it("preserves complete thread cards in the tablet layout", () => {
+    expect(conversationCss).toContain(".thread-panel { height: 232px;");
+    expect(conversationCss).toContain(".thread-card { flex: 0 0 292px;");
   });
 });
 

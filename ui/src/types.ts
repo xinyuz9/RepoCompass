@@ -12,6 +12,9 @@ export interface DashboardSystemInfo {
   product_version: string;
   repository_id: string;
   commit_sha: string | null;
+  workspace_name: string;
+  workspace_path: ".";
+  memory_available: boolean;
   pricing_configured: boolean;
   lifecycle_mutations_enabled: boolean;
   memory_mutations_enabled: boolean;
@@ -201,6 +204,15 @@ export interface CandidateResult {
   unresolved_questions: string[];
 }
 
+export interface FinalResult {
+  relevant_files: string[];
+  relevant_symbols: string[];
+  evidence: string[];
+  summary: string;
+  unresolved_questions: string[];
+  structure: InvestigationStructure | null;
+}
+
 export interface HumanReviewRequest {
   turn_number: number;
   candidate_result: CandidateResult;
@@ -223,6 +235,7 @@ export interface ThreadInvestigationView {
   candidate_result: CandidateResult | null;
   evaluation_report: EvaluationReport | null;
   structure: InvestigationStructure | null;
+  final_result: FinalResult | null;
   pending_review: HumanReviewRequest | null;
   interrupt_id: string | null;
 }
@@ -261,6 +274,32 @@ export interface DashboardHumanResponseCommand {
   request_id: string;
   interrupt_id: string;
   decision: HumanDecision;
+}
+
+export interface DashboardStartCommand {
+  schema_version: 1;
+  request_id: string;
+  goal: string;
+  focus_path: string;
+  human_review_policy: "never" | "before_finalize";
+  memory_retrieval_enabled: boolean;
+  max_attempt_cost_usd: string | null;
+}
+
+export interface DashboardResumeCommand {
+  schema_version: 1;
+  request_id: string;
+  expected_repository_id: string;
+  expected_commit_sha: string | null;
+}
+
+export interface DashboardContinueCommand {
+  schema_version: 1;
+  request_id: string;
+  prompt: string;
+  focus_path: string;
+  expected_repository_id: string;
+  expected_commit_sha: string | null;
 }
 
 export interface InvestigationOperationResult {

@@ -1,4 +1,11 @@
-import { AlertCircle, CheckCircle2, CircleDot, Clock3, Search } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  CircleDot,
+  Clock3,
+  Plus,
+  Search,
+} from "lucide-react";
 
 import type { DashboardThreadSummary, ExecutionState } from "./types";
 
@@ -6,7 +13,10 @@ interface ThreadListProps {
   threads: DashboardThreadSummary[];
   selectedId: string | null;
   query: string;
+  currentRepositoryId: string | null;
+  currentCommitSha: string | null;
   onQueryChange: (value: string) => void;
+  onNew: () => void;
   onSelect: (threadId: string) => void;
 }
 
@@ -14,7 +24,10 @@ export function ThreadList({
   threads,
   selectedId,
   query,
+  currentRepositoryId,
+  currentCommitSha,
   onQueryChange,
+  onNew,
   onSelect,
 }: ThreadListProps) {
   return (
@@ -24,7 +37,12 @@ export function ThreadList({
           <p className="eyebrow">workspace</p>
           <h2>Investigations</h2>
         </div>
-        <span className="count-pill">{threads.length}</span>
+        <div className="thread-panel__actions">
+          <span className="count-pill">{threads.length}</span>
+          <button type="button" className="new-thread-button" onClick={onNew} aria-label="New investigation" title="Declare a new goal">
+            <Plus size={16} />
+          </button>
+        </div>
       </div>
       <label className="thread-search">
         <Search size={15} aria-hidden="true" />
@@ -32,29 +50,35 @@ export function ThreadList({
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Filter objective or ID"
+          placeholder="Filter goal or ID"
         />
       </label>
       <div className="thread-list">
-        {threads.map((thread) => (
-          <button
-            key={thread.thread_id}
-            type="button"
-            className={`thread-card${thread.thread_id === selectedId ? " is-active" : ""}`}
-            onClick={() => onSelect(thread.thread_id)}
-          >
-            <div className="thread-card__topline">
-              <StateIcon state={thread.execution_state} />
-              <span>{stateLabel(thread.execution_state)}</span>
-              <code>{shortId(thread.thread_id)}</code>
-            </div>
-            <strong>{thread.objective ?? "Checkpoint unavailable"}</strong>
-            <div className="thread-card__meta">
-              <span><Clock3 size={12} /> {formatTimestamp(thread.latest_attempt.started_at_ms)}</span>
-              <span>{thread.attempt_count} run{thread.attempt_count === 1 ? "" : "s"}</span>
-            </div>
-          </button>
-        ))}
+        {threads.map((thread) => {
+          const stale = currentRepositoryId !== null && (
+            thread.latest_attempt.repository_id !== currentRepositoryId
+            || thread.latest_attempt.commit_sha !== currentCommitSha
+          );
+          return (
+            <button
+              key={thread.thread_id}
+              type="button"
+              className={`thread-card${thread.thread_id === selectedId ? " is-active" : ""}${stale ? " is-stale" : ""}`}
+              onClick={() => onSelect(thread.thread_id)}
+            >
+              <div className="thread-card__topline">
+                <StateIcon state={thread.execution_state} stale={stale} />
+                <span>{stale ? "stale snapshot" : stateLabel(thread.execution_state)}</span>
+                <code>{shortId(thread.thread_id)}</code>
+              </div>
+              <strong>{thread.objective ?? "Checkpoint unavailable"}</strong>
+              <div className="thread-card__meta">
+                <span><Clock3 size={12} /> {formatTimestamp(thread.latest_attempt.started_at_ms)}</span>
+                <span>{thread.latest_attempt.status} · {thread.attempt_count} run{thread.attempt_count === 1 ? "" : "s"}</span>
+              </div>
+            </button>
+          );
+        })}
         {threads.length === 0 ? (
           <p className="thread-list__empty">No matching investigations.</p>
         ) : null}
@@ -63,7 +87,8 @@ export function ThreadList({
   );
 }
 
-function StateIcon({ state }: { state: ExecutionState | null }) {
+function StateIcon({ state, stale }: { state: ExecutionState | null; stale: boolean }) {
+  if (stale) return <AlertCircle size={13} aria-hidden="true" />;
   if (state === "completed") return <CheckCircle2 size={13} aria-hidden="true" />;
   if (state === "interrupted") return <AlertCircle size={13} aria-hidden="true" />;
   return <CircleDot size={13} aria-hidden="true" />;

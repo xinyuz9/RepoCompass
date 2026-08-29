@@ -1,0 +1,246 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { ConversationWorkspace } from "./ConversationWorkspace";
+import type {
+  DashboardSystemInfo,
+  DashboardThreadDetail,
+} from "./types";
+
+const repositoryId = "a".repeat(64);
+const commitSha = "b".repeat(40);
+const system: DashboardSystemInfo = {
+  schema_version: 1,
+  product: "RepoCompass",
+  product_version: "0.1.0",
+  repository_id: repositoryId,
+  commit_sha: commitSha,
+  workspace_name: "RepoCompass",
+  workspace_path: ".",
+  memory_available: true,
+  pricing_configured: true,
+  lifecycle_mutations_enabled: true,
+  memory_mutations_enabled: true,
+};
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+describe("ConversationWorkspace lifecycle commands", () => {
+  it("starts a goal with an idempotency key and never accepts a browser repository root", async () => {
+    const onThreadActivated = vi.fn();
+    const fetchMock = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+      const command = JSON.parse(String(init?.body)) as { request_id: string };
+      return Promise.resolve(operationResponse(command.request_id, "thread-new", "start-run"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWorkspace({ detail: null, onThreadActivated });
+    fireEvent.change(screen.getByLabelText("What should RepoCompass investigate?"), {
+      target: { value: " Trace the proposal verifier. " },
+    });
+    fireEvent.change(screen.getByLabelText(/Focus path/), {
+      target: { value: " src/repocompass " },
+    });
+    fireEvent.change(screen.getByLabelText(/Attempt cap/), {
+      target: { value: "1.25" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start investigation" }));
+
+    await waitFor(() => expect(onThreadActivated).toHaveBeenCalledWith("thread-new"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [input, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    expect(String(input)).toBe("/api/v1/investigations");
+    expect(init?.method).toBe("POST");
+    expect((init?.headers as Record<string, string>)["Idempotency-Key"]).toBe(body.request_id);
+    expect(body).toMatchObject({
+      schema_version: 1,
+      goal: "Trace the proposal verifier.",
+      focus_path: "src/repocompass",
+      human_review_policy: "before_finalize",
+      memory_retrieval_enabled: true,
+      max_attempt_cost_usd: "1.25",
+    });
+    expect(body).not.toHaveProperty("repo_path");
+  });
+  it("locks a failed command for exact retry until the user explicitly edits it", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({
+      schema_version: 1,
+      type: "urn:repocompass:problem:lifecycle-failed",
+      title: "Lifecycle request failed",
+      status: 503,
+      detail: "The provider was temporarily unavailable.",
+      instance: "/api/v1/investigations",
+    }), {
+      status: 503,
+      headers: { "content-type": "application/problem+json" },
+    })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWorkspace({ detail: null });
+    const goal = screen.getByLabelText("What should RepoCompass investigate?");
+    fireEvent.change(goal, { target: { value: "Trace the retry path." } });
+    fireEvent.click(screen.getByRole("button", { name: "Start investigation" }));
+
+    expect(await screen.findByRole("button", { name: "Retry same request" })).toBeVisible();
+    expect(goal).toBeDisabled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit request" }));
+    expect(goal).toBeEnabled();
+    fireEvent.change(goal, { target: { value: "Trace a different path." } });
+    expect(screen.getByRole("button", { name: "Start investigation" })).toBeEnabled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks resume when the persisted attempt targets a stale repository snapshot", () => {
+    const fetchMock = vi.fn();
+    const onNewGoal = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWorkspace({
+      detail: threadDetail({
+        executionState: "resumable",
+        attemptCommitSha: "c".repeat(40),
+      }),
+      onNewGoal,
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Repository snapshot changed");
+    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Start fresh" }));
+    expect(onNewGoal).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("continues a completed thread against the visible focus path and snapshot", async () => {
+    const onThreadActivated = vi.fn();
+    const fetchMock = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+      const command = JSON.parse(String(init?.body)) as { request_id: string };
+      return Promise.resolve(operationResponse(command.request_id, "thread-1", "continue-run"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWorkspace({
+      detail: threadDetail({ executionState: "completed", attemptCommitSha: commitSha }),
+      onThreadActivated,
+    });
+    fireEvent.change(screen.getByPlaceholderText("Ask a follow-up about this repository…"), {
+      target: { value: " Show the exact verification call path. " },
+    });
+    fireEvent.change(screen.getByLabelText("Focus"), {
+      target: { value: "src/repocompass/agent" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send follow-up" }));
+
+    await waitFor(() => expect(onThreadActivated).toHaveBeenCalledWith("thread-1"));
+    const [input, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    expect(String(input)).toBe("/api/v1/threads/thread-1/turns");
+    expect((init?.headers as Record<string, string>)["Idempotency-Key"]).toBe(body.request_id);
+    expect(body).toMatchObject({
+      schema_version: 1,
+      prompt: "Show the exact verification call path.",
+      focus_path: "src/repocompass/agent",
+      expected_repository_id: repositoryId,
+      expected_commit_sha: commitSha,
+    });
+    expect(body).not.toHaveProperty("repo_path");
+  });
+});
+
+function renderWorkspace({
+  detail,
+  onThreadActivated = vi.fn(),
+  onNewGoal = vi.fn(),
+}: {
+  detail: DashboardThreadDetail | null;
+  onThreadActivated?: (threadId: string) => void;
+  onNewGoal?: () => void;
+}) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <ConversationWorkspace
+        system={system}
+        detail={detail}
+        lifecycleMutationsEnabled
+        onThreadActivated={onThreadActivated}
+        onOpenLens={vi.fn()}
+        onNewGoal={onNewGoal}
+      />
+    </QueryClientProvider>,
+  );
+}
+
+function threadDetail({
+  executionState,
+  attemptCommitSha,
+}: {
+  executionState: "completed" | "resumable";
+  attemptCommitSha: string;
+}): DashboardThreadDetail {
+  return {
+    schema_version: 1,
+    thread: {
+      schema_version: 1,
+      thread_id: "thread-1",
+      execution_state: executionState,
+      turn_number: 1,
+      objective: "Trace the proposal verifier.",
+      plan: { steps: [] },
+      plan_revision_count: 0,
+      max_plan_revisions: 2,
+      next_nodes: executionState === "resumable" ? ["build_candidate"] : [],
+      termination_status: executionState === "completed" ? "accepted" : null,
+      step_stop_reason: null,
+      candidate_result: null,
+      evaluation_report: null,
+      structure: null,
+      final_result: null,
+      pending_review: null,
+      interrupt_id: null,
+    },
+    attempts: [{
+      schema_version: 1,
+      attempt: {
+        schema_version: 1,
+        run_id: "run-1",
+        thread_id: "thread-1",
+        turn_number: 1,
+        execution_mode: "start",
+        repository_id: repositoryId,
+        commit_sha: attemptCommitSha,
+        objective_digest: "d".repeat(64),
+        status: executionState === "completed" ? "completed" : "interrupted",
+        started_at_ms: 1_000,
+        finished_at_ms: 2_000,
+      },
+      trace_availability: "available",
+      cost_availability: "available",
+    }],
+    plan_timeline: [],
+    evaluator_timeline: [],
+  };
+}
+
+function operationResponse(requestId: string, threadId: string, runId: string): Response {
+  return new Response(JSON.stringify({
+    schema_version: 1,
+    request_id: requestId,
+    thread_id: threadId,
+    execution_state: "completed",
+    run_id: runId,
+    idempotent_replay: false,
+    recovered_from_checkpoint: false,
+  }), { status: 200, headers: { "content-type": "application/json" } });
+}

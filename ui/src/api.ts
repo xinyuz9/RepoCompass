@@ -1,4 +1,5 @@
 import type {
+  DashboardContinueCommand,
   DashboardHumanResponseCommand,
   DashboardMemoryAudit,
   DashboardMemoryCatalog,
@@ -6,6 +7,8 @@ import type {
   DashboardMemoryDeleteResult,
   DashboardProblemDetail,
   DashboardRunDetail,
+  DashboardResumeCommand,
+  DashboardStartCommand,
   DashboardSystemInfo,
   DashboardThreadCatalog,
   DashboardThreadDetail,
@@ -65,6 +68,34 @@ async function readProblem(response: Response): Promise<DashboardProblemDetail |
     return null;
   }
   return (await response.json()) as DashboardProblemDetail;
+}
+
+export function startInvestigation(
+  command: DashboardStartCommand,
+): Promise<InvestigationOperationResult> {
+  return mutateJson("/investigations", "POST", command);
+}
+
+export function resumeThread(
+  threadId: string,
+  command: DashboardResumeCommand,
+): Promise<InvestigationOperationResult> {
+  return mutateJson(
+    `/threads/${encodeURIComponent(threadId)}/resume`,
+    "POST",
+    command,
+  );
+}
+
+export function continueThread(
+  threadId: string,
+  command: DashboardContinueCommand,
+): Promise<InvestigationOperationResult> {
+  return mutateJson(
+    `/threads/${encodeURIComponent(threadId)}/turns`,
+    "POST",
+    command,
+  );
 }
 
 export function respondToReview(

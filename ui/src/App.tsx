@@ -4,9 +4,11 @@ import {
   BrainCircuit,
   CircleDollarSign,
   Compass,
+  FolderGit2,
   GitCommitHorizontal,
   Layers3,
   ListChecks,
+  MessageSquareText,
   Network,
   RefreshCw,
   ShieldCheck,
@@ -14,16 +16,21 @@ import {
 import { useMemo, useState } from "react";
 
 import { DashboardApiError, dashboardQueries } from "./api";
+import {
+  ConversationWorkspace,
+  type InspectorLens,
+} from "./ConversationWorkspace";
 import { HumanReviewPanel } from "./HumanReviewPanel";
 import { ObservabilityPanel } from "./ObservabilityPanel";
 import { TaskGraph } from "./TaskGraph";
 import { ThreadList } from "./ThreadList";
 import type { DashboardThreadDetail } from "./types";
 
-type Lens = "topology" | "plan" | "trace" | "context" | "memory" | "cost";
+type Lens = "chat" | InspectorLens;
 
 const LENSES: { id: Lens; label: string; icon: typeof Network }[] = [
-  { id: "topology", label: "Topology", icon: Network },
+  { id: "chat", label: "Chat", icon: MessageSquareText },
+  { id: "topology", label: "Path", icon: Network },
   { id: "plan", label: "Plan", icon: ListChecks },
   { id: "trace", label: "Run trace", icon: Activity },
   { id: "context", label: "Context", icon: Layers3 },
@@ -36,16 +43,13 @@ export function App() {
   const system = useQuery({ ...dashboardQueries.system, staleTime: 60_000 });
   const catalog = useQuery({ ...dashboardQueries.threads, staleTime: 20_000 });
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [composingNew, setComposingNew] = useState(false);
   const [filter, setFilter] = useState("");
-  const [lens, setLens] = useState<Lens>("topology");
+  const [lens, setLens] = useState<Lens>("chat");
 
-  const selectedExists = catalog.data?.threads.some(
-    (item) => item.thread_id === selectedThreadId,
-  );
-  const activeThreadId = selectedExists
-    ? selectedThreadId
-    : (catalog.data?.threads[0]?.thread_id ?? null);
-
+  const activeThreadId = composingNew
+    ? null
+    : (selectedThreadId ?? catalog.data?.threads[0]?.thread_id ?? null);
   const thread = useQuery({
     ...dashboardQueries.thread(activeThreadId ?? ""),
     enabled: activeThreadId !== null,
@@ -55,11 +59,23 @@ export function App() {
     const normalized = filter.trim().toLocaleLowerCase();
     if (!normalized) return catalog.data?.threads ?? [];
     return (catalog.data?.threads ?? []).filter((item) =>
-      `${item.objective ?? ""} ${item.thread_id}`.toLocaleLowerCase().includes(normalized),
+      `${item.objective ?? ""} ${item.thread_id}`
+        .toLocaleLowerCase()
+        .includes(normalized),
     );
   }, [catalog.data, filter]);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  const openNewGoal = () => {
+    setComposingNew(true);
+    setLens("chat");
+  };
+  const activateThread = (threadId: string) => {
+    setSelectedThreadId(threadId);
+    setComposingNew(false);
+    setLens("chat");
+  };
+  const openInspector = (nextLens: InspectorLens) => setLens(nextLens);
   const rootError = system.error ?? catalog.error;
 
   return (
@@ -68,7 +84,7 @@ export function App() {
         <div className="brand-mark" title="RepoCompass">
           <Compass size={23} strokeWidth={1.7} />
         </div>
-        <nav>
+        <nav aria-label="Primary lenses">
           {LENSES.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -92,10 +108,14 @@ export function App() {
         threads={visibleThreads}
         selectedId={activeThreadId}
         query={filter}
+        currentRepositoryId={system.data?.repository_id ?? null}
+        currentCommitSha={system.data?.commit_sha ?? null}
         onQueryChange={setFilter}
+        onNew={openNewGoal}
         onSelect={(threadId) => {
           setSelectedThreadId(threadId);
-          setLens("topology");
+          setComposingNew(false);
+          setLens("chat");
         }}
       />
 
@@ -103,17 +123,20 @@ export function App() {
         <header className="topbar">
           <div className="topbar__brand">
             <span className="wordmark">RepoCompass</span>
-            <span>investigation observatory</span>
+            <span>agent investigation workbench</span>
           </div>
           <div className="topbar__status">
             {system.data ? (
               <>
+                <span className="workspace-chip" title="Repository root is selected by the dashboard process">
+                  <FolderGit2 size={13} />
+                  {system.data.workspace_name}<code>/{system.data.workspace_path}</code>
+                </span>
                 <span className="live-indicator"><i /> local</span>
                 <span className="snapshot-chip">
                   <GitCommitHorizontal size={13} />
                   {shortHash(system.data.commit_sha ?? "unversioned")}
                 </span>
-                <code>{shortHash(system.data.repository_id)}</code>
               </>
             ) : null}
             <button type="button" className="icon-button" onClick={refresh} title="Refresh data">
@@ -125,20 +148,42 @@ export function App() {
 
         {rootError ? <ErrorState error={rootError} onRetry={refresh} /> : null}
         {!rootError && (catalog.isPending || system.isPending) ? <LoadingState /> : null}
-        {!rootError && !catalog.isPending && catalog.data?.threads.length === 0 ? (
-          <EmptyWorkspace />
-        ) : null}
         {!rootError && activeThreadId && thread.isError ? (
           <ErrorState error={thread.error} onRetry={refresh} />
         ) : null}
         {!rootError && activeThreadId && thread.isPending ? <LoadingState compact /> : null}
-        {!rootError && thread.data ? (
+
+        {!rootError
+        && system.data
+        && lens === "chat"
+        && (activeThreadId === null || !thread.isPending) ? (
+          <ConversationWorkspace
+            key={thread.data?.thread.thread_id ?? "new-goal"}
+            system={system.data}
+            detail={thread.data ?? null}
+            lifecycleMutationsEnabled={system.data.lifecycle_mutations_enabled}
+            onThreadActivated={activateThread}
+            onOpenLens={openInspector}
+            onNewGoal={openNewGoal}
+          />
+        ) : null}
+
+        {!rootError && lens !== "chat" && thread.data ? (
           <InvestigationStage
             lens={lens}
             detail={thread.data}
             lifecycleMutationsEnabled={system.data?.lifecycle_mutations_enabled ?? false}
             memoryMutationsEnabled={system.data?.memory_mutations_enabled ?? false}
           />
+        ) : null}
+
+        {!rootError && lens !== "chat" && !activeThreadId && !catalog.isPending ? (
+          <section className="inspector-empty">
+            <Network size={25} />
+            <h1>Start a goal before opening inspectors</h1>
+            <p>Plan, Path, Trace, Context, Memory, and Cost are populated from persisted attempts.</p>
+            <button type="button" onClick={openNewGoal}>Declare current goal</button>
+          </section>
         ) : null}
       </main>
     </div>
@@ -151,14 +196,16 @@ function InvestigationStage({
   lifecycleMutationsEnabled,
   memoryMutationsEnabled,
 }: {
-  lens: Lens;
+  lens: InspectorLens;
   detail: DashboardThreadDetail;
   lifecycleMutationsEnabled: boolean;
   memoryMutationsEnabled: boolean;
 }) {
   const { thread, attempts } = detail;
   const slice = thread.structure?.reading_path.graph_slice;
-  const verifiedEdges = slice?.edges.filter((edge) => edge.verification_status === "verified").length ?? 0;
+  const verifiedEdges = slice?.edges.filter(
+    (edge) => edge.verification_status === "verified",
+  ).length ?? 0;
 
   return (
     <div className="investigation-stage">
@@ -213,23 +260,6 @@ function Metric({ label, value, detail }: { label: string; value: number; detail
   return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>;
 }
 
-function EmptyWorkspace() {
-  return (
-    <section className="empty-workspace">
-      <div className="empty-compass"><Compass size={36} /></div>
-      <p className="eyebrow">local flight recorder</p>
-      <h1>No investigations recorded</h1>
-      <p>Run RepoCompass against this repository, then return here to replay the evidence path.</p>
-      <code>uv run repocompass . --objective "Trace the authentication flow"</code>
-      <div className="empty-workspace__features">
-        <span><Network size={14} /> task graph</span>
-        <span><ListChecks size={14} /> plan replay</span>
-        <span><ShieldCheck size={14} /> source provenance</span>
-      </div>
-    </section>
-  );
-}
-
 function StructureEmpty() {
   return (
     <section className="structure-empty">
@@ -248,7 +278,9 @@ function LoadingState({ compact = false }: { compact?: boolean }) {
 }
 
 function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
-  const label = error instanceof DashboardApiError ? error.problem?.title ?? "Dashboard unavailable" : "Dashboard unavailable";
+  const label = error instanceof DashboardApiError
+    ? error.problem?.title ?? "Dashboard unavailable"
+    : "Dashboard unavailable";
   return (
     <section className="error-state" role="alert">
       <Activity size={22} />

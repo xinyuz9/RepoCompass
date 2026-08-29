@@ -1,0 +1,528 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  ArrowUp,
+  Bot,
+  CheckCircle2,
+  CirclePlay,
+  Clock3,
+  FileCode2,
+  FolderGit2,
+  GitCommitHorizontal,
+  LoaderCircle,
+  MessageSquareText,
+  RotateCcw,
+  ShieldAlert,
+  Sparkles,
+  UserRound,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+
+import {
+  continueThread,
+  DashboardApiError,
+  resumeThread,
+  startInvestigation,
+} from "./api";
+import { HumanReviewPanel } from "./HumanReviewPanel";
+import type {
+  DashboardContinueCommand,
+  DashboardResumeCommand,
+  DashboardStartCommand,
+  DashboardSystemInfo,
+  DashboardThreadDetail,
+  InvestigationOperationResult,
+} from "./types";
+
+export type InspectorLens =
+  | "topology"
+  | "plan"
+  | "trace"
+  | "context"
+  | "memory"
+  | "cost";
+
+interface ConversationWorkspaceProps {
+  system: DashboardSystemInfo;
+  detail: DashboardThreadDetail | null;
+  lifecycleMutationsEnabled: boolean;
+  onThreadActivated: (threadId: string) => void;
+  onOpenLens: (lens: InspectorLens) => void;
+  onNewGoal: () => void;
+}
+
+const INSPECTORS: { id: InspectorLens; label: string }[] = [
+  { id: "topology", label: "Path" },
+  { id: "plan", label: "Plan" },
+  { id: "trace", label: "Trace" },
+  { id: "context", label: "Context" },
+  { id: "memory", label: "Memory" },
+  { id: "cost", label: "Cost" },
+];
+
+let fallbackRequestSequence = 0;
+
+export function ConversationWorkspace({
+  system,
+  detail,
+  lifecycleMutationsEnabled,
+  onThreadActivated,
+  onOpenLens,
+  onNewGoal,
+}: ConversationWorkspaceProps) {
+  if (!detail) {
+    return (
+      <NewGoalWorkspace
+        system={system}
+        enabled={lifecycleMutationsEnabled}
+        onThreadActivated={onThreadActivated}
+      />
+    );
+  }
+  return (
+    <ThreadConversation
+      system={system}
+      detail={detail}
+      enabled={lifecycleMutationsEnabled}
+      onThreadActivated={onThreadActivated}
+      onOpenLens={onOpenLens}
+      onNewGoal={onNewGoal}
+    />
+  );
+}
+
+function NewGoalWorkspace({
+  system,
+  enabled,
+  onThreadActivated,
+}: {
+  system: DashboardSystemInfo;
+  enabled: boolean;
+  onThreadActivated: (threadId: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [goal, setGoal] = useState("");
+  const [focusPath, setFocusPath] = useState(".");
+  const [memoryEnabled, setMemoryEnabled] = useState(system.memory_available);
+  const [reviewEnabled, setReviewEnabled] = useState(true);
+  const [costBudget, setCostBudget] = useState("");
+  const [lockedCommand, setLockedCommand] =
+    useState<DashboardStartCommand | null>(null);
+  const mutation = useMutation({
+    mutationFn: startInvestigation,
+    retry: false,
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      onThreadActivated(result.thread_id);
+    },
+  });
+
+  const resetCommand = () => {
+    setLockedCommand(null);
+    mutation.reset();
+  };
+  const submit = () => {
+    if (!enabled || !goal.trim() || mutation.isPending || mutation.isSuccess) return;
+    const command: DashboardStartCommand = {
+      schema_version: 1,
+      request_id: createRequestId("start"),
+      goal: goal.trim(),
+      focus_path: focusPath.trim() || ".",
+      human_review_policy: reviewEnabled ? "before_finalize" : "never",
+      memory_retrieval_enabled: system.memory_available && memoryEnabled,
+      max_attempt_cost_usd: costBudget.trim() || null,
+    };
+    setLockedCommand(command);
+    mutation.mutate(command);
+  };
+
+  return (
+    <div className="conversation-stage conversation-stage--new">
+      <section className="goal-welcome" aria-labelledby="new-goal-title">
+        <span className="goal-welcome__mark"><Sparkles size={22} /></span>
+        <p className="eyebrow">repository agent workspace</p>
+        <h1 id="new-goal-title">Declare the current goal</h1>
+        <p>
+          Declare a goal and RepoCompass will plan, trace, remember, and account for
+          the work against one server-bound repository snapshot.
+        </p>
+        <WorkspaceBoundary system={system} focusPath={focusPath} />
+      </section>
+
+      <section className="goal-composer" aria-label="Declare current goal">
+        <div className="goal-composer__heading">
+          <div><MessageSquareText size={17} /><span>Current goal</span></div>
+          <small>new investigation</small>
+        </div>
+        <label className="goal-field">
+          <span>What should RepoCompass investigate?</span>
+          <textarea
+            value={goal}
+            rows={4}
+            maxLength={16_384}
+            disabled={lockedCommand !== null || mutation.isPending || mutation.isSuccess}
+            placeholder="Trace how focused-improve verifies and applies a proposal"
+            onChange={(event) => setGoal(event.target.value)}
+          />
+        </label>
+        <ComposerOptions
+          system={system}
+          focusPath={focusPath}
+          onFocusPathChange={setFocusPath}
+          memoryEnabled={memoryEnabled}
+          onMemoryEnabledChange={setMemoryEnabled}
+          reviewEnabled={reviewEnabled}
+          onReviewEnabledChange={setReviewEnabled}
+          costBudget={costBudget}
+          onCostBudgetChange={setCostBudget}
+          disabled={lockedCommand !== null || mutation.isPending || mutation.isSuccess}
+        />
+        <MutationFooter
+          enabled={enabled}
+          pending={mutation.isPending}
+          result={mutation.data ?? null}
+          error={mutation.error}
+          actionLabel="Start investigation"
+          disabled={!goal.trim() || lockedCommand !== null}
+          onSubmit={submit}
+          onRetry={() => lockedCommand && mutation.mutate(lockedCommand)}
+          onReset={resetCommand}
+        />
+      </section>
+    </div>
+  );
+}
+
+function ThreadConversation({
+  system,
+  detail,
+  enabled,
+  onThreadActivated,
+  onOpenLens,
+  onNewGoal,
+}: {
+  system: DashboardSystemInfo;
+  detail: DashboardThreadDetail;
+  enabled: boolean;
+  onThreadActivated: (threadId: string) => void;
+  onOpenLens: (lens: InspectorLens) => void;
+  onNewGoal: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { thread } = detail;
+  const attempts = useMemo(
+    () => [...detail.attempts].sort((left, right) =>
+      left.attempt.started_at_ms - right.attempt.started_at_ms),
+    [detail.attempts],
+  );
+  const latestAttempt = attempts.at(-1)?.attempt ?? null;
+  const stale = latestAttempt !== null && (
+    latestAttempt.repository_id !== system.repository_id
+    || latestAttempt.commit_sha !== system.commit_sha
+  );
+  const summary = thread.final_result?.summary
+    ?? thread.candidate_result?.summary
+    ?? thread.evaluation_report?.semantic_assessment.summary
+    ?? "The latest attempt ended before a validated result was produced.";
+  const [prompt, setPrompt] = useState("");
+  const [focusPath, setFocusPath] = useState(".");
+  const [continueCommand, setContinueCommand] =
+    useState<DashboardContinueCommand | null>(null);
+  const [resumeCommand, setResumeCommand] =
+    useState<DashboardResumeCommand | null>(null);
+
+  const afterLifecycle = (result: InvestigationOperationResult) => {
+    void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    onThreadActivated(result.thread_id);
+  };
+  const continueMutation = useMutation({
+    mutationFn: (command: DashboardContinueCommand) =>
+      continueThread(thread.thread_id, command),
+    retry: false,
+    onSuccess: afterLifecycle,
+  });
+  const resumeMutation = useMutation({
+    mutationFn: (command: DashboardResumeCommand) =>
+      resumeThread(thread.thread_id, command),
+    retry: false,
+    onSuccess: afterLifecycle,
+  });
+
+  const submitFollowUp = () => {
+    if (!enabled || stale || !prompt.trim() || continueMutation.isPending) return;
+    const command: DashboardContinueCommand = {
+      schema_version: 1,
+      request_id: createRequestId("continue"),
+      prompt: prompt.trim(),
+      focus_path: focusPath.trim() || ".",
+      expected_repository_id: system.repository_id,
+      expected_commit_sha: system.commit_sha,
+    };
+    setContinueCommand(command);
+    continueMutation.mutate(command);
+  };
+  const resume = () => {
+    if (!enabled || stale || resumeMutation.isPending) return;
+    const command: DashboardResumeCommand = {
+      schema_version: 1,
+      request_id: createRequestId("resume"),
+      expected_repository_id: system.repository_id,
+      expected_commit_sha: system.commit_sha,
+    };
+    setResumeCommand(command);
+    resumeMutation.mutate(command);
+  };
+
+  return (
+    <div className="conversation-stage">
+      <header className="conversation-goal">
+        <div>
+          <p className="eyebrow">current goal</p>
+          <h1>{firstLine(thread.objective)}</h1>
+          <span>turn {thread.turn_number} · thread/{shortId(thread.thread_id)}</span>
+        </div>
+        <button type="button" className="new-goal-link" onClick={onNewGoal}>
+          <Sparkles size={14} />New goal
+        </button>
+      </header>
+
+      <div className="conversation-feed" aria-label="Investigation conversation">
+        <article className="chat-message chat-message--user">
+          <span className="chat-avatar"><UserRound size={16} /></span>
+          <div>
+            <header><strong>You</strong><small>goal · turn 1</small></header>
+            <p>{thread.objective}</p>
+          </div>
+        </article>
+
+        <article className="chat-message chat-message--agent">
+          <span className="chat-avatar"><Bot size={17} /></span>
+          <div>
+            <header>
+              <strong>RepoCompass</strong>
+              <span className={`state-chip state-chip--${thread.execution_state}`}>
+                {thread.execution_state}
+              </span>
+            </header>
+            <p>{summary}</p>
+            <AttemptRail attempts={attempts.map((item) => item.attempt)} />
+            <div className="inspector-shortcuts" aria-label="Open investigation inspector">
+              {INSPECTORS.map((item) => (
+                <button key={item.id} type="button" onClick={() => onOpenLens(item.id)}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </article>
+
+        {stale ? (
+          <div className="snapshot-warning" role="alert">
+            <GitCommitHorizontal size={18} />
+            <div>
+              <strong>Repository snapshot changed</strong>
+              <span>This checkpoint targets {shortId(latestAttempt?.commit_sha ?? "unversioned")}; current HEAD is {shortId(system.commit_sha ?? "unversioned")}.</span>
+            </div>
+            <button type="button" onClick={onNewGoal}>Start fresh</button>
+          </div>
+        ) : null}
+
+        {thread.pending_review ? (
+          <HumanReviewPanel detail={detail} enabled={enabled && !stale} />
+        ) : null}
+      </div>
+
+      <footer className="conversation-command">
+        {thread.execution_state === "completed" ? (
+          <>
+            <div className="follow-up-box">
+              <label>
+                <span className="sr-only">Ask a follow-up</span>
+                <textarea
+                  rows={2}
+                  value={prompt}
+                  maxLength={16_384}
+                  disabled={!enabled || stale || continueCommand !== null || continueMutation.isPending}
+                  placeholder="Ask a follow-up about this repository…"
+                  onChange={(event) => setPrompt(event.target.value)}
+                />
+              </label>
+              <div className="follow-up-box__bar">
+                <label className="compact-path"><FileCode2 size={13} /><span>Focus</span><input value={focusPath} disabled={!enabled || stale || continueCommand !== null} onChange={(event) => setFocusPath(event.target.value)} /></label>
+                <button type="button" aria-label="Send follow-up" disabled={!prompt.trim() || !enabled || stale || continueCommand !== null || continueMutation.isPending} onClick={submitFollowUp}>
+                  {continueMutation.isPending ? <LoaderCircle className="is-spinning" size={16} /> : <ArrowUp size={16} />}
+                </button>
+              </div>
+            </div>
+            <InlineMutationResult
+              pending={continueMutation.isPending}
+              result={continueMutation.data ?? null}
+              error={continueMutation.error}
+              onRetry={() => continueCommand && continueMutation.mutate(continueCommand)}
+              onReset={() => {
+                setContinueCommand(null);
+                continueMutation.reset();
+              }}
+            />
+          </>
+        ) : null}
+
+        {thread.execution_state === "resumable" ? (
+          <div className="resume-command">
+            <div><RotateCcw size={18} /><span><strong>Checkpoint can resume</strong><small>Continue pending graph nodes with the same budgets and evidence boundary.</small></span></div>
+            <button type="button" disabled={!enabled || stale || resumeCommand !== null || resumeMutation.isPending} onClick={resume}>
+              {resumeMutation.isPending ? <LoaderCircle className="is-spinning" size={15} /> : <CirclePlay size={15} />}Resume
+            </button>
+            <InlineMutationResult pending={resumeMutation.isPending} result={resumeMutation.data ?? null} error={resumeMutation.error} onRetry={() => resumeCommand && resumeMutation.mutate(resumeCommand)} />
+          </div>
+        ) : null}
+
+        {thread.execution_state === "interrupted" && !thread.pending_review ? (
+          <p className="command-hint"><ShieldAlert size={15} />This thread is interrupted but no public review payload is available.</p>
+        ) : null}
+
+        {!enabled ? (
+          <p className="command-hint"><ShieldAlert size={15} />Lifecycle controls are read-only. Restart the dashboard with <code>--enable-lifecycle-mutations</code>.</p>
+        ) : null}
+      </footer>
+    </div>
+  );
+}
+
+function ComposerOptions({
+  system,
+  focusPath,
+  onFocusPathChange,
+  memoryEnabled,
+  onMemoryEnabledChange,
+  reviewEnabled,
+  onReviewEnabledChange,
+  costBudget,
+  onCostBudgetChange,
+  disabled,
+}: {
+  system: DashboardSystemInfo;
+  focusPath: string;
+  onFocusPathChange: (value: string) => void;
+  memoryEnabled: boolean;
+  onMemoryEnabledChange: (value: boolean) => void;
+  reviewEnabled: boolean;
+  onReviewEnabledChange: (value: boolean) => void;
+  costBudget: string;
+  onCostBudgetChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="composer-options">
+      <label className="path-option">
+        <span><FileCode2 size={13} />Focus path</span>
+        <input value={focusPath} disabled={disabled} placeholder="." onChange={(event) => onFocusPathChange(event.target.value)} />
+        <small>repository-relative; validated by the server</small>
+      </label>
+      <div className="toggle-options">
+        <label><input type="checkbox" checked={memoryEnabled && system.memory_available} disabled={disabled || !system.memory_available} onChange={(event) => onMemoryEnabledChange(event.target.checked)} /><span>Recall memory</span></label>
+        <label><input type="checkbox" checked={reviewEnabled} disabled={disabled} onChange={(event) => onReviewEnabledChange(event.target.checked)} /><span>Review before finalize</span></label>
+      </div>
+      <label className="cost-option">
+        <span>Attempt cap</span>
+        <input value={costBudget} disabled={disabled || !system.pricing_configured} inputMode="decimal" placeholder={system.pricing_configured ? "USD, optional" : "pricing unavailable"} onChange={(event) => onCostBudgetChange(event.target.value)} />
+      </label>
+    </div>
+  );
+}
+
+function WorkspaceBoundary({ system, focusPath }: { system: DashboardSystemInfo; focusPath: string }) {
+  return (
+    <div className="workspace-boundary">
+      <FolderGit2 size={16} />
+      <span><strong>{system.workspace_name}</strong><code>/{focusPath.trim() || "."}</code></span>
+      <small>server-bound</small>
+    </div>
+  );
+}
+
+function MutationFooter({
+  enabled,
+  pending,
+  result,
+  error,
+  actionLabel,
+  disabled,
+  onSubmit,
+  onRetry,
+  onReset,
+}: {
+  enabled: boolean;
+  pending: boolean;
+  result: InvestigationOperationResult | null;
+  error: Error | null;
+  actionLabel: string;
+  disabled: boolean;
+  onSubmit: () => void;
+  onRetry: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="composer-submit-row">
+      <span><ShieldAlert size={13} />No browser-provided repository root · one idempotent request</span>
+      <button type="button" disabled={!enabled || disabled || pending || result !== null} onClick={onSubmit}>
+        {pending ? <LoaderCircle className="is-spinning" size={15} /> : <CirclePlay size={15} />}{pending ? "Running…" : actionLabel}
+      </button>
+      {!enabled ? <p className="mutation-inline is-error">Lifecycle mutations are disabled.</p> : null}
+      <InlineMutationResult pending={pending} result={result} error={error} onRetry={onRetry} onReset={onReset} />
+    </div>
+  );
+}
+
+function InlineMutationResult({ pending, result, error, onRetry, onReset }: {
+  pending: boolean;
+  result: InvestigationOperationResult | null;
+  error: Error | null;
+  onRetry: () => void;
+  onReset?: () => void;
+}) {
+  if (pending) return <p className="mutation-inline" role="status"><LoaderCircle className="is-spinning" size={13} />The agent is running. This request may take a few minutes.</p>;
+  if (error) return (
+    <p className="mutation-inline is-error" role="alert">
+      <ShieldAlert size={13} />{mutationMessage(error)}
+      <button type="button" onClick={onRetry}>Retry same request</button>
+      {onReset ? <button type="button" onClick={onReset}>Edit request</button> : null}
+    </p>
+  );
+  if (result) return <p className="mutation-inline is-success" role="status"><CheckCircle2 size={13} />Checkpoint {result.execution_state} · {shortId(result.request_id)}</p>;
+  return null;
+}
+
+function AttemptRail({ attempts }: { attempts: DashboardThreadDetail["attempts"][number]["attempt"][] }) {
+  if (attempts.length === 0) return null;
+  return (
+    <ol className="attempt-rail" aria-label="Persisted attempts">
+      {attempts.map((attempt) => (
+        <li key={attempt.run_id} className={`attempt-rail__item attempt-rail__item--${attempt.status}`}>
+          <span>{attempt.turn_number}</span>
+          <div><strong>{attempt.execution_mode}</strong><small><Clock3 size={11} />{attempt.status}</small></div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function createRequestId(kind: "start" | "resume" | "continue"): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid) return `dashboard-${kind}:${randomUuid}`;
+  fallbackRequestSequence += 1;
+  return `dashboard-${kind}:${Date.now().toString(36)}:${fallbackRequestSequence.toString(36)}`;
+}
+
+function mutationMessage(error: Error): string {
+  return error instanceof DashboardApiError
+    ? error.problem?.detail ?? error.message
+    : "The lifecycle request ended without a confirmed result.";
+}
+
+function shortId(value: string): string {
+  return value.length <= 10 ? value : value.slice(0, 8);
+}
+
+function firstLine(value: string): string {
+  return value.split("\n", 1)[0] ?? value;
+}

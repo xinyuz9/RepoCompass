@@ -22,6 +22,9 @@ describe("dashboard accessibility", () => {
         product_version: "0.1.0",
         repository_id: "a".repeat(64),
         commit_sha: "b".repeat(40),
+        workspace_name: "RepoCompass",
+        workspace_path: ".",
+        memory_available: true,
         pricing_configured: false,
         lifecycle_mutations_enabled: false,
         memory_mutations_enabled: false,
@@ -41,7 +44,7 @@ describe("dashboard accessibility", () => {
     vi.stubGlobal("fetch", fetchMock);
     const view = renderWithClient(<App />);
 
-    expect(await screen.findByRole("heading", { name: "No investigations recorded" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Declare the current goal" })).toBeVisible();
     const results = await axe.run(view.container, axeOptions);
     expect(results.violations).toEqual([]);
   });

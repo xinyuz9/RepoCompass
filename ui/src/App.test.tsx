@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -10,6 +10,9 @@ const system = {
   product_version: "0.1.0",
   repository_id: "a".repeat(64),
   commit_sha: "b".repeat(40),
+  workspace_name: "RepoCompass",
+  workspace_path: ".",
+  memory_available: true,
   pricing_configured: false,
   lifecycle_mutations_enabled: false,
   memory_mutations_enabled: false,
@@ -52,8 +55,8 @@ describe("App query shell", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "No investigations recorded" })).toBeVisible();
-    expect(screen.getByText(/uv run repocompass/)).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Declare the current goal" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "Declare current goal" })).toBeVisible();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
     view.rerender(
@@ -148,16 +151,17 @@ describe("App query shell", () => {
     render(<QueryClientProvider client={client}><App /></QueryClientProvider>);
     expect(await screen.findByRole("heading", { name: "Trace the authentication flow." })).toBeVisible();
     expect(requestedPaths.filter((path) => path.includes("/runs/")).length).toBe(0);
+    const lensNavigation = screen.getByRole("navigation", { name: "Primary lenses" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Context" }));
+    fireEvent.click(within(lensNavigation).getByRole("button", { name: "Context" }));
     expect(await screen.findByRole("heading", { name: "No ContextPack persisted" })).toBeVisible();
     expect(requestedPaths.filter((path) => path.endsWith("/runs/run-1")).length).toBe(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Cost" }));
+    fireEvent.click(within(lensNavigation).getByRole("button", { name: "Cost" }));
     expect(await screen.findByRole("heading", { name: "Pricing not configured" })).toBeVisible();
     expect(requestedPaths.filter((path) => path.endsWith("/runs/run-1")).length).toBe(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Memory" }));
+    fireEvent.click(within(lensNavigation).getByRole("button", { name: "Memory" }));
     expect(await screen.findByRole("heading", { name: "Memory store not configured" })).toBeVisible();
     expect(requestedPaths.filter((path) => path.endsWith("/memory")).length).toBe(1);
   });
