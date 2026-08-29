@@ -51,6 +51,7 @@ class InvestigationOperationKind(StrEnum):
 
     START = "start"
     RESUME = "resume"
+    CONTINUE = "continue"
     RESPOND = "respond"
 
 
@@ -151,6 +152,19 @@ class ResumeInvestigationRequest(_ServiceModel):
             if self.decision is None
             else InvestigationOperationKind.RESPOND
         )
+
+
+class ContinueInvestigationRequest(_ServiceModel):
+    """Idempotent new Human turn for one completed checkpoint thread."""
+
+    schema_version: Literal[1] = SERVICE_SCHEMA_VERSION
+    request_id: str = Field(pattern=REQUEST_ID_PATTERN)
+    thread_id: str = Field(min_length=1, max_length=256)
+    prompt: str = Field(min_length=1, max_length=16_384)
+
+    @property
+    def operation_kind(self) -> InvestigationOperationKind:
+        return InvestigationOperationKind.CONTINUE
 
 
 class ThreadArtifactRequest(_ServiceModel):

@@ -125,7 +125,8 @@ class DashboardQueryService:
         self._runner = runner
         self._raw_run_store = raw_run_store
         self._trace_store = trace_store
-        self._context = ToolExecutionContext(repository_root)
+        self._repository_root = repository_root.expanduser().resolve(strict=True)
+        self._context = ToolExecutionContext(self._repository_root)
         self._memory_store = memory_store
         self._pricing_table = pricing_table
         self._lifecycle_mutations_enabled = lifecycle_mutations_enabled
@@ -133,18 +134,21 @@ class DashboardQueryService:
 
     @property
     def repository_context(self) -> ToolExecutionContext:
-        """Return the trusted context used to scope all dashboard reads."""
+        """Return a fresh trusted context so HEAD drift is immediately visible."""
 
-        return self._context
+        return ToolExecutionContext(self._repository_root)
 
     def system_info(self) -> DashboardSystemInfo:
         """Describe capabilities without revealing the repository locator."""
 
+        context = self.repository_context
         return DashboardSystemInfo(
             product_version=_product_version(),
-            repository_id=self._context.repository_id,
-            commit_sha=self._context.commit_sha,
+            repository_id=context.repository_id,
+            commit_sha=context.commit_sha,
+            workspace_name=self._repository_root.name or "repository",
             pricing_configured=self._pricing_table is not None,
+            memory_available=self._memory_store is not None,
             lifecycle_mutations_enabled=self._lifecycle_mutations_enabled,
             memory_mutations_enabled=self._memory_mutations_enabled,
         )
@@ -307,15 +311,16 @@ class DashboardQueryService:
                 entries=(),
                 tombstones=(),
             )
+        context = self.repository_context
         return DashboardMemoryCatalog(
             availability=DashboardAvailability.AVAILABLE,
             entries=self._memory_store.list_memory_metadata(
-                context=self._context,
+                context=context,
                 max_results=max_results,
                 memory_scope=memory_scope,
             ),
             tombstones=self._memory_store.list_memory_tombstones(
-                context=self._context,
+                context=context,
                 max_results=max_results,
             ),
         )
@@ -326,13 +331,14 @@ class DashboardQueryService:
         normalized_memory_id = _validate_digest(memory_id, name="memory_id")
         if self._memory_store is None:
             raise DashboardServiceError("memory store is not configured")
+        context = self.repository_context
         metadata = self._memory_store.get_memory_metadata(
             normalized_memory_id,
-            context=self._context,
+            context=context,
         )
         tombstone = self._memory_store.get_memory_tombstone(
             normalized_memory_id,
-            context=self._context,
+            context=context,
         )
         if metadata is None and tombstone is None:
             raise DashboardNotFoundError("memory was not found")

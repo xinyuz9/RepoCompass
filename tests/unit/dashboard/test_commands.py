@@ -25,6 +25,11 @@ from repocompass.dashboard.commands import (
     DashboardCommandUnavailableError,
 )
 from repocompass.dashboard.contracts import (
+    DashboardAvailability,
+    DashboardContinueCommand,
+    DashboardResumeCommand,
+    DashboardRunSummary,
+    DashboardStartCommand,
     DashboardHumanResponseCommand,
     DashboardMemoryAudit,
     DashboardMemoryDeleteCommand,
@@ -41,8 +46,15 @@ from repocompass.memory.contracts import (
 from repocompass.memory.identity import resolve_memory_repository_identity
 from repocompass.memory.store import MemoryStore, open_memory_store
 from repocompass.service.contracts import (
+    ContinueInvestigationRequest,
     InvestigationOperationResult,
     ResumeInvestigationRequest,
+    StartInvestigationRequest,
+)
+from repocompass.storage.raw_store import (
+    AttemptExecutionMode,
+    AttemptStatus,
+    RawRunAttempt,
 )
 from repocompass.tools.gateway import ToolExecutionContext
 
@@ -137,7 +149,7 @@ def _evaluation() -> EvaluationReport:
     )
 
 
-def _thread_detail() -> DashboardThreadDetail:
+def _thread_detail(context: ToolExecutionContext) -> DashboardThreadDetail:
     candidate = _candidate()
     evaluation = _evaluation()
     review = HumanReviewRequest(
@@ -171,16 +183,35 @@ def _thread_detail() -> DashboardThreadDetail:
             pending_review=review,
             interrupt_id="interrupt-1",
         ),
-        attempts=(),
+        attempts=(
+            DashboardRunSummary(
+                attempt=RawRunAttempt(
+                    run_id="run-1",
+                    thread_id="thread-1",
+                    turn_number=1,
+                    execution_mode=AttemptExecutionMode.START,
+                    repository_id=context.repository_id,
+                    commit_sha=context.commit_sha,
+                    objective_digest="c" * 64,
+                    status=AttemptStatus.INTERRUPTED,
+                    started_at_ms=1_000,
+                    finished_at_ms=2_000,
+                ),
+                trace_availability=DashboardAvailability.NOT_PERSISTED,
+                cost_availability=DashboardAvailability.NOT_CONFIGURED,
+            ),
+        ),
         plan_timeline=(),
         evaluator_timeline=(),
     )
 
 
-def _operation_result(request_id: str) -> InvestigationOperationResult:
+def _operation_result(
+    request_id: str, thread_id: str = "thread-1"
+) -> InvestigationOperationResult:
     return InvestigationOperationResult(
         request_id=request_id,
-        thread_id="thread-1",
+        thread_id=thread_id,
         execution_state=ThreadExecutionState.COMPLETED,
         run_id="response-run",
         termination_status="accepted",
@@ -209,7 +240,7 @@ class _Query:
     ) -> None:
         self.repository_context = context
         self.memory_store = memory_store
-        self.thread_detail = _thread_detail()
+        self.thread_detail = _thread_detail(context)
 
     def get_thread(self, thread_id: str) -> DashboardThreadDetail:
         assert thread_id == "thread-1"
@@ -236,8 +267,17 @@ class _Query:
 class _Lifecycle:
     def __init__(self) -> None:
         self.replay_result: InvestigationOperationResult | None = None
+        self.continue_replay_result: InvestigationOperationResult | None = None
+        self.start_requests: list[StartInvestigationRequest] = []
         self.replay_requests: list[ResumeInvestigationRequest] = []
         self.response_requests: list[ResumeInvestigationRequest] = []
+        self.continue_requests: list[ContinueInvestigationRequest] = []
+
+    def start_investigation(
+        self, request: StartInvestigationRequest
+    ) -> InvestigationOperationResult:
+        self.start_requests.append(request)
+        return _operation_result(request.request_id, "thread-started")
 
     def replay_resume_investigation(
         self,
@@ -252,6 +292,17 @@ class _Lifecycle:
     ) -> InvestigationOperationResult:
         self.response_requests.append(request)
         return _operation_result(request.request_id)
+
+    def replay_continue_investigation(
+        self, request: ContinueInvestigationRequest
+    ) -> InvestigationOperationResult | None:
+        return self.continue_replay_result
+
+    def continue_investigation(
+        self, request: ContinueInvestigationRequest
+    ) -> InvestigationOperationResult:
+        self.continue_requests.append(request)
+        return _operation_result(request.request_id, request.thread_id)
 
 
 def test_human_response_is_bound_to_interrupt_action_and_idempotent_replay(
@@ -301,6 +352,94 @@ def test_human_response_is_bound_to_interrupt_action_and_idempotent_replay(
     with pytest.raises(DashboardCommandConflictError, match="not allowed"):
         service.respond_to_review("thread-1", disallowed)
     assert len(lifecycle.response_requests) == 1
+
+
+def test_goal_resume_and_follow_up_are_bound_to_repository_snapshot(
+    tmp_path: Path,
+) -> None:
+    _, context = _create_repository(tmp_path)
+    query = _Query(context)
+    lifecycle = _Lifecycle()
+    service = DashboardCommandService(query, lifecycle_service=lifecycle)
+
+    started = service.start_investigation(
+        DashboardStartCommand(
+            request_id="dashboard-start-1",
+            goal="Trace authentication.",
+            focus_path="src/api.py",
+            memory_retrieval_enabled=True,
+        )
+    )
+    assert started.thread_id == "thread-started"
+    start_request = lifecycle.start_requests[0]
+    assert start_request.repo_path == context.repository_root
+    assert start_request.objective.endswith("Focus this investigation on `src/api.py`.")
+    assert start_request.memory_retrieval_enabled is True
+
+    query.thread_detail = query.thread_detail.model_copy(
+        update={
+            "thread": query.thread_detail.thread.model_copy(
+                update={
+                    "execution_state": ThreadExecutionState.RESUMABLE,
+                    "next_nodes": ("agent",),
+                    "pending_review": None,
+                    "interrupt_id": None,
+                }
+            )
+        }
+    )
+    service.resume_thread(
+        "thread-1",
+        DashboardResumeCommand(
+            request_id="dashboard-resume-1",
+            expected_repository_id=context.repository_id,
+            expected_commit_sha=context.commit_sha,
+        ),
+    )
+    assert lifecycle.response_requests[-1].decision is None
+
+    query.thread_detail = query.thread_detail.model_copy(
+        update={
+            "thread": query.thread_detail.thread.model_copy(
+                update={
+                    "execution_state": ThreadExecutionState.COMPLETED,
+                    "next_nodes": (),
+                }
+            )
+        }
+    )
+    service.continue_thread(
+        "thread-1",
+        DashboardContinueCommand(
+            request_id="dashboard-continue-1",
+            prompt="Now trace rejection.",
+            focus_path="src",
+            expected_repository_id=context.repository_id,
+            expected_commit_sha=context.commit_sha,
+        ),
+    )
+    assert lifecycle.continue_requests[0].prompt.endswith(
+        "Focus this investigation on `src`."
+    )
+
+    with pytest.raises(DashboardCommandConflictError, match="stale"):
+        service.continue_thread(
+            "thread-1",
+            DashboardContinueCommand(
+                request_id="dashboard-continue-stale",
+                prompt="Use stale code.",
+                expected_repository_id="f" * 64,
+                expected_commit_sha=context.commit_sha,
+            ),
+        )
+    with pytest.raises(DashboardCommandConflictError, match="escapes"):
+        service.start_investigation(
+            DashboardStartCommand(
+                request_id="dashboard-start-escape",
+                goal="Escape.",
+                focus_path="../outside",
+            )
+        )
 
 
 def test_disabled_lifecycle_command_fails_closed(tmp_path: Path) -> None:

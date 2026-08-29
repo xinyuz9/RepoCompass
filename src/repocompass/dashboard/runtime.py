@@ -112,8 +112,8 @@ def create_parser() -> argparse.ArgumentParser:
         "--enable-lifecycle-mutations",
         action="store_true",
         help=(
-            "load configured workflow models and expose only pending-review "
-            "approve/revise/cancel responses"
+            "load configured workflow models and expose idempotent start, "
+            "resume, follow-up, and pending-review commands"
         ),
     )
     parser.add_argument(

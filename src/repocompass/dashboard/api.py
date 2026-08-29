@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from repocompass.dashboard.contracts import (
     DashboardEventStreamCursor,
+    DashboardContinueCommand,
     DashboardHumanResponseCommand,
     DashboardMemoryAudit,
     DashboardMemoryCatalog,
@@ -24,6 +25,8 @@ from repocompass.dashboard.contracts import (
     DashboardMemoryDeleteResult,
     DashboardProblemDetail,
     DashboardRunDetail,
+    DashboardStartCommand,
+    DashboardResumeCommand,
     DashboardSystemInfo,
     DashboardThreadCatalog,
     DashboardThreadDetail,
@@ -85,6 +88,18 @@ class DashboardReadService(Protocol):
 
 
 class DashboardMutationService(Protocol):
+    def start_investigation(
+        self, command: DashboardStartCommand
+    ) -> InvestigationOperationResult: ...
+
+    def resume_thread(
+        self, thread_id: str, command: DashboardResumeCommand
+    ) -> InvestigationOperationResult: ...
+
+    def continue_thread(
+        self, thread_id: str, command: DashboardContinueCommand
+    ) -> InvestigationOperationResult: ...
+
     @property
     def lifecycle_mutations_enabled(self) -> bool: ...
 
@@ -130,7 +145,13 @@ def create_dashboard_app(
         ):
             raise ValueError("dashboard capabilities require a command service")
     else:
-        command_methods = ("respond_to_review", "delete_memory")
+        command_methods = (
+            "start_investigation",
+            "resume_thread",
+            "continue_thread",
+            "respond_to_review",
+            "delete_memory",
+        )
         if not all(callable(getattr(commands, name, None)) for name in command_methods):
             raise TypeError(
                 "commands does not implement the dashboard mutation boundary"
@@ -412,6 +433,71 @@ def create_dashboard_app(
 
     if commands is not None and commands.lifecycle_mutations_enabled:
 
+        def _require_idempotency(command_request_id: str, header: str) -> None:
+            if header != command_request_id:
+                raise DashboardCommandConflictError(
+                    "idempotency header does not match command"
+                )
+
+        @app.post(
+            f"{DASHBOARD_API_PREFIX}/investigations",
+            response_model=InvestigationOperationResult,
+        )
+        def start_investigation(
+            command: DashboardStartCommand,
+            idempotency_key: Annotated[
+                str,
+                Header(
+                    alias="Idempotency-Key",
+                    pattern=REQUEST_ID_PATTERN,
+                    min_length=1,
+                    max_length=128,
+                ),
+            ],
+        ) -> InvestigationOperationResult:
+            _require_idempotency(command.request_id, idempotency_key)
+            return commands.start_investigation(command)
+
+        @app.post(
+            f"{DASHBOARD_API_PREFIX}/threads/{{thread_id}}/resume",
+            response_model=InvestigationOperationResult,
+        )
+        def resume_thread(
+            thread_id: str,
+            command: DashboardResumeCommand,
+            idempotency_key: Annotated[
+                str,
+                Header(
+                    alias="Idempotency-Key",
+                    pattern=REQUEST_ID_PATTERN,
+                    min_length=1,
+                    max_length=128,
+                ),
+            ],
+        ) -> InvestigationOperationResult:
+            _require_idempotency(command.request_id, idempotency_key)
+            return commands.resume_thread(thread_id, command)
+
+        @app.post(
+            f"{DASHBOARD_API_PREFIX}/threads/{{thread_id}}/turns",
+            response_model=InvestigationOperationResult,
+        )
+        def continue_thread(
+            thread_id: str,
+            command: DashboardContinueCommand,
+            idempotency_key: Annotated[
+                str,
+                Header(
+                    alias="Idempotency-Key",
+                    pattern=REQUEST_ID_PATTERN,
+                    min_length=1,
+                    max_length=128,
+                ),
+            ],
+        ) -> InvestigationOperationResult:
+            _require_idempotency(command.request_id, idempotency_key)
+            return commands.continue_thread(thread_id, command)
+
         @app.post(
             f"{DASHBOARD_API_PREFIX}/threads/{{thread_id}}/responses",
             response_model=InvestigationOperationResult,
@@ -429,10 +515,7 @@ def create_dashboard_app(
                 ),
             ],
         ) -> InvestigationOperationResult:
-            if idempotency_key != command.request_id:
-                raise DashboardCommandConflictError(
-                    "idempotency header does not match command"
-                )
+            _require_idempotency(command.request_id, idempotency_key)
             return commands.respond_to_review(thread_id, command)
 
     if commands is not None and commands.memory_mutations_enabled:

@@ -1,5 +1,6 @@
 """Unit tests for Runner orchestration and domain-trace collection."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -14,6 +15,7 @@ from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, ResumeRequest, RunRequest
 from repocompass.agent.thread_view import ThreadExecutionState
 from repocompass.agent.trace import TraceEventKind
+from repocompass.storage.raw_store import open_raw_run_store
 from repocompass.tools.contracts import ToolDecisionReason
 from tests.model_doubles import candidate_from_final_result, with_scripted_planner
 
@@ -352,6 +354,63 @@ def test_runner_records_tool_loop_updates_without_extra_event_kinds(
     assert outcome.no_progress_decision.reason.value == "progress_observed"
     assert outcome.consecutive_no_progress_rounds == 0
     assert "unregistered type" not in caplog.text.casefold()
+
+
+def test_runner_rejects_resume_after_repository_commit_changes(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "tests@example.com"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "RepoCompass Tests"],
+        cwd=tmp_path,
+        check=True,
+    )
+    source = tmp_path / "example.py"
+    source.write_text("value = True\n", encoding="utf-8")
+    subprocess.run(["git", "add", "example.py"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "commit", "--quiet", "-m", "initial"],
+        cwd=tmp_path,
+        check=True,
+    )
+    final_result = FinalResult(
+        relevant_files=["example.py"],
+        evidence=["example.py contains the relevant implementation."],
+        summary="The implementation is in example.py.",
+        unresolved_questions=[],
+    )
+    model = _create_scripted_model(
+        [AIMessage(content="Enough evidence is available.")],
+        final_result,
+    )
+    with open_raw_run_store(tmp_path / "raw.sqlite") as raw_store:
+        runner = AgentRunner(
+            with_scripted_planner(model),
+            checkpointer=InMemorySaver(),
+            raw_run_store=raw_store,
+            run_id_factory=lambda: "snapshot-start",
+            thread_id_factory=lambda: "snapshot-thread",
+        )
+        outcome = runner.run(
+            RunRequest(
+                repo_path=tmp_path,
+                objective="Inspect the repository.",
+                max_tool_calls_per_step=2,
+                max_explorer_calls_per_step=2,
+            )
+        )
+        source.write_text("value = False\n", encoding="utf-8")
+        subprocess.run(["git", "add", "example.py"], cwd=tmp_path, check=True)
+        subprocess.run(
+            ["git", "commit", "--quiet", "-m", "changed"],
+            cwd=tmp_path,
+            check=True,
+        )
+        with pytest.raises(ValueError, match="snapshot changed"):
+            runner.resume(ResumeRequest(thread_id=outcome.thread_id))
 
 
 def test_runner_preserves_step_explorer_budget_step_stop_reason(

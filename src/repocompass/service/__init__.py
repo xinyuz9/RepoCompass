@@ -3,6 +3,7 @@
 from repocompass.service.contracts import (
     ArtifactAvailability,
     CodeGraphView,
+    ContinueInvestigationRequest,
     ContextPackView,
     EvaluatorReportView,
     ExpandedSymbolView,
@@ -35,6 +36,7 @@ from repocompass.service.operation_store import (
 __all__ = [
     "ArtifactAvailability",
     "CodeGraphView",
+    "ContinueInvestigationRequest",
     "ContextPackView",
     "EvaluatorReportView",
     "ExpandSymbolRequest",

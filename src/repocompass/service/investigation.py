@@ -10,7 +10,7 @@ from threading import RLock
 from typing import Protocol
 from uuid import uuid4
 
-from repocompass.agent.lifecycle import HumanResponseRequest
+from repocompass.agent.lifecycle import ContinueRequest, HumanResponseRequest
 from repocompass.agent.runner import (
     ResumeRequest,
     RunOutcome,
@@ -25,6 +25,7 @@ from repocompass.structure.evidence_graph import EvidenceNodeKind
 from repocompass.service.contracts import (
     ArtifactAvailability,
     CodeGraphView,
+    ContinueInvestigationRequest,
     ContextPackView,
     EvaluatorReportView,
     ExpandedSymbolView,
@@ -78,6 +79,8 @@ class InvestigationRunner(Protocol):
 
     def respond(self, request: HumanResponseRequest) -> RunOutcome: ...
 
+    def continue_thread(self, request: ContinueRequest) -> RunOutcome: ...
+
     def inspect_thread(self, request: ResumeRequest) -> ThreadInvestigationView: ...
 
 
@@ -95,7 +98,13 @@ class InvestigationService:
     ) -> None:
         if not all(
             callable(getattr(runner, method, None))
-            for method in ("run", "resume", "respond", "inspect_thread")
+            for method in (
+                "run",
+                "resume",
+                "respond",
+                "continue_thread",
+                "inspect_thread",
+            )
         ):
             raise TypeError("runner does not implement the investigation boundary")
         if not isinstance(operation_store, ServiceOperationStore):
@@ -119,13 +128,21 @@ class InvestigationService:
 
     @staticmethod
     def request_digest(
-        request: StartInvestigationRequest | ResumeInvestigationRequest,
+        request: (
+            StartInvestigationRequest
+            | ResumeInvestigationRequest
+            | ContinueInvestigationRequest
+        ),
     ) -> str:
         """Return the canonical payload digest excluding its idempotency key."""
 
         if not isinstance(
             request,
-            (StartInvestigationRequest, ResumeInvestigationRequest),
+            (
+                StartInvestigationRequest,
+                ResumeInvestigationRequest,
+                ContinueInvestigationRequest,
+            ),
         ):
             raise TypeError("request is not a lifecycle service contract")
         payload = request.model_dump(
@@ -251,6 +268,64 @@ class InvestigationService:
                         decision=request.decision,
                     )
                 )
+            return self._complete_outcome(
+                request_id=request.request_id,
+                request_digest=digest,
+                outcome=outcome,
+            )
+
+    def replay_continue_investigation(
+        self,
+        request: ContinueInvestigationRequest,
+    ) -> InvestigationOperationResult | None:
+        """Return an exact existing follow-up result without reserving a key."""
+
+        if not isinstance(request, ContinueInvestigationRequest):
+            raise TypeError("request must be a ContinueInvestigationRequest")
+        digest = self.request_digest(request)
+        with self._mutation_lock:
+            reservation = self._operation_store.lookup(
+                request_id=request.request_id,
+                request_digest=digest,
+                kind=request.operation_kind,
+                thread_id=request.thread_id,
+            )
+            if reservation is None:
+                return None
+            return self._resolve_existing_reservation(
+                reservation=reservation,
+                request_digest=digest,
+            )
+
+    def continue_investigation(
+        self,
+        request: ContinueInvestigationRequest,
+    ) -> InvestigationOperationResult:
+        """Start one new Human turn on a completed checkpoint thread."""
+
+        if not isinstance(request, ContinueInvestigationRequest):
+            raise TypeError("request must be a ContinueInvestigationRequest")
+        digest = self.request_digest(request)
+        with self._mutation_lock:
+            reservation = self._operation_store.reserve(
+                request_id=request.request_id,
+                request_digest=digest,
+                kind=request.operation_kind,
+                proposed_thread_id=request.thread_id,
+            )
+            replay = self._resolve_existing_reservation(
+                reservation=reservation,
+                request_digest=digest,
+            )
+            if replay is not None:
+                return replay
+
+            outcome = self._runner.continue_thread(
+                ContinueRequest(
+                    thread_id=reservation.thread_id,
+                    prompt=request.prompt,
+                )
+            )
             return self._complete_outcome(
                 request_id=request.request_id,
                 request_digest=digest,

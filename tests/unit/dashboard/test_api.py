@@ -12,11 +12,14 @@ from repocompass.agent.trace import TraceEventKind
 from repocompass.dashboard.api import create_dashboard_app
 from repocompass.dashboard.contracts import (
     DashboardAvailability,
+    DashboardContinueCommand,
     DashboardHumanResponseCommand,
     DashboardMemoryCatalog,
     DashboardMemoryDeleteCommand,
     DashboardMemoryDeleteResult,
     DashboardRunDetail,
+    DashboardResumeCommand,
+    DashboardStartCommand,
     DashboardSystemInfo,
     DashboardThreadCatalog,
     PublicTraceEvent,
@@ -111,6 +114,8 @@ class _FakeDashboardService:
             product_version="0.1.0",
             repository_id="a" * 64,
             commit_sha="b" * 40,
+            workspace_name="repository",
+            memory_available=True,
             pricing_configured=False,
             lifecycle_mutations_enabled=self.lifecycle_mutations_enabled,
             memory_mutations_enabled=self.memory_mutations_enabled,
@@ -154,8 +159,46 @@ class _FakeDashboardCommands:
     memory_mutations_enabled = True
 
     def __init__(self) -> None:
+        self.start_calls: list[DashboardStartCommand] = []
+        self.resume_calls: list[tuple[str, DashboardResumeCommand]] = []
+        self.continue_calls: list[tuple[str, DashboardContinueCommand]] = []
         self.response_calls: list[tuple[str, DashboardHumanResponseCommand]] = []
         self.delete_calls: list[tuple[str, DashboardMemoryDeleteCommand]] = []
+
+    def _result(self, request_id: str, thread_id: str) -> InvestigationOperationResult:
+        return InvestigationOperationResult(
+            request_id=request_id,
+            thread_id=thread_id,
+            execution_state=ThreadExecutionState.RESUMABLE,
+            run_id="lifecycle-run",
+            termination_status=None,
+            step_stop_reason=None,
+            next_nodes=("agent",),
+            final_result=None,
+            pending_review=None,
+            interrupt_id=None,
+            usage_cost_report=None,
+            idempotent_replay=False,
+            recovered_from_checkpoint=False,
+        )
+
+    def start_investigation(
+        self, command: DashboardStartCommand
+    ) -> InvestigationOperationResult:
+        self.start_calls.append(command)
+        return self._result(command.request_id, "thread-started")
+
+    def resume_thread(
+        self, thread_id: str, command: DashboardResumeCommand
+    ) -> InvestigationOperationResult:
+        self.resume_calls.append((thread_id, command))
+        return self._result(command.request_id, thread_id)
+
+    def continue_thread(
+        self, thread_id: str, command: DashboardContinueCommand
+    ) -> InvestigationOperationResult:
+        self.continue_calls.append((thread_id, command))
+        return self._result(command.request_id, thread_id)
 
     def respond_to_review(
         self,
@@ -381,6 +424,46 @@ def test_explicit_mutations_require_idempotency_and_same_origin() -> None:
     assert accepted.json()["request_id"] == "review-command-1"
     assert len(commands.response_calls) == 1
 
+    snapshot = {
+        "expected_repository_id": "a" * 64,
+        "expected_commit_sha": "b" * 40,
+    }
+    started = client.post(
+        "/api/v1/investigations",
+        json={
+            "schema_version": 1,
+            "request_id": "start-command-1",
+            "goal": "Trace authentication.",
+            "focus_path": ".",
+            "human_review_policy": "before_finalize",
+            "memory_retrieval_enabled": True,
+            "max_attempt_cost_usd": None,
+        },
+        headers={"Idempotency-Key": "start-command-1"},
+    )
+    resumed = client.post(
+        "/api/v1/threads/thread-1/resume",
+        json={"schema_version": 1, "request_id": "resume-command-1", **snapshot},
+        headers={"Idempotency-Key": "resume-command-1"},
+    )
+    continued = client.post(
+        "/api/v1/threads/thread-1/turns",
+        json={
+            "schema_version": 1,
+            "request_id": "continue-command-1",
+            "prompt": "Trace rejection.",
+            "focus_path": "src",
+            **snapshot,
+        },
+        headers={"Idempotency-Key": "continue-command-1"},
+    )
+    assert started.status_code == 200
+    assert resumed.status_code == 200
+    assert continued.status_code == 200
+    assert len(commands.start_calls) == 1
+    assert len(commands.resume_calls) == 1
+    assert len(commands.continue_calls) == 1
+
     memory_id = "d" * 64
     memory_request_id = f"memory-delete:{memory_id}"
     deleted = client.request(
@@ -397,6 +480,9 @@ def test_explicit_mutations_require_idempotency_and_same_origin() -> None:
     assert len(commands.delete_calls) == 1
 
     document = client.get("/api/v1/openapi.json").json()
+    assert set(document["paths"]["/api/v1/investigations"]) == {"post"}
+    assert set(document["paths"]["/api/v1/threads/{thread_id}/resume"]) == {"post"}
+    assert set(document["paths"]["/api/v1/threads/{thread_id}/turns"]) == {"post"}
     assert set(document["paths"]["/api/v1/threads/{thread_id}/responses"]) == {"post"}
     assert set(document["paths"]["/api/v1/memory/{memory_id}"]) == {"delete"}
     serialized = str(document)

@@ -737,6 +737,7 @@ class AgentRunner:
             raise TypeError("episode_clock_factory must be callable")
         self._memory_store = memory_store
         self._episode_clock_factory = episode_clock_factory
+        self._raw_run_store = raw_run_store
         self._raw_run_recorder = (
             None
             if raw_run_store is None
@@ -874,6 +875,7 @@ class AgentRunner:
 
         if not snapshot.values:
             raise ValueError(f"Checkpoint thread does not exist: {thread_id}")
+        self._require_current_repository_snapshot(snapshot, thread_id=thread_id)
 
         return self._execute_graph(
             graph,
@@ -898,6 +900,7 @@ class AgentRunner:
         snapshot = graph.get_state(config)
         if not snapshot.values:
             raise ValueError(f"Checkpoint thread does not exist: {thread_id}")
+        self._require_current_repository_snapshot(snapshot, thread_id=thread_id)
         if not snapshot.interrupts:
             raise ValueError(
                 f"Checkpoint thread is not awaiting a Human response: {thread_id}"
@@ -955,6 +958,7 @@ class AgentRunner:
             raise ValueError(f"Checkpoint thread does not exist: {thread_id}")
         if snapshot.next or snapshot.interrupts:
             raise ValueError(f"Checkpoint thread is not completed: {thread_id}")
+        self._require_current_repository_snapshot(snapshot, thread_id=thread_id)
 
         continuation_update = create_continuation_update(
             snapshot.values,
@@ -971,6 +975,33 @@ class AgentRunner:
             thread_id=thread_id,
             execution_mode="continue",
         )
+
+    def _require_current_repository_snapshot(
+        self,
+        snapshot: StateSnapshot,
+        *,
+        thread_id: str,
+    ) -> None:
+        """Reject lifecycle execution when checkpoint evidence targets old code."""
+
+        store = self._raw_run_store
+        if store is None:
+            return
+        repo_path = snapshot.values.get("repo_path")
+        if not isinstance(repo_path, Path):
+            raise ValueError("Checkpoint repository provenance is unavailable")
+        attempts = store.list_attempts(max_results=1, thread_id=thread_id)
+        if not attempts:
+            raise ValueError("Checkpoint repository provenance is unavailable")
+        latest = attempts[0]
+        current = ToolExecutionContext(repo_path)
+        if (
+            latest.repository_id != current.repository_id
+            or latest.commit_sha != current.commit_sha
+        ):
+            raise ValueError(
+                "Checkpoint repository snapshot changed; start a new investigation"
+            )
 
     def _execute_graph(
         self,

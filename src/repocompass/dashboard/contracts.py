@@ -8,10 +8,13 @@ from typing import Literal
 from pydantic import ConfigDict, Field, JsonValue, field_validator, model_validator
 
 from repocompass.agent.context import ContextPack
-from repocompass.agent.cost import AttemptUsageCostReport
+from repocompass.agent.cost import (
+    AttemptUsageCostReport,
+    validate_cost_budget_usd,
+)
 from repocompass.agent.domain_model import CheckpointSafeModel
 from repocompass.agent.evaluation import EvaluationReport
-from repocompass.agent.lifecycle import HumanDecision
+from repocompass.agent.lifecycle import HumanDecision, HumanReviewPolicy
 from repocompass.agent.planning import InvestigationPlan
 from repocompass.agent.routing import TerminationStatus
 from repocompass.agent.thread_view import (
@@ -63,6 +66,9 @@ class DashboardSystemInfo(_DashboardModel):
     product_version: str = Field(pattern=IDENTIFIER_PATTERN)
     repository_id: Sha256Digest
     commit_sha: CommitSha | None = None
+    workspace_name: str = Field(min_length=1, max_length=256)
+    workspace_path: Literal["."] = "."
+    memory_available: bool
     pricing_configured: bool
     lifecycle_mutations_enabled: bool
     memory_mutations_enabled: bool
@@ -184,6 +190,58 @@ class DashboardProblemDetail(_DashboardModel):
     status: int = Field(ge=400, le=599)
     detail: str = Field(min_length=1, max_length=1_024)
     instance: str = Field(min_length=1, max_length=2_048)
+
+
+class DashboardStartCommand(_DashboardModel):
+    """Start one goal inside the repository selected by the server operator."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    request_id: str = Field(pattern=REQUEST_ID_PATTERN)
+    goal: str = Field(min_length=1, max_length=16_384)
+    focus_path: str = Field(default=".", min_length=1, max_length=2_048)
+    human_review_policy: HumanReviewPolicy = HumanReviewPolicy.BEFORE_FINALIZE
+    memory_retrieval_enabled: bool = True
+    max_attempt_cost_usd: str | None = None
+
+    @field_validator("human_review_policy", mode="before")
+    @classmethod
+    def decode_json_review_policy(cls, value: object) -> HumanReviewPolicy:
+        if isinstance(value, HumanReviewPolicy):
+            return value
+        try:
+            return HumanReviewPolicy(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError("human review policy is invalid") from error
+
+    @field_validator("max_attempt_cost_usd", mode="before")
+    @classmethod
+    def require_canonical_cost_budget(cls, value: object) -> object:
+        if value is None:
+            return None
+        try:
+            return validate_cost_budget_usd(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(str(error)) from error
+
+
+class DashboardResumeCommand(_DashboardModel):
+    """Resume pending graph work against the exact visible repository snapshot."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    request_id: str = Field(pattern=REQUEST_ID_PATTERN)
+    expected_repository_id: Sha256Digest
+    expected_commit_sha: CommitSha | None = None
+
+
+class DashboardContinueCommand(_DashboardModel):
+    """Submit a new Human turn to one completed investigation."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    request_id: str = Field(pattern=REQUEST_ID_PATTERN)
+    prompt: str = Field(min_length=1, max_length=16_384)
+    focus_path: str = Field(default=".", min_length=1, max_length=2_048)
+    expected_repository_id: Sha256Digest
+    expected_commit_sha: CommitSha | None = None
 
 
 class DashboardHumanResponseCommand(_DashboardModel):

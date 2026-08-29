@@ -24,6 +24,7 @@ from repocompass.agent.trace import RunTrace
 from repocompass.agent.trace_sink import JsonlTraceSink
 from repocompass.service.contracts import (
     ArtifactAvailability,
+    ContinueInvestigationRequest,
     ExpandSymbolRequest,
     ResumeInvestigationRequest,
     StartInvestigationRequest,
@@ -80,6 +81,7 @@ class _FakeRunner:
         self.run_requests = []
         self.resume_requests = []
         self.response_requests = []
+        self.continue_requests = []
         self.views = {"thread-1": _completed_view()}
 
     def run(self, request):
@@ -115,6 +117,18 @@ class _FakeRunner:
             termination_status="accepted",
             step_stop_reason=None,
             trace=RunTrace("respond-run"),
+        )
+
+    def continue_thread(self, request):
+        self.continue_requests.append(request)
+        result = _final_result()
+        self.views[request.thread_id] = _completed_view(request.thread_id)
+        return RunOutcome(
+            thread_id=request.thread_id,
+            final_result=result,
+            termination_status="accepted",
+            step_stop_reason=None,
+            trace=RunTrace("continue-run"),
         )
 
     def inspect_thread(self, request):
@@ -292,6 +306,29 @@ def test_resume_replay_lookup_never_reserves_and_executes_once() -> None:
     )
     with pytest.raises(ServiceOperationConflictError, match="different payload"):
         service.replay_resume_investigation(changed)
+
+
+def test_continue_is_durably_idempotent_and_preserves_follow_up_prompt() -> None:
+    runner = _FakeRunner()
+    service = _service(runner)
+    request = ContinueInvestigationRequest(
+        request_id="continue-1",
+        thread_id="thread-1",
+        prompt="Now trace the failure path.",
+    )
+
+    assert service.replay_continue_investigation(request) is None
+    first = service.continue_investigation(request)
+    replay = service.continue_investigation(request)
+
+    assert first.run_id == "continue-run"
+    assert replay.idempotent_replay is True
+    assert len(runner.continue_requests) == 1
+    assert runner.continue_requests[0].prompt == "Now trace the failure path."
+
+    changed = request.model_copy(update={"prompt": "Different follow-up."})
+    with pytest.raises(ServiceOperationConflictError, match="different payload"):
+        service.continue_investigation(changed)
 
 
 def test_high_level_getters_never_offer_internal_repository_tools() -> None:
