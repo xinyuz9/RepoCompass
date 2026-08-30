@@ -38,7 +38,7 @@ def _result(request_id: str = "request-1") -> InvestigationOperationResult:
 
 def test_operation_store_reserves_completes_and_replays() -> None:
     connection = sqlite3.connect(":memory:", check_same_thread=False)
-    store = ServiceOperationStore(connection)
+    store = ServiceOperationStore(connection, clock_ms=lambda: 1_234)
 
     reserved = store.reserve(
         request_id="request-1",
@@ -54,8 +54,10 @@ def test_operation_store_reserves_completes_and_replays() -> None:
     )
 
     assert reserved.state is OperationReservationState.NEW
+    assert reserved.reserved_at_ms == 1_234
     assert pending.state is OperationReservationState.PENDING
     assert pending.thread_id == "thread-1"
+    assert pending.reserved_at_ms == 1_234
     assert pending.response is None
 
     assert (
@@ -83,7 +85,35 @@ def test_operation_store_reserves_completes_and_replays() -> None:
     )
     assert replay.state is OperationReservationState.COMPLETED
     assert replay.response == _result()
-    assert store.schema_version == 1
+    assert replay.reserved_at_ms == 1_234
+    assert store.schema_version == 2
+
+
+def test_operation_store_get_is_read_only_and_hides_missing_requests() -> None:
+    store = ServiceOperationStore(sqlite3.connect(":memory:"), clock_ms=lambda: 2_000)
+
+    assert store.get("request-missing") is None
+    store.reserve(
+        request_id="request-1",
+        request_digest="a" * 64,
+        kind=InvestigationOperationKind.START,
+        proposed_thread_id="thread-1",
+    )
+    pending = store.get("request-1")
+    assert pending is not None
+    assert pending.state is OperationReservationState.PENDING
+    assert pending.reserved_at_ms == 2_000
+    assert pending.response is None
+
+    store.complete(
+        request_id="request-1",
+        request_digest="a" * 64,
+        response=_result(),
+    )
+    completed = store.get("request-1")
+    assert completed is not None
+    assert completed.state is OperationReservationState.COMPLETED
+    assert completed.response == _result()
 
 
 def test_operation_store_rejects_request_id_reuse_with_changed_payload() -> None:
@@ -221,3 +251,35 @@ def test_operation_store_replays_after_sqlite_reopen(tmp_path: Path) -> None:
     assert replay.state is OperationReservationState.COMPLETED
     assert replay.thread_id == "thread-1"
     assert replay.response == _result()
+
+
+def test_operation_store_migrates_v1_reservations_with_safe_epoch() -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.execute(
+        """
+        CREATE TABLE service_operations (
+            request_id TEXT PRIMARY KEY NOT NULL,
+            request_digest TEXT NOT NULL,
+            operation_kind TEXT NOT NULL,
+            thread_id TEXT NOT NULL,
+            response_json TEXT
+        ) STRICT
+        """
+    )
+    connection.execute(
+        "INSERT INTO service_operations VALUES (?, ?, ?, ?, NULL)",
+        ("request-legacy", "a" * 64, "start", "thread-legacy"),
+    )
+    connection.execute("PRAGMA user_version = 1")
+    connection.commit()
+
+    store = ServiceOperationStore(connection, clock_ms=lambda: 9_999)
+    migrated = store.get("request-legacy")
+
+    assert store.schema_version == 2
+    assert migrated is not None
+    assert migrated.reserved_at_ms == 0
+    columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(service_operations)")
+    }
+    assert "reserved_at_ms" in columns

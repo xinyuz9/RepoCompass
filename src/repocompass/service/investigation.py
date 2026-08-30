@@ -32,6 +32,8 @@ from repocompass.service.contracts import (
     ExpandSymbolRequest,
     InvestigationOperationKind,
     InvestigationOperationResult,
+    InvestigationOperationSnapshot,
+    InvestigationOperationState,
     LocalizationResultPayload,
     LocalizationResultView,
     ResumeInvestigationRequest,
@@ -157,6 +159,26 @@ class InvestigationService:
             separators=(",", ":"),
         ).encode("utf-8")
         return hashlib.sha256(b"repocompass:service-request:v1\0" + encoded).hexdigest()
+
+    def get_operation(self, request_id: str) -> InvestigationOperationSnapshot | None:
+        """Return one durable lifecycle request without exposing its payload digest."""
+
+        reservation = self._operation_store.get(request_id)
+        if reservation is None:
+            return None
+        completed = reservation.state is OperationReservationState.COMPLETED
+        return InvestigationOperationSnapshot(
+            request_id=reservation.request_id,
+            kind=reservation.kind,
+            thread_id=reservation.thread_id,
+            state=(
+                InvestigationOperationState.COMPLETED
+                if completed
+                else InvestigationOperationState.PENDING
+            ),
+            reserved_at_ms=reservation.reserved_at_ms,
+            result=reservation.response,
+        )
 
     def start_investigation(
         self,

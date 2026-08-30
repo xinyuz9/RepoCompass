@@ -34,7 +34,12 @@ from repocompass.dashboard.contracts import (
 from repocompass.dashboard.trace_store import JsonlTraceStore, TraceStoreError
 from repocompass.memory.contracts import MemoryScope
 from repocompass.memory.store import MemoryStore
-from repocompass.storage.raw_store import RawRunAttempt, RawRunStore
+from repocompass.service.contracts import InvestigationOperationKind
+from repocompass.storage.raw_store import (
+    AttemptExecutionMode,
+    RawRunAttempt,
+    RawRunStore,
+)
 from repocompass.tools.contracts import IDENTIFIER_PATTERN, SHA256_PATTERN
 from repocompass.tools.gateway import ToolExecutionContext
 
@@ -292,6 +297,46 @@ class DashboardQueryService:
                 else DashboardAvailability.NOT_CONFIGURED
             ),
             usage_cost_report=report,
+        )
+
+    def find_lifecycle_attempt(
+        self,
+        *,
+        thread_id: str,
+        kind: InvestigationOperationKind,
+        reserved_at_ms: int,
+        run_id: str | None,
+    ) -> RawRunAttempt | None:
+        """Find only the attempt attributable to one durable operation window."""
+
+        normalized_thread_id = _validate_identifier(thread_id, name="thread_id")
+        if not isinstance(kind, InvestigationOperationKind):
+            raise TypeError("kind must be an InvestigationOperationKind")
+        if (
+            type(reserved_at_ms) is not int
+            or not 0 <= reserved_at_ms <= 9_007_199_254_740_991
+        ):
+            raise ValueError("reserved_at_ms is invalid")
+        expected_mode = AttemptExecutionMode(kind.value)
+        if run_id is not None:
+            normalized_run_id = _validate_identifier(run_id, name="run_id")
+            loaded = self._raw_run_store.get_attempt(normalized_run_id)
+            attempts = () if loaded is None else (loaded,)
+        else:
+            attempts = self._raw_run_store.list_attempts(
+                max_results=_MAX_THREAD_ATTEMPTS,
+                thread_id=normalized_thread_id,
+            )
+        return next(
+            (
+                attempt
+                for attempt in attempts
+                if attempt.thread_id == normalized_thread_id
+                and attempt.repository_id == self._context.repository_id
+                and attempt.execution_mode is expected_mode
+                and attempt.started_at_ms >= reserved_at_ms
+            ),
+            None,
         )
 
     def list_memory(

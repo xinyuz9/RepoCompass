@@ -26,6 +26,7 @@ from repocompass.service.contracts import (
     ArtifactAvailability,
     ContinueInvestigationRequest,
     ExpandSymbolRequest,
+    InvestigationOperationState,
     ResumeInvestigationRequest,
     StartInvestigationRequest,
     ThreadArtifactRequest,
@@ -170,12 +171,18 @@ def test_start_is_durably_idempotent_and_preserves_all_budgets(tmp_path: Path) -
 
     first = service.start_investigation(request)
     replay = service.start_investigation(request)
+    operation = service.get_operation(request.request_id)
 
     assert first.thread_id == "thread-generated"
     assert first.run_id == "run-1"
     assert first.idempotent_replay is False
     assert replay.idempotent_replay is True
     assert replay.model_copy(update={"idempotent_replay": False}) == first
+    assert operation is not None
+    assert operation.state is InvestigationOperationState.COMPLETED
+    assert operation.thread_id == first.thread_id
+    assert operation.result == first
+    assert service.get_operation("missing-request") is None
     assert len(runner.run_requests) == 1
     run_request = runner.run_requests[0]
     assert run_request.thread_id == "thread-generated"

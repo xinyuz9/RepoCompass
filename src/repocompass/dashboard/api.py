@@ -19,6 +19,7 @@ from repocompass.dashboard.contracts import (
     DashboardEventStreamCursor,
     DashboardContinueCommand,
     DashboardHumanResponseCommand,
+    DashboardLifecycleOperationStatus,
     DashboardMemoryAudit,
     DashboardMemoryCatalog,
     DashboardMemoryDeleteCommand,
@@ -88,6 +89,8 @@ class DashboardReadService(Protocol):
 
 
 class DashboardMutationService(Protocol):
+    def get_operation(self, request_id: str) -> DashboardLifecycleOperationStatus: ...
+
     def start_investigation(
         self, command: DashboardStartCommand
     ) -> InvestigationOperationResult: ...
@@ -146,6 +149,7 @@ def create_dashboard_app(
             raise ValueError("dashboard capabilities require a command service")
     else:
         command_methods = (
+            "get_operation",
             "start_investigation",
             "resume_thread",
             "continue_thread",
@@ -438,6 +442,13 @@ def create_dashboard_app(
                 raise DashboardCommandConflictError(
                     "idempotency header does not match command"
                 )
+
+        @app.get(
+            f"{DASHBOARD_API_PREFIX}/operations/{{request_id}}",
+            response_model=DashboardLifecycleOperationStatus,
+        )
+        def get_operation(request_id: str) -> DashboardLifecycleOperationStatus:
+            return commands.get_operation(request_id)
 
         @app.post(
             f"{DASHBOARD_API_PREFIX}/investigations",

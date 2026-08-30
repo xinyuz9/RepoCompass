@@ -12,6 +12,7 @@ from typing import Protocol, TypeVar
 from repocompass.agent.thread_view import ThreadExecutionState
 from repocompass.dashboard.contracts import (
     DashboardContinueCommand,
+    DashboardLifecycleOperationStatus,
     DashboardStartCommand,
     DashboardResumeCommand,
     DashboardHumanResponseCommand,
@@ -20,11 +21,15 @@ from repocompass.dashboard.contracts import (
     DashboardMemoryDeleteResult,
     DashboardThreadDetail,
 )
+from repocompass.storage.raw_store import RawRunAttempt
+from repocompass.dashboard.service import DashboardNotFoundError
 from repocompass.memory.contracts import MemoryAuditReason, MemoryTombstone
 from repocompass.service import (
     ContinueInvestigationRequest,
+    InvestigationOperationKind,
     InvestigationOperationPendingError,
     InvestigationOperationResult,
+    InvestigationOperationSnapshot,
     InvestigationServiceError,
     ResumeInvestigationRequest,
     ServiceOperationConflictError,
@@ -53,10 +58,23 @@ class DashboardCommandQuery(Protocol):
 
     def get_thread(self, thread_id: str) -> DashboardThreadDetail: ...
 
+    def find_lifecycle_attempt(
+        self,
+        *,
+        thread_id: str,
+        kind: InvestigationOperationKind,
+        reserved_at_ms: int,
+        run_id: str | None,
+    ) -> RawRunAttempt | None: ...
+
     def get_memory_audit(self, memory_id: str) -> DashboardMemoryAudit: ...
 
 
 class DashboardLifecycleWriter(Protocol):
+    def get_operation(
+        self, request_id: str
+    ) -> InvestigationOperationSnapshot | None: ...
+
     def start_investigation(
         self, request: StartInvestigationRequest
     ) -> InvestigationOperationResult: ...
@@ -104,7 +122,11 @@ class DashboardCommandService:
     ) -> None:
         if not all(
             callable(getattr(query_service, name, None))
-            for name in ("get_thread", "get_memory_audit")
+            for name in (
+                "get_thread",
+                "find_lifecycle_attempt",
+                "get_memory_audit",
+            )
         ) or not isinstance(
             getattr(query_service, "repository_context", None),
             ToolExecutionContext,
@@ -113,6 +135,7 @@ class DashboardCommandService:
         if lifecycle_service is not None and not all(
             callable(getattr(lifecycle_service, name, None))
             for name in (
+                "get_operation",
                 "start_investigation",
                 "replay_resume_investigation",
                 "resume_investigation",
@@ -140,6 +163,30 @@ class DashboardCommandService:
     @property
     def memory_mutations_enabled(self) -> bool:
         return self._memory_store is not None
+
+    def get_operation(self, request_id: str) -> DashboardLifecycleOperationStatus:
+        """Project one durable request for polling and reconnect recovery."""
+
+        service = self._require_lifecycle_service()
+        operation = service.get_operation(request_id)
+        if operation is None:
+            raise DashboardNotFoundError("lifecycle operation was not found")
+        result_run_id = None if operation.result is None else operation.result.run_id
+        attempt = self._query_service.find_lifecycle_attempt(
+            thread_id=operation.thread_id,
+            kind=operation.kind,
+            reserved_at_ms=operation.reserved_at_ms,
+            run_id=result_run_id,
+        )
+        return DashboardLifecycleOperationStatus(
+            request_id=operation.request_id,
+            kind=operation.kind,
+            thread_id=operation.thread_id,
+            state=operation.state,
+            reserved_at_ms=operation.reserved_at_ms,
+            latest_attempt=attempt,
+            result=operation.result,
+        )
 
     def start_investigation(
         self,

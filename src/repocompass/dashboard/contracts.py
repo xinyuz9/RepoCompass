@@ -29,7 +29,12 @@ from repocompass.memory.contracts import (
     MemoryTombstone,
 )
 from repocompass.storage.raw_store import RawRunAttempt
-from repocompass.service.contracts import REQUEST_ID_PATTERN
+from repocompass.service.contracts import (
+    REQUEST_ID_PATTERN,
+    InvestigationOperationKind,
+    InvestigationOperationResult,
+    InvestigationOperationState,
+)
 from repocompass.tools.contracts import (
     IDENTIFIER_PATTERN,
     MAX_SAFE_JSON_INTEGER,
@@ -92,6 +97,44 @@ class DashboardRunSummary(_DashboardModel):
             DashboardAvailability.NOT_CONFIGURED,
         }:
             raise ValueError("run cost availability is invalid")
+        return self
+
+
+class DashboardLifecycleOperationStatus(_DashboardModel):
+    """Reconnect-safe progress projection for one lifecycle request."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    request_id: str = Field(pattern=REQUEST_ID_PATTERN)
+    kind: InvestigationOperationKind
+    thread_id: str = Field(pattern=IDENTIFIER_PATTERN)
+    state: InvestigationOperationState
+    reserved_at_ms: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
+    latest_attempt: RawRunAttempt | None = None
+    result: InvestigationOperationResult | None = None
+
+    @model_validator(mode="after")
+    def reconcile_operation_progress(self) -> "DashboardLifecycleOperationStatus":
+        completed = self.state is InvestigationOperationState.COMPLETED
+        if completed != (self.result is not None):
+            raise ValueError("operation state and result disagree")
+        if self.result is not None and (
+            self.result.request_id != self.request_id
+            or self.result.thread_id != self.thread_id
+        ):
+            raise ValueError("operation result identity does not reconcile")
+        if self.latest_attempt is not None:
+            if (
+                self.latest_attempt.thread_id != self.thread_id
+                or self.latest_attempt.execution_mode.value != self.kind.value
+                or self.latest_attempt.started_at_ms < self.reserved_at_ms
+            ):
+                raise ValueError("operation attempt identity does not reconcile")
+            if (
+                self.result is not None
+                and self.result.run_id is not None
+                and self.latest_attempt.run_id != self.result.run_id
+            ):
+                raise ValueError("completed operation run identity does not reconcile")
         return self
 
 

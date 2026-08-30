@@ -14,6 +14,7 @@ from repocompass.dashboard.contracts import (
     DashboardAvailability,
     DashboardContinueCommand,
     DashboardHumanResponseCommand,
+    DashboardLifecycleOperationStatus,
     DashboardMemoryCatalog,
     DashboardMemoryDeleteCommand,
     DashboardMemoryDeleteResult,
@@ -32,7 +33,11 @@ from repocompass.memory.contracts import (
     create_memory_audit_event,
     create_memory_tombstone,
 )
-from repocompass.service.contracts import InvestigationOperationResult
+from repocompass.service.contracts import (
+    InvestigationOperationKind,
+    InvestigationOperationResult,
+    InvestigationOperationState,
+)
 from repocompass.storage.raw_store import (
     AttemptExecutionMode,
     AttemptStatus,
@@ -41,7 +46,11 @@ from repocompass.storage.raw_store import (
 )
 
 
-def _attempt(run_id: str = "run-1") -> RawRunAttempt:
+def _attempt(
+    run_id: str = "run-1",
+    *,
+    status: AttemptStatus = AttemptStatus.COMPLETED,
+) -> RawRunAttempt:
     return RawRunAttempt(
         run_id=run_id,
         thread_id="thread-1",
@@ -50,9 +59,9 @@ def _attempt(run_id: str = "run-1") -> RawRunAttempt:
         repository_id="a" * 64,
         commit_sha="b" * 40,
         objective_digest="c" * 64,
-        status=AttemptStatus.COMPLETED,
+        status=status,
         started_at_ms=1_000,
-        finished_at_ms=2_000,
+        finished_at_ms=None if status is AttemptStatus.RUNNING else 2_000,
     )
 
 
@@ -180,6 +189,18 @@ class _FakeDashboardCommands:
             usage_cost_report=None,
             idempotent_replay=False,
             recovered_from_checkpoint=False,
+        )
+
+    def get_operation(self, request_id: str) -> DashboardLifecycleOperationStatus:
+        if request_id != "operation-1":
+            raise DashboardNotFoundError("missing lifecycle operation")
+        return DashboardLifecycleOperationStatus(
+            request_id=request_id,
+            kind=InvestigationOperationKind.START,
+            thread_id="thread-1",
+            state=InvestigationOperationState.PENDING,
+            reserved_at_ms=500,
+            latest_attempt=_attempt("operation-run", status=AttemptStatus.RUNNING),
         )
 
     def start_investigation(
@@ -382,6 +403,13 @@ def test_explicit_mutations_require_idempotency_and_same_origin() -> None:
         create_dashboard_app(service, commands=commands),
         raise_server_exceptions=False,
     )
+    operation = client.get("/api/v1/operations/operation-1")
+    missing_operation = client.get("/api/v1/operations/operation-missing")
+    assert operation.status_code == 200
+    assert operation.json()["state"] == "pending"
+    assert operation.json()["latest_attempt"]["status"] == "running"
+    assert missing_operation.status_code == 404
+
     response_body = {
         "request_id": "review-command-1",
         "interrupt_id": "interrupt-1",
@@ -481,6 +509,7 @@ def test_explicit_mutations_require_idempotency_and_same_origin() -> None:
 
     document = client.get("/api/v1/openapi.json").json()
     assert set(document["paths"]["/api/v1/investigations"]) == {"post"}
+    assert set(document["paths"]["/api/v1/operations/{request_id}"]) == {"get"}
     assert set(document["paths"]["/api/v1/threads/{thread_id}/resume"]) == {"post"}
     assert set(document["paths"]["/api/v1/threads/{thread_id}/turns"]) == {"post"}
     assert set(document["paths"]["/api/v1/threads/{thread_id}/responses"]) == {"post"}

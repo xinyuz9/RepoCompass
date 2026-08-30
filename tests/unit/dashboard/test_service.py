@@ -22,6 +22,7 @@ from repocompass.dashboard.service import (
     DashboardQueryService,
 )
 from repocompass.dashboard.trace_store import JsonlTraceStore
+from repocompass.service.contracts import InvestigationOperationKind
 from repocompass.storage.raw_store import (
     AttemptExecutionMode,
     AttemptStatus,
@@ -63,18 +64,22 @@ def _attempt(
     thread_id: str = "thread-1",
     started_at_ms: int = 1_000,
     repository_id: str | None = None,
+    execution_mode: AttemptExecutionMode = AttemptExecutionMode.START,
+    status: AttemptStatus = AttemptStatus.COMPLETED,
 ) -> RawRunAttempt:
     return RawRunAttempt(
         run_id=run_id,
         thread_id=thread_id,
         turn_number=1,
-        execution_mode=AttemptExecutionMode.START,
+        execution_mode=execution_mode,
         repository_id=repository_id or context.repository_id,
         commit_sha=context.commit_sha,
         objective_digest=hashlib.sha256(b"objective").hexdigest(),
-        status=AttemptStatus.COMPLETED,
+        status=status,
         started_at_ms=started_at_ms,
-        finished_at_ms=started_at_ms + 100,
+        finished_at_ms=(
+            None if status is AttemptStatus.RUNNING else started_at_ms + 100
+        ),
     )
 
 
@@ -223,3 +228,49 @@ def test_dashboard_catalog_reports_missing_checkpoint_without_failing(
         DashboardAvailability.NOT_FOUND
     )
     assert catalog.threads[0].objective is None
+
+
+def test_dashboard_finds_only_attempts_inside_an_operation_window(
+    tmp_path: Path,
+) -> None:
+    context = ToolExecutionContext(tmp_path)
+    runner = _FakeRunner({"thread-1": _view()})
+    with open_raw_run_store(tmp_path / "raw.sqlite") as store:
+        store.record_attempt(_attempt(context, run_id="run-old", started_at_ms=900))
+        current = _attempt(
+            context,
+            run_id="run-current",
+            started_at_ms=1_100,
+            execution_mode=AttemptExecutionMode.RESUME,
+            status=AttemptStatus.RUNNING,
+        )
+        store.record_attempt(current)
+        service = DashboardQueryService(
+            runner,
+            raw_run_store=store,
+            trace_store=JsonlTraceStore(tmp_path / "traces"),
+            repository_root=tmp_path,
+        )
+
+        pending = service.find_lifecycle_attempt(
+            thread_id="thread-1",
+            kind=InvestigationOperationKind.RESUME,
+            reserved_at_ms=1_000,
+            run_id=None,
+        )
+        exact = service.find_lifecycle_attempt(
+            thread_id="thread-1",
+            kind=InvestigationOperationKind.RESUME,
+            reserved_at_ms=1_000,
+            run_id="run-current",
+        )
+        stale = service.find_lifecycle_attempt(
+            thread_id="thread-1",
+            kind=InvestigationOperationKind.START,
+            reserved_at_ms=1_000,
+            run_id="run-old",
+        )
+
+    assert pending == current
+    assert exact == current
+    assert stale is None

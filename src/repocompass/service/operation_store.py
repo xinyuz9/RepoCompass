@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from threading import RLock
+from time import time_ns
 
 from pydantic import ValidationError
 
@@ -20,10 +21,14 @@ from repocompass.service.contracts import (
     REQUEST_ID_PATTERN,
 )
 
-SERVICE_OPERATION_STORE_SCHEMA_VERSION = 1
+SERVICE_OPERATION_STORE_SCHEMA_VERSION = 2
 MAX_OPERATION_RESPONSE_BYTES = 33_554_432
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _REQUEST_ID_PATTERN = re.compile(REQUEST_ID_PATTERN)
+
+
+def _wall_clock_ms() -> int:
+    return time_ns() // 1_000_000
 
 
 class ServiceOperationStoreError(RuntimeError):
@@ -54,6 +59,7 @@ class OperationReservation:
     request_digest: str
     kind: InvestigationOperationKind
     thread_id: str
+    reserved_at_ms: int
     state: OperationReservationState
     response: InvestigationOperationResult | None = None
 
@@ -61,11 +67,19 @@ class OperationReservation:
 class ServiceOperationStore:
     """Atomically reserve and complete caller-supplied idempotency keys."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        clock_ms: Callable[[], int] = _wall_clock_ms,
+    ) -> None:
         if not isinstance(connection, sqlite3.Connection):
             raise TypeError("connection must be a sqlite3.Connection")
+        if not callable(clock_ms):
+            raise TypeError("clock_ms must be callable")
         self._connection = connection
         self._lock = RLock()
+        self._clock_ms = clock_ms
         self._migrate()
 
     @property
@@ -93,7 +107,8 @@ class ServiceOperationStore:
         with self._lock:
             row = self._connection.execute(
                 """
-                SELECT request_digest, operation_kind, thread_id, response_json
+                SELECT request_digest, operation_kind, thread_id,
+                       reserved_at_ms, response_json
                 FROM service_operations
                 WHERE request_id = ?
                 """,
@@ -101,7 +116,13 @@ class ServiceOperationStore:
             ).fetchone()
         if row is None:
             return None
-        stored_digest, stored_kind, stored_thread_id, response_json = row
+        (
+            stored_digest,
+            stored_kind,
+            stored_thread_id,
+            reserved_at_ms,
+            response_json,
+        ) = row
         if stored_digest != normalized_digest:
             raise ServiceOperationConflictError(
                 "request_id was already used with a different payload"
@@ -120,6 +141,7 @@ class ServiceOperationStore:
                 request_digest=normalized_digest,
                 kind=normalized_kind,
                 thread_id=normalized_thread_id,
+                reserved_at_ms=_validate_timestamp(reserved_at_ms),
                 state=OperationReservationState.PENDING,
             )
         response = _decode_response(response_json)
@@ -135,6 +157,55 @@ class ServiceOperationStore:
             request_digest=normalized_digest,
             kind=normalized_kind,
             thread_id=normalized_thread_id,
+            reserved_at_ms=_validate_timestamp(reserved_at_ms),
+            state=OperationReservationState.COMPLETED,
+            response=response,
+        )
+
+    def get(self, request_id: str) -> OperationReservation | None:
+        """Return one operation by opaque request identity without reserving it."""
+
+        normalized_request_id = _validate_request_id(request_id)
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT request_digest, operation_kind, thread_id,
+                       reserved_at_ms, response_json
+                FROM service_operations
+                WHERE request_id = ?
+                """,
+                (normalized_request_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        request_digest, kind, thread_id, reserved_at_ms, response_json = row
+        normalized_digest = _validate_digest(request_digest)
+        normalized_kind = _normalize_kind(kind)
+        normalized_thread_id = _validate_thread_id(thread_id)
+        normalized_timestamp = _validate_timestamp(reserved_at_ms)
+        if response_json is None:
+            return OperationReservation(
+                request_id=normalized_request_id,
+                request_digest=normalized_digest,
+                kind=normalized_kind,
+                thread_id=normalized_thread_id,
+                reserved_at_ms=normalized_timestamp,
+                state=OperationReservationState.PENDING,
+            )
+        response = _decode_response(response_json)
+        if (
+            response.request_id != normalized_request_id
+            or response.thread_id != normalized_thread_id
+        ):
+            raise ServiceOperationCorruptionError(
+                "persisted operation response identity does not reconcile"
+            )
+        return OperationReservation(
+            request_id=normalized_request_id,
+            request_digest=normalized_digest,
+            kind=normalized_kind,
+            thread_id=normalized_thread_id,
+            reserved_at_ms=normalized_timestamp,
             state=OperationReservationState.COMPLETED,
             response=response,
         )
@@ -157,25 +228,28 @@ class ServiceOperationStore:
         with self._transaction():
             row = self._connection.execute(
                 """
-                SELECT request_digest, operation_kind, thread_id, response_json
+                SELECT request_digest, operation_kind, thread_id,
+                       reserved_at_ms, response_json
                 FROM service_operations
                 WHERE request_id = ?
                 """,
                 (normalized_request_id,),
             ).fetchone()
             if row is None:
+                reserved_at_ms = _validate_timestamp(self._clock_ms())
                 self._connection.execute(
                     """
                     INSERT INTO service_operations (
                         request_id, request_digest, operation_kind,
-                        thread_id, response_json
-                    ) VALUES (?, ?, ?, ?, NULL)
+                        thread_id, reserved_at_ms, response_json
+                    ) VALUES (?, ?, ?, ?, ?, NULL)
                     """,
                     (
                         normalized_request_id,
                         normalized_digest,
                         normalized_kind.value,
                         normalized_thread_id,
+                        reserved_at_ms,
                     ),
                 )
                 return OperationReservation(
@@ -183,10 +257,17 @@ class ServiceOperationStore:
                     request_digest=normalized_digest,
                     kind=normalized_kind,
                     thread_id=normalized_thread_id,
+                    reserved_at_ms=reserved_at_ms,
                     state=OperationReservationState.NEW,
                 )
 
-            stored_digest, stored_kind, stored_thread_id, response_json = row
+            (
+                stored_digest,
+                stored_kind,
+                stored_thread_id,
+                reserved_at_ms,
+                response_json,
+            ) = row
             if stored_digest != normalized_digest:
                 raise ServiceOperationConflictError(
                     "request_id was already used with a different payload"
@@ -202,6 +283,7 @@ class ServiceOperationStore:
                     request_digest=normalized_digest,
                     kind=normalized_kind,
                     thread_id=stored_thread_id,
+                    reserved_at_ms=_validate_timestamp(reserved_at_ms),
                     state=OperationReservationState.PENDING,
                 )
             response = _decode_response(response_json)
@@ -217,6 +299,7 @@ class ServiceOperationStore:
                 request_digest=normalized_digest,
                 kind=normalized_kind,
                 thread_id=stored_thread_id,
+                reserved_at_ms=_validate_timestamp(reserved_at_ms),
                 state=OperationReservationState.COMPLETED,
                 response=response,
             )
@@ -305,6 +388,7 @@ class ServiceOperationStore:
                         request_digest TEXT NOT NULL,
                         operation_kind TEXT NOT NULL,
                         thread_id TEXT NOT NULL,
+                        reserved_at_ms INTEGER NOT NULL CHECK(reserved_at_ms >= 0),
                         response_json TEXT
                     ) STRICT
                     """
@@ -314,6 +398,14 @@ class ServiceOperationStore:
                     "service_operations_thread_request "
                     "ON service_operations(thread_id, request_id)"
                 )
+                version = SERVICE_OPERATION_STORE_SCHEMA_VERSION
+            if version == 1:
+                self._connection.execute(
+                    "ALTER TABLE service_operations ADD COLUMN reserved_at_ms "
+                    "INTEGER NOT NULL DEFAULT 0 CHECK(reserved_at_ms >= 0)"
+                )
+                version = SERVICE_OPERATION_STORE_SCHEMA_VERSION
+            if version == SERVICE_OPERATION_STORE_SCHEMA_VERSION:
                 self._connection.execute(
                     f"PRAGMA user_version = {SERVICE_OPERATION_STORE_SCHEMA_VERSION}"
                 )
@@ -351,6 +443,12 @@ def _validate_thread_id(value: object) -> str:
     if not normalized or len(normalized) > 256:
         raise ValueError("thread_id is invalid")
     return normalized
+
+
+def _validate_timestamp(value: object) -> int:
+    if type(value) is not int or not 0 <= value <= 9_007_199_254_740_991:
+        raise ValueError("reserved_at_ms is invalid")
+    return value
 
 
 def _normalize_kind(

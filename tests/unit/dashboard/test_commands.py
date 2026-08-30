@@ -14,6 +14,7 @@ from repocompass.agent.lifecycle import (
     HumanDecisionAction,
     HumanReviewRequest,
 )
+from repocompass.dashboard.service import DashboardNotFoundError
 from repocompass.agent.result import FinalResult
 from repocompass.agent.thread_view import (
     ThreadExecutionState,
@@ -47,7 +48,10 @@ from repocompass.memory.identity import resolve_memory_repository_identity
 from repocompass.memory.store import MemoryStore, open_memory_store
 from repocompass.service.contracts import (
     ContinueInvestigationRequest,
+    InvestigationOperationKind,
     InvestigationOperationResult,
+    InvestigationOperationSnapshot,
+    InvestigationOperationState,
     ResumeInvestigationRequest,
     StartInvestigationRequest,
 )
@@ -246,6 +250,27 @@ class _Query:
         assert thread_id == "thread-1"
         return self.thread_detail
 
+    def find_lifecycle_attempt(
+        self,
+        *,
+        thread_id: str,
+        kind: InvestigationOperationKind,
+        reserved_at_ms: int,
+        run_id: str | None,
+    ) -> RawRunAttempt | None:
+        expected_mode = AttemptExecutionMode(kind.value)
+        return next(
+            (
+                summary.attempt
+                for summary in self.thread_detail.attempts
+                if summary.attempt.thread_id == thread_id
+                and summary.attempt.execution_mode is expected_mode
+                and summary.attempt.started_at_ms >= reserved_at_ms
+                and (run_id is None or summary.attempt.run_id == run_id)
+            ),
+            None,
+        )
+
     def get_memory_audit(self, memory_id: str) -> DashboardMemoryAudit:
         assert self.memory_store is not None
         metadata = self.memory_store.get_memory_metadata(
@@ -266,12 +291,16 @@ class _Query:
 
 class _Lifecycle:
     def __init__(self) -> None:
+        self.operations: dict[str, InvestigationOperationSnapshot] = {}
         self.replay_result: InvestigationOperationResult | None = None
         self.continue_replay_result: InvestigationOperationResult | None = None
         self.start_requests: list[StartInvestigationRequest] = []
         self.replay_requests: list[ResumeInvestigationRequest] = []
         self.response_requests: list[ResumeInvestigationRequest] = []
         self.continue_requests: list[ContinueInvestigationRequest] = []
+
+    def get_operation(self, request_id: str) -> InvestigationOperationSnapshot | None:
+        return self.operations.get(request_id)
 
     def start_investigation(
         self, request: StartInvestigationRequest
@@ -352,6 +381,44 @@ def test_human_response_is_bound_to_interrupt_action_and_idempotent_replay(
     with pytest.raises(DashboardCommandConflictError, match="not allowed"):
         service.respond_to_review("thread-1", disallowed)
     assert len(lifecycle.response_requests) == 1
+
+
+def test_operation_status_reconciles_durable_identity_and_attempt(
+    tmp_path: Path,
+) -> None:
+    _, context = _create_repository(tmp_path)
+    lifecycle = _Lifecycle()
+    lifecycle.operations["operation-pending"] = InvestigationOperationSnapshot(
+        request_id="operation-pending",
+        kind=InvestigationOperationKind.START,
+        thread_id="thread-1",
+        state=InvestigationOperationState.PENDING,
+        reserved_at_ms=500,
+    )
+    completed_result = _operation_result("operation-completed")
+    lifecycle.operations["operation-completed"] = InvestigationOperationSnapshot(
+        request_id="operation-completed",
+        kind=InvestigationOperationKind.START,
+        thread_id="thread-1",
+        state=InvestigationOperationState.COMPLETED,
+        reserved_at_ms=500,
+        result=completed_result,
+    )
+    service = DashboardCommandService(
+        _Query(context),
+        lifecycle_service=lifecycle,
+    )
+
+    pending = service.get_operation("operation-pending")
+    completed = service.get_operation("operation-completed")
+
+    assert pending.latest_attempt is not None
+    assert pending.latest_attempt.run_id == "run-1"
+    assert pending.result is None
+    assert completed.result == completed_result
+    assert completed.latest_attempt is None
+    with pytest.raises(DashboardNotFoundError, match="operation"):
+        service.get_operation("operation-missing")
 
 
 def test_goal_resume_and_follow_up_are_bound_to_repository_snapshot(

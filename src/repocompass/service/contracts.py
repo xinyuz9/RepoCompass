@@ -40,7 +40,7 @@ from repocompass.structure.evidence_graph import (
     EvidenceGraphEdge,
     EvidenceGraphNode,
 )
-from repocompass.tools.contracts import Sha256Digest
+from repocompass.tools.contracts import MAX_SAFE_JSON_INTEGER, Sha256Digest
 
 SERVICE_SCHEMA_VERSION = 1
 REQUEST_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
@@ -53,6 +53,13 @@ class InvestigationOperationKind(StrEnum):
     RESUME = "resume"
     CONTINUE = "continue"
     RESPOND = "respond"
+
+
+class InvestigationOperationState(StrEnum):
+    """Durable completion state of one idempotent lifecycle request."""
+
+    PENDING = "pending"
+    COMPLETED = "completed"
 
 
 class ArtifactAvailability(StrEnum):
@@ -227,6 +234,30 @@ class InvestigationOperationResult(_ServiceModel):
                 raise ValueError("resumable operation requires pending nodes")
             if self.final_result is not None or self.pending_review is not None:
                 raise ValueError("resumable operation cannot publish a result")
+        return self
+
+
+class InvestigationOperationSnapshot(_ServiceModel):
+    """Read-only durable identity and result of one lifecycle request."""
+
+    schema_version: Literal[1] = SERVICE_SCHEMA_VERSION
+    request_id: str = Field(pattern=REQUEST_ID_PATTERN)
+    kind: InvestigationOperationKind
+    thread_id: str = Field(min_length=1, max_length=256)
+    state: InvestigationOperationState
+    reserved_at_ms: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
+    result: InvestigationOperationResult | None = None
+
+    @model_validator(mode="after")
+    def require_consistent_operation_state(self) -> "InvestigationOperationSnapshot":
+        completed = self.state is InvestigationOperationState.COMPLETED
+        if completed != (self.result is not None):
+            raise ValueError("operation state and result disagree")
+        if self.result is not None and (
+            self.result.request_id != self.request_id
+            or self.result.thread_id != self.thread_id
+        ):
+            raise ValueError("operation result identity does not reconcile")
         return self
 
 
