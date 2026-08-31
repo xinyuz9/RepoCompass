@@ -19,13 +19,19 @@ from repocompass.dashboard.contracts import (
     DashboardMemoryDeleteCommand,
     DashboardMemoryDeleteResult,
     DashboardRunDetail,
+    DashboardSourceLine,
+    DashboardSourceSnippet,
     DashboardResumeCommand,
     DashboardStartCommand,
     DashboardSystemInfo,
     DashboardThreadCatalog,
     PublicTraceEvent,
 )
-from repocompass.dashboard.service import DashboardNotFoundError
+
+from repocompass.dashboard.service import (
+    DashboardNotFoundError,
+    DashboardSnapshotConflictError,
+)
 from repocompass.memory.contracts import (
     MemoryAuditAction,
     MemoryAuditReason,
@@ -44,6 +50,8 @@ from repocompass.storage.raw_store import (
     RawRunAttempt,
     RawStoreError,
 )
+
+SOURCE_ENTITY_ID = "d" * 64
 
 
 def _attempt(
@@ -113,6 +121,7 @@ class _FakeDashboardService:
     ) -> None:
         self.fail_system = False
         self.fail_threads = False
+        self.source_changed = False
         self.lifecycle_mutations_enabled = lifecycle_mutations_enabled
         self.memory_mutations_enabled = memory_mutations_enabled
 
@@ -142,6 +151,33 @@ class _FakeDashboardService:
 
     def get_thread(self, thread_id: str):
         raise DashboardNotFoundError(f"missing thread {thread_id}")
+
+    def get_source(self, thread_id: str, entity_id: str) -> DashboardSourceSnippet:
+        if self.source_changed:
+            raise DashboardSnapshotConflictError("private source drift detail")
+        if thread_id != "thread-1" or entity_id != SOURCE_ENTITY_ID:
+            raise DashboardNotFoundError("missing source")
+        return DashboardSourceSnippet(
+            thread_id=thread_id,
+            entity_id=entity_id,
+            repository_id="a" * 64,
+            commit_sha="b" * 40,
+            path="src/auth.py",
+            symbol="auth.login",
+            source_digest="e" * 64,
+            evidence_line_start=2,
+            evidence_line_end=2,
+            snippet_line_start=1,
+            snippet_line_end=3,
+            total_lines=3,
+            truncated_before=False,
+            truncated_after=False,
+            lines=(
+                DashboardSourceLine(number=1, text="def login():"),
+                DashboardSourceLine(number=2, text="    return authenticate()"),
+                DashboardSourceLine(number=3, text=""),
+            ),
+        )
 
     def get_run(self, run_id: str) -> DashboardRunDetail:
         if run_id == "run-1":
@@ -299,6 +335,23 @@ def test_read_api_returns_versioned_empty_states_and_security_headers() -> None:
     assert memory.json()["availability"] == "not_configured"
 
 
+def test_source_api_returns_only_an_evidence_bound_numbered_window() -> None:
+    client = _client(_FakeDashboardService())
+
+    response = client.get(f"/api/v1/threads/thread-1/source/{SOURCE_ENTITY_ID}")
+    invalid = client.get("/api/v1/threads/thread-1/source/not-a-digest")
+
+    assert response.status_code == 200
+    assert response.json()["path"] == "src/auth.py"
+    assert response.json()["lines"][1] == {
+        "number": 2,
+        "text": "    return authenticate()",
+    }
+    assert "repository_root" not in response.text
+    assert response.headers["cache-control"] == "no-store"
+    assert invalid.status_code == 422
+
+
 def test_every_http_failure_uses_sanitized_problem_detail() -> None:
     service = _FakeDashboardService()
     client = _client(service)
@@ -310,6 +363,9 @@ def test_every_http_failure_uses_sanitized_problem_detail() -> None:
     invalid_query = client.get("/api/v1/threads", params={"max_results": 0})
     missing_route = client.get("/api/v1/not-a-route")
     missing_run = client.get("/api/v1/runs/missing")
+    service.source_changed = True
+    stale_source = client.get(f"/api/v1/threads/thread-1/source/{SOURCE_ENTITY_ID}")
+    service.source_changed = False
     wrong_method = client.post("/api/v1/system")
     service.fail_threads = True
     storage_failure = client.get("/api/v1/threads")
@@ -321,6 +377,7 @@ def test_every_http_failure_uses_sanitized_problem_detail() -> None:
         (invalid_query, 422),
         (missing_route, 404),
         (missing_run, 404),
+        (stale_source, 409),
         (wrong_method, 405),
         (storage_failure, 503),
         (unexpected, 500),

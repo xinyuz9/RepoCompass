@@ -516,6 +516,56 @@ class DashboardThreadDetail(_DashboardModel):
         return self
 
 
+class DashboardSourceLine(_DashboardModel):
+    """One bounded UTF-8 source line in an evidence-backed preview."""
+
+    model_config = ConfigDict(str_strip_whitespace=False)
+
+    number: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+    text: str = Field(max_length=20_000)
+
+
+class DashboardSourceSnippet(_DashboardModel):
+    """Content-verified source window for one traceable graph entity."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    thread_id: str = Field(pattern=IDENTIFIER_PATTERN)
+    entity_id: Sha256Digest
+    repository_id: Sha256Digest
+    commit_sha: CommitSha | None = None
+    path: str = Field(min_length=1, max_length=4_096)
+    symbol: str | None = Field(default=None, min_length=1, max_length=2_048)
+    source_digest: Sha256Digest
+    evidence_line_start: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+    evidence_line_end: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+    snippet_line_start: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+    snippet_line_end: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+    total_lines: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+    truncated_before: bool
+    truncated_after: bool
+    lines: tuple[DashboardSourceLine, ...] = Field(min_length=1, max_length=160)
+
+    @model_validator(mode="after")
+    def reconcile_source_window(self) -> "DashboardSourceSnippet":
+        numbers = tuple(line.number for line in self.lines)
+        if numbers != tuple(range(self.snippet_line_start, self.snippet_line_end + 1)):
+            raise ValueError("source snippet lines must be contiguous")
+        if self.snippet_line_end > self.total_lines:
+            raise ValueError("source snippet exceeds the file length")
+        if not (self.evidence_line_start <= self.evidence_line_end <= self.total_lines):
+            raise ValueError("source evidence range is invalid")
+        if (
+            self.evidence_line_end < self.snippet_line_start
+            or self.evidence_line_start > self.snippet_line_end
+        ):
+            raise ValueError("source snippet does not intersect its evidence")
+        if self.truncated_before != (self.snippet_line_start > 1):
+            raise ValueError("source leading truncation flag is invalid")
+        if self.truncated_after != (self.snippet_line_end < self.total_lines):
+            raise ValueError("source trailing truncation flag is invalid")
+        return self
+
+
 class DashboardRunDetail(_DashboardModel):
     schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
     attempt: RawRunAttempt

@@ -255,6 +255,30 @@ export interface DashboardThreadDetail {
   evaluator_timeline: EvaluatorReplayFrame[];
 }
 
+export interface DashboardSourceLine {
+  number: number;
+  text: string;
+}
+
+export interface DashboardSourceSnippet {
+  schema_version: 1;
+  thread_id: string;
+  entity_id: string;
+  repository_id: string;
+  commit_sha: string | null;
+  path: string;
+  symbol: string | null;
+  source_digest: string;
+  evidence_line_start: number;
+  evidence_line_end: number;
+  snippet_line_start: number;
+  snippet_line_end: number;
+  total_lines: number;
+  truncated_before: boolean;
+  truncated_after: boolean;
+  lines: DashboardSourceLine[];
+}
+
 export interface DashboardProblemDetail {
   schema_version: 1;
   type: string;

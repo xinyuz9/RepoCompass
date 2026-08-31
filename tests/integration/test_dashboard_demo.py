@@ -15,7 +15,10 @@ from repocompass.dashboard.demo import (
     create_dashboard_demo,
 )
 from repocompass.dashboard.runtime import create_inspection_models
-from repocompass.dashboard.service import DashboardQueryService
+from repocompass.dashboard.service import (
+    DashboardQueryService,
+    DashboardSnapshotConflictError,
+)
 from repocompass.dashboard.trace_store import JsonlTraceStore
 from repocompass.memory.contracts import MemoryScope
 from repocompass.memory.store import open_memory_store
@@ -55,6 +58,12 @@ def test_demo_uses_production_stores_and_populates_every_observability_lens(
         thread = service.get_thread(DEMO_THREAD_ID)
         run = service.get_run(DEMO_RUN_ID)
         memory = service.list_memory()
+        policy_step = next(
+            step
+            for step in thread.thread.structure.reading_path.steps
+            if step.path == "pkg/policy.py"
+        )
+        source = service.get_source(DEMO_THREAD_ID, policy_step.entity_id)
 
     assert system.demo_mode is True
     assert system.lifecycle_mutations_enabled is False
@@ -98,6 +107,49 @@ def test_demo_uses_production_stores_and_populates_every_observability_lens(
         MemoryScope.EPISODIC,
     }
     assert str(workspace.root) not in run.model_dump_json()
+    assert source.path == "pkg/policy.py"
+    assert source.source_digest == policy_step.source_locations[0].source_digest
+    assert source.repository_id == system.repository_id
+    assert any("class ProposalVerifier" in line.text for line in source.lines)
+    assert source.evidence_line_start <= source.evidence_line_end
+
+
+def test_demo_source_preview_fails_closed_after_content_drift(tmp_path: Path) -> None:
+    workspace = create_dashboard_demo(tmp_path / "demo")
+
+    with (
+        open_sqlite_checkpointer(workspace.checkpoint_database) as checkpointer,
+        open_raw_run_store(workspace.raw_store_database) as raw_store,
+        open_memory_store(workspace.memory_database) as memory_store,
+    ):
+        service = DashboardQueryService(
+            AgentRunner(
+                create_inspection_models(),
+                checkpointer=checkpointer,
+                raw_run_store=raw_store,
+                memory_store=memory_store,
+                pricing_table=workspace.pricing_table,
+            ),
+            raw_run_store=raw_store,
+            trace_store=JsonlTraceStore(workspace.trace_directory),
+            repository_root=workspace.repository_path,
+            memory_store=memory_store,
+            pricing_table=workspace.pricing_table,
+        )
+        thread = service.get_thread(DEMO_THREAD_ID)
+        policy_step = next(
+            step
+            for step in thread.thread.structure.reading_path.steps
+            if step.path == "pkg/policy.py"
+        )
+        policy_path = workspace.repository_path / "pkg" / "policy.py"
+        policy_path.write_text(
+            policy_path.read_text(encoding="utf-8") + "\n# drift\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(DashboardSnapshotConflictError, match="content changed"):
+            service.get_source(DEMO_THREAD_ID, policy_step.entity_id)
 
 
 def test_demo_refuses_to_overlay_any_existing_state(tmp_path: Path) -> None:

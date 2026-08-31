@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   Background,
   BackgroundVariant,
@@ -7,20 +8,37 @@ import {
   type Node,
   type NodeMouseHandler,
 } from "@xyflow/react";
-import { CheckCircle2, ChevronRight, FileCode2, Route, ShieldCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronRight,
+  Code2,
+  FileCode2,
+  LoaderCircle,
+  RefreshCw,
+  Route,
+  ShieldCheck,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { DashboardApiError, dashboardQueries } from "./api";
 import EvidenceNodeCard from "./EvidenceNode";
 import { buildTaskGraph, type EvidenceNodeData } from "./graph-model";
-import type { EvidenceNode, InvestigationStructure, ReadingStep } from "./types";
+import type {
+  DashboardSourceSnippet,
+  EvidenceNode,
+  InvestigationStructure,
+  ReadingStep,
+} from "./types";
 
 const NODE_TYPES = { evidence: EvidenceNodeCard };
 
 interface TaskGraphProps {
+  threadId: string;
   structure: InvestigationStructure;
 }
 
-export function TaskGraph({ structure }: TaskGraphProps) {
+export function TaskGraph({ threadId, structure }: TaskGraphProps) {
   const model = useMemo(() => buildTaskGraph(structure), [structure]);
   const firstEntity = model.readingSteps[0]?.entity_id ?? model.nodes[0]?.id ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(firstEntity);
@@ -33,6 +51,15 @@ export function TaskGraph({ structure }: TaskGraphProps) {
   const selectedStep = model.readingSteps.find(
     (step) => step.entity_id === activeSelectedId,
   );
+  const sourceEnabled = Boolean(
+    activeSelectedId && selectedStep?.source_locations.length,
+  );
+  const source = useQuery({
+    ...dashboardQueries.source(threadId, activeSelectedId ?? ""),
+    enabled: sourceEnabled,
+    retry: false,
+    staleTime: Infinity,
+  });
   const flowNodes = model.nodes.map((node) => ({
     ...node,
     selected: node.id === activeSelectedId,
@@ -90,6 +117,28 @@ export function TaskGraph({ structure }: TaskGraphProps) {
           )}
         </div>
 
+        <div className="inspector-section inspector-section--source">
+          <div className="section-heading section-heading--source">
+            <div>
+              <p className="eyebrow"><Code2 size={13} /> verified source</p>
+              <h3>Evidence window</h3>
+            </div>
+            {source.data ? (
+              <span className="count-pill">{source.data.lines.length} lines</span>
+            ) : null}
+          </div>
+          {sourceEnabled ? (
+            <SourcePreview
+              snippet={source.data ?? null}
+              pending={source.isPending}
+              error={source.error}
+              onRetry={() => void source.refetch()}
+            />
+          ) : (
+            <p className="muted-copy">This structural node has no source-backed reading step.</p>
+          )}
+        </div>
+
         <div className="inspector-section inspector-section--reading">
           <div className="section-heading">
             <div>
@@ -119,6 +168,68 @@ export function TaskGraph({ structure }: TaskGraphProps) {
         </div>
       </aside>
     </section>
+  );
+}
+
+function SourcePreview({
+  snippet,
+  pending,
+  error,
+  onRetry,
+}: {
+  snippet: DashboardSourceSnippet | null;
+  pending: boolean;
+  error: Error | null;
+  onRetry: () => void;
+}) {
+  if (pending) {
+    return (
+      <div className="source-preview-state" role="status">
+        <LoaderCircle className="is-spinning" size={15} />
+        <span>Verifying source digest…</span>
+      </div>
+    );
+  }
+  if (error) {
+    const title = error instanceof DashboardApiError
+      ? error.problem?.title ?? "Source unavailable"
+      : "Source unavailable";
+    return (
+      <div className="source-preview-state source-preview-state--error" role="alert">
+        <AlertTriangle size={15} />
+        <div><strong>{title}</strong><span>{error.message}</span></div>
+        <button type="button" onClick={onRetry} title="Retry source verification">
+          <RefreshCw size={13} /><span className="sr-only">Retry source verification</span>
+        </button>
+      </div>
+    );
+  }
+  if (!snippet) return null;
+
+  return (
+    <div className="source-preview">
+      <div className="source-preview__meta">
+        <code title={snippet.path}>{snippet.path}</code>
+        <span>L{snippet.evidence_line_start}–{snippet.evidence_line_end}</span>
+      </div>
+      <div className="source-code" aria-label={`Source preview for ${snippet.path}`}>
+        {snippet.truncated_before ? <div className="source-omission">earlier lines omitted</div> : null}
+        {snippet.lines.map((line) => {
+          const evidence = line.number >= snippet.evidence_line_start
+            && line.number <= snippet.evidence_line_end;
+          return (
+            <div key={line.number} className={`source-line${evidence ? " is-evidence" : ""}`}>
+              <span>{line.number}</span>
+              <code>{line.text || " "}</code>
+            </div>
+          );
+        })}
+        {snippet.truncated_after ? <div className="source-omission">later lines omitted</div> : null}
+      </div>
+      <div className="source-preview__proof">
+        <ShieldCheck size={12} />digest {snippet.source_digest.slice(0, 10)} · snapshot matched
+      </div>
+    </div>
   );
 }
 

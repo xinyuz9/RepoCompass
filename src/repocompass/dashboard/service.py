@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
@@ -23,6 +24,8 @@ from repocompass.dashboard.contracts import (
     DashboardMemoryCatalog,
     DashboardRunDetail,
     DashboardRunSummary,
+    DashboardSourceLine,
+    DashboardSourceSnippet,
     DashboardSystemInfo,
     DashboardThreadCatalog,
     DashboardThreadDetail,
@@ -41,6 +44,7 @@ from repocompass.storage.raw_store import (
     RawRunAttempt,
     RawRunStore,
 )
+from repocompass.structure.contracts import MAX_INDEXED_SOURCE_BYTES, SourceLocation
 from repocompass.tools.contracts import IDENTIFIER_PATTERN, SHA256_PATTERN
 from repocompass.tools.gateway import ToolExecutionContext
 
@@ -49,6 +53,8 @@ _DIGEST_RE = re.compile(SHA256_PATTERN)
 _MAX_CATALOG_SCAN = 1_000
 _MAX_THREAD_ATTEMPTS = 100
 _MAX_MEMORY_RESULTS = 50
+_MAX_SOURCE_SNIPPET_LINES = 160
+_SOURCE_CONTEXT_LINES = 4
 _DROP_TRACE_KEYS = frozenset(
     {
         "access_token",
@@ -86,6 +92,10 @@ class DashboardServiceError(RuntimeError):
 
 class DashboardNotFoundError(DashboardServiceError):
     """A repository-bound run, thread, or memory identity does not exist."""
+
+
+class DashboardSnapshotConflictError(DashboardServiceError):
+    """Persisted evidence no longer matches the visible repository snapshot."""
 
 
 class DashboardThreadReader(Protocol):
@@ -303,6 +313,41 @@ class DashboardQueryService:
                 else DashboardAvailability.NOT_CONFIGURED
             ),
             usage_cost_report=report,
+        )
+
+    def get_source(self, thread_id: str, entity_id: str) -> DashboardSourceSnippet:
+        """Read one source window only when its persisted digest still matches."""
+
+        normalized_thread_id = _validate_identifier(thread_id, name="thread_id")
+        normalized_entity_id = _validate_digest(entity_id, name="entity_id")
+        detail = self.get_thread(normalized_thread_id)
+        structure = detail.thread.structure
+        if structure is None:
+            raise DashboardNotFoundError("thread has no structural source evidence")
+        current = self.repository_context
+        if (
+            structure.repository_id != current.repository_id
+            or structure.commit_sha != current.commit_sha
+        ):
+            raise DashboardSnapshotConflictError(
+                "repository snapshot changed after evidence collection"
+            )
+        step = next(
+            (
+                item
+                for item in structure.reading_path.steps
+                if item.entity_id == normalized_entity_id
+            ),
+            None,
+        )
+        if step is None or not step.source_locations:
+            raise DashboardNotFoundError("entity has no traceable source evidence")
+        return _read_source_snippet(
+            thread_id=normalized_thread_id,
+            entity_id=normalized_entity_id,
+            symbol=step.canonical_name,
+            context=current,
+            location=step.source_locations[0],
         )
 
     def find_lifecycle_attempt(
@@ -548,6 +593,93 @@ def _validate_identifier(value: object, *, name: str) -> str:
     if not isinstance(value, str) or _IDENTIFIER_RE.fullmatch(value) is None:
         raise ValueError(f"{name} is invalid")
     return value
+
+
+def _read_source_snippet(
+    *,
+    thread_id: str,
+    entity_id: str,
+    symbol: str,
+    context: ToolExecutionContext,
+    location: SourceLocation,
+) -> DashboardSourceSnippet:
+    if (
+        location.repository_id != context.repository_id
+        or location.commit_sha != context.commit_sha
+    ):
+        raise DashboardSnapshotConflictError(
+            "source evidence targets a different repository snapshot"
+        )
+    relative = Path(location.path)
+    current = context.repository_root
+    try:
+        for part in relative.parts:
+            current /= part
+            if current.is_symlink():
+                raise DashboardSnapshotConflictError(
+                    "source evidence cannot traverse a symbolic link"
+                )
+        target = current.resolve(strict=True)
+        target.relative_to(context.repository_root)
+        if not target.is_file() or target.stat().st_size > MAX_INDEXED_SOURCE_BYTES:
+            raise DashboardSnapshotConflictError(
+                "source evidence file is unavailable or exceeds the display limit"
+            )
+        encoded = target.read_bytes()
+    except DashboardSnapshotConflictError:
+        raise
+    except (OSError, ValueError) as error:
+        raise DashboardSnapshotConflictError(
+            "source evidence file is no longer available"
+        ) from error
+    if hashlib.sha256(encoded).hexdigest() != location.source_digest:
+        raise DashboardSnapshotConflictError(
+            "source content changed after evidence collection"
+        )
+    try:
+        source_lines = encoded.decode("utf-8").splitlines()
+    except UnicodeDecodeError as error:
+        raise DashboardSnapshotConflictError(
+            "source evidence is not valid UTF-8 text"
+        ) from error
+    if not source_lines or location.line_start > len(source_lines):
+        raise DashboardSnapshotConflictError("source evidence range no longer exists")
+    if location.line_end > len(source_lines) and not (
+        location.line_end == len(source_lines) + 1 and location.column_end == 0
+    ):
+        raise DashboardSnapshotConflictError("source evidence range no longer exists")
+    evidence_line_end = min(location.line_end, len(source_lines))
+    snippet_start = max(1, location.line_start - _SOURCE_CONTEXT_LINES)
+    desired_end = min(len(source_lines), evidence_line_end + _SOURCE_CONTEXT_LINES)
+    snippet_end = min(
+        desired_end,
+        snippet_start + _MAX_SOURCE_SNIPPET_LINES - 1,
+    )
+    selected = source_lines[snippet_start - 1 : snippet_end]
+    if any(len(line) > 20_000 for line in selected):
+        raise DashboardSnapshotConflictError(
+            "source evidence contains a line that exceeds the display limit"
+        )
+    return DashboardSourceSnippet(
+        thread_id=thread_id,
+        entity_id=entity_id,
+        repository_id=context.repository_id,
+        commit_sha=context.commit_sha,
+        path=location.path,
+        symbol=symbol,
+        source_digest=location.source_digest,
+        evidence_line_start=location.line_start,
+        evidence_line_end=evidence_line_end,
+        snippet_line_start=snippet_start,
+        snippet_line_end=snippet_end,
+        total_lines=len(source_lines),
+        truncated_before=snippet_start > 1,
+        truncated_after=snippet_end < len(source_lines),
+        lines=tuple(
+            DashboardSourceLine(number=number, text=line)
+            for number, line in enumerate(selected, start=snippet_start)
+        ),
+    )
 
 
 def _validate_digest(value: object, *, name: str) -> str:

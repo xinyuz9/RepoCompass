@@ -317,7 +317,9 @@ function InvestigationStage({
       ) : null}
 
       {lens === "topology" ? (
-        thread.structure ? <TaskGraph structure={thread.structure} /> : <StructureEmpty />
+        thread.structure ? (
+          <TaskGraph threadId={thread.thread_id} structure={thread.structure} />
+        ) : <StructureEmpty />
       ) : (
         <ObservabilityPanel
           lens={lens}

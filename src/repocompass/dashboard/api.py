@@ -8,7 +8,14 @@ from pathlib import Path
 from typing import Annotated, Protocol
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import (
+    FastAPI,
+    Header,
+    HTTPException,
+    Path as PathParameter,
+    Query,
+    Request,
+)
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -26,6 +33,7 @@ from repocompass.dashboard.contracts import (
     DashboardMemoryDeleteResult,
     DashboardProblemDetail,
     DashboardRunDetail,
+    DashboardSourceSnippet,
     DashboardStartCommand,
     DashboardResumeCommand,
     DashboardSystemInfo,
@@ -39,6 +47,7 @@ from repocompass.dashboard.commands import (
 from repocompass.dashboard.service import (
     DashboardNotFoundError,
     DashboardServiceError,
+    DashboardSnapshotConflictError,
 )
 from repocompass.memory.contracts import MemoryScope
 from repocompass.memory.store import MemoryStoreError
@@ -47,7 +56,7 @@ from repocompass.service.contracts import (
     InvestigationOperationResult,
     REQUEST_ID_PATTERN,
 )
-from repocompass.tools.contracts import MAX_SAFE_JSON_INTEGER
+from repocompass.tools.contracts import MAX_SAFE_JSON_INTEGER, SHA256_PATTERN
 
 DASHBOARD_API_VERSION = "v1"
 DASHBOARD_API_PREFIX = f"/api/{DASHBOARD_API_VERSION}"
@@ -75,6 +84,12 @@ class DashboardReadService(Protocol):
     def list_threads(self, *, max_results: int = 50) -> DashboardThreadCatalog: ...
 
     def get_thread(self, thread_id: str) -> DashboardThreadDetail: ...
+
+    def get_source(
+        self,
+        thread_id: str,
+        entity_id: str,
+    ) -> DashboardSourceSnippet: ...
 
     def get_run(self, run_id: str) -> DashboardRunDetail: ...
 
@@ -134,6 +149,7 @@ def create_dashboard_app(
         "system_info",
         "list_threads",
         "get_thread",
+        "get_source",
         "get_run",
         "list_memory",
         "get_memory_audit",
@@ -240,6 +256,21 @@ def create_dashboard_app(
             code="mutation-conflict",
             title="Mutation conflict",
             detail="The command conflicts with current state or prior identity.",
+            instance=request.url.path,
+        )
+
+    @app.exception_handler(DashboardSnapshotConflictError)
+    async def dashboard_snapshot_conflict(
+        request: Request,
+        _: DashboardSnapshotConflictError,
+    ):
+        return _problem_response(
+            status=409,
+            code="source-snapshot-conflict",
+            title="Evidence source changed",
+            detail=(
+                "The source file no longer matches the persisted evidence snapshot."
+            ),
             instance=request.url.path,
         )
 
@@ -359,6 +390,16 @@ def create_dashboard_app(
     )
     def get_thread(thread_id: str) -> DashboardThreadDetail:
         return service.get_thread(thread_id)
+
+    @app.get(
+        f"{DASHBOARD_API_PREFIX}/threads/{{thread_id}}/source/{{entity_id}}",
+        response_model=DashboardSourceSnippet,
+    )
+    def get_source(
+        thread_id: str,
+        entity_id: Annotated[str, PathParameter(pattern=SHA256_PATTERN)],
+    ) -> DashboardSourceSnippet:
+        return service.get_source(thread_id, entity_id)
 
     @app.get(
         f"{DASHBOARD_API_PREFIX}/runs/{{run_id}}",

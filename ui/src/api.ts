@@ -8,6 +8,7 @@ import type {
   DashboardMemoryDeleteResult,
   DashboardProblemDetail,
   DashboardRunDetail,
+  DashboardSourceSnippet,
   DashboardResumeCommand,
   DashboardStartCommand,
   DashboardSystemInfo,
@@ -133,6 +134,14 @@ export const dashboardQueries = {
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       getJson<DashboardThreadDetail>(
         `/threads/${encodeURIComponent(threadId)}`,
+        signal,
+      ),
+  }),
+  source: (threadId: string, entityId: string) => ({
+    queryKey: ["dashboard", "threads", threadId, "source", entityId] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      getJson<DashboardSourceSnippet>(
+        `/threads/${encodeURIComponent(threadId)}/source/${encodeURIComponent(entityId)}`,
         signal,
       ),
   }),
