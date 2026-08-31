@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field, JsonValue, field_validator, model_validator
 
+from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.context import ContextPack
 from repocompass.agent.cost import (
     AttemptUsageCostReport,
@@ -14,15 +15,22 @@ from repocompass.agent.cost import (
 )
 from repocompass.agent.domain_model import CheckpointSafeModel
 from repocompass.agent.evaluation import EvaluationReport
-from repocompass.agent.lifecycle import HumanDecision, HumanReviewPolicy
+from repocompass.agent.lifecycle import (
+    HumanDecision,
+    HumanReviewPolicy,
+    HumanReviewRequest,
+)
 from repocompass.agent.planning import InvestigationPlan
+from repocompass.agent.result import FinalResult
 from repocompass.agent.routing import TerminationStatus
+from repocompass.agent.structural_artifacts import InvestigationStructure
 from repocompass.agent.thread_view import (
     ThreadExecutionState,
     ThreadInvestigationView,
 )
 from repocompass.agent.trace import TraceEventKind
 from repocompass.agent.usage import ModelInvocationRecord
+from repocompass.structure.reading_path import TraceableReadingPath
 from repocompass.memory.contracts import (
     MemoryAuditEvent,
     MemoryEntryMetadata,
@@ -73,6 +81,7 @@ class DashboardSystemInfo(_DashboardModel):
     commit_sha: CommitSha | None = None
     workspace_name: str = Field(min_length=1, max_length=256)
     workspace_path: Literal["."] = "."
+    demo_mode: bool = False
     memory_available: bool
     pricing_configured: bool
     lifecycle_mutations_enabled: bool
@@ -172,6 +181,154 @@ class DashboardThreadCatalog(_DashboardModel):
     threads: tuple[DashboardThreadSummary, ...] = Field(max_length=100)
     scanned_attempt_count: int = Field(ge=0, le=1_000)
     truncated: bool
+
+
+class DashboardFinalResult(_DashboardModel):
+    """Terminal answer without the structure duplicated by its parent view."""
+
+    relevant_files: tuple[str, ...]
+    relevant_symbols: tuple[str, ...]
+    evidence: tuple[str, ...]
+    summary: str
+    unresolved_questions: tuple[str, ...]
+
+    @classmethod
+    def from_internal(cls, result: FinalResult) -> "DashboardFinalResult":
+        if not isinstance(result, FinalResult):
+            raise TypeError("result must be a FinalResult")
+        return cls(
+            relevant_files=tuple(result.relevant_files),
+            relevant_symbols=tuple(result.relevant_symbols),
+            evidence=tuple(result.evidence),
+            summary=result.summary,
+            unresolved_questions=tuple(result.unresolved_questions),
+        )
+
+
+class DashboardInvestigationStructure(_DashboardModel):
+    """Traceable UI slice without the duplicated full repository graph."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    artifact_id: Sha256Digest
+    repository_id: Sha256Digest
+    commit_sha: CommitSha | None = None
+    indexed_paths: tuple[str, ...] = Field(min_length=1, max_length=32)
+    reading_path: TraceableReadingPath
+
+    @classmethod
+    def from_internal(
+        cls,
+        structure: InvestigationStructure,
+    ) -> "DashboardInvestigationStructure":
+        if not isinstance(structure, InvestigationStructure):
+            raise TypeError("structure must be an InvestigationStructure")
+        return cls(
+            artifact_id=structure.artifact_id,
+            repository_id=structure.repository_id,
+            commit_sha=structure.commit_sha,
+            indexed_paths=structure.indexed_paths,
+            reading_path=structure.reading_path,
+        )
+
+    @model_validator(mode="after")
+    def reconcile_reading_path_provenance(self) -> "DashboardInvestigationStructure":
+        graph_slice = self.reading_path.graph_slice
+        if (
+            graph_slice.repository_id != self.repository_id
+            or graph_slice.commit_sha != self.commit_sha
+        ):
+            raise ValueError("dashboard structure has mismatched graph provenance")
+        if self.indexed_paths != tuple(sorted(set(self.indexed_paths))):
+            raise ValueError("dashboard indexed paths must be canonical")
+        return self
+
+
+class DashboardThreadView(_DashboardModel):
+    """UI-minimal checkpoint view; heavy run artifacts stay run-scoped."""
+
+    schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
+    thread_id: str = Field(pattern=IDENTIFIER_PATTERN)
+    execution_state: ThreadExecutionState
+    turn_number: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+    objective: str = Field(min_length=1, max_length=16_384)
+    plan: InvestigationPlan | None = None
+    plan_revision_count: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
+    max_plan_revisions: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
+    next_nodes: tuple[str, ...] = Field(default=(), max_length=32)
+    termination_status: TerminationStatus | None = None
+    step_stop_reason: str | None = None
+    candidate_result: CandidateResult | None = None
+    evaluation_report: EvaluationReport | None = None
+    structure: DashboardInvestigationStructure | None = None
+    final_result: DashboardFinalResult | None = None
+    pending_review: HumanReviewRequest | None = None
+    interrupt_id: str | None = Field(default=None, min_length=1, max_length=256)
+
+    @classmethod
+    def from_internal(cls, view: ThreadInvestigationView) -> "DashboardThreadView":
+        if not isinstance(view, ThreadInvestigationView):
+            raise TypeError("view must be a ThreadInvestigationView")
+        final_result = (
+            None
+            if view.final_result is None
+            else DashboardFinalResult.from_internal(view.final_result)
+        )
+        structure = (
+            None
+            if view.structure is None
+            else DashboardInvestigationStructure.from_internal(view.structure)
+        )
+        return cls(
+            thread_id=view.thread_id,
+            execution_state=view.execution_state,
+            turn_number=view.turn_number,
+            objective=view.objective,
+            plan=view.plan,
+            plan_revision_count=view.plan_revision_count,
+            max_plan_revisions=view.max_plan_revisions,
+            next_nodes=view.next_nodes,
+            termination_status=view.termination_status,
+            step_stop_reason=view.step_stop_reason,
+            candidate_result=view.candidate_result,
+            evaluation_report=view.evaluation_report,
+            structure=structure,
+            final_result=final_result,
+            pending_review=view.pending_review,
+            interrupt_id=view.interrupt_id,
+        )
+
+    @model_validator(mode="after")
+    def require_unambiguous_lifecycle_state(self) -> "DashboardThreadView":
+        if len(self.next_nodes) != len(set(self.next_nodes)):
+            raise ValueError("next_nodes must be unique")
+        if self.execution_state is ThreadExecutionState.COMPLETED:
+            if self.final_result is None or self.termination_status is None:
+                raise ValueError(
+                    "completed dashboard thread requires a terminal result"
+                )
+            if self.next_nodes or self.pending_review is not None:
+                raise ValueError("completed dashboard thread cannot remain pending")
+            if self.interrupt_id is not None:
+                raise ValueError(
+                    "completed dashboard thread cannot expose an interrupt"
+                )
+        elif self.execution_state is ThreadExecutionState.INTERRUPTED:
+            if (
+                self.pending_review is None
+                or self.interrupt_id is None
+                or not self.next_nodes
+            ):
+                raise ValueError("interrupted dashboard thread requires one review")
+            if self.final_result is not None or self.termination_status is not None:
+                raise ValueError("interrupted dashboard thread cannot be terminal")
+        elif self.execution_state is ThreadExecutionState.RESUMABLE:
+            if not self.next_nodes:
+                raise ValueError("resumable dashboard thread requires pending nodes")
+            if self.pending_review is not None or self.interrupt_id is not None:
+                raise ValueError("resumable dashboard thread cannot contain a review")
+            if self.final_result is not None or self.termination_status is not None:
+                raise ValueError("resumable dashboard thread cannot be terminal")
+        return self
 
 
 class PublicTraceEvent(_DashboardModel):
@@ -344,7 +501,7 @@ class EvaluatorReplayFrame(_DashboardModel):
 
 class DashboardThreadDetail(_DashboardModel):
     schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
-    thread: ThreadInvestigationView
+    thread: DashboardThreadView
     attempts: tuple[DashboardRunSummary, ...] = Field(max_length=100)
     plan_timeline: tuple[PlanReplayFrame, ...] = Field(max_length=10_000)
     evaluator_timeline: tuple[EvaluatorReplayFrame, ...] = Field(max_length=10_000)

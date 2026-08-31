@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 from contextlib import ExitStack
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, cast
 
 import uvicorn
@@ -18,6 +19,7 @@ from repocompass.agent.runner import AgentRunner
 from repocompass.agent.trace_sink import JsonlTraceSink
 from repocompass.dashboard.api import create_dashboard_app
 from repocompass.dashboard.commands import DashboardCommandService
+from repocompass.dashboard.demo import DashboardDemoError, create_dashboard_demo
 from repocompass.dashboard.service import DashboardQueryService
 from repocompass.dashboard.trace_store import JsonlTraceStore
 from repocompass.memory.store import MemoryStoreError, open_memory_store
@@ -38,6 +40,19 @@ DEFAULT_DASHBOARD_TRACE_DIRECTORY = Path(".repocompass/traces")
 DEFAULT_DASHBOARD_HOST = "127.0.0.1"
 DEFAULT_DASHBOARD_PORT = 8766
 _LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
+_DEMO_CONFLICT_OPTIONS = frozenset(
+    {
+        "--repo-path",
+        "--checkpoint-db",
+        "--raw-store-db",
+        "--memory-db",
+        "--operation-db",
+        "--trace-dir",
+        "--pricing-file",
+        "--enable-lifecycle-mutations",
+        "--enable-memory-mutations",
+    }
+)
 
 
 class _InspectionOnlyModel:
@@ -72,8 +87,16 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--repo-path",
         type=Path,
-        required=True,
+        required=False,
         help="trusted repository root selected by the local operator",
+    )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help=(
+            "serve a sanitized, read-only, ephemeral investigation generated "
+            "through the production graph without provider credentials"
+        ),
     )
     parser.add_argument(
         "--host",
@@ -133,24 +156,59 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Open local stores and serve a read-first dashboard until shutdown."""
 
     parser = create_parser()
-    arguments = parser.parse_args(argv)
+    argument_vector = list(sys.argv[1:] if argv is None else argv)
+    arguments = parser.parse_args(argument_vector)
     if not 1 <= arguments.port <= 65_535:
         parser.error("--port must be between 1 and 65535")
+    if arguments.demo:
+        conflicts = sorted(
+            option
+            for option in _DEMO_CONFLICT_OPTIONS
+            if _option_was_supplied(argument_vector, option)
+        )
+        if conflicts:
+            parser.error("--demo cannot be combined with " + ", ".join(conflicts))
+    elif arguments.repo_path is None:
+        parser.error("--repo-path is required unless --demo is selected")
 
     try:
-        pricing_table = (
-            None
-            if arguments.pricing_file is None
-            else load_pricing_table_file(arguments.pricing_file)
-        )
         with ExitStack() as stack:
+            if arguments.demo:
+                demo_root = Path(
+                    stack.enter_context(
+                        TemporaryDirectory(prefix="repocompass-dashboard-demo-")
+                    )
+                )
+                demo = create_dashboard_demo(demo_root)
+                repository_path = demo.repository_path
+                checkpoint_database = demo.checkpoint_database
+                raw_store_database = demo.raw_store_database
+                memory_database = demo.memory_database
+                trace_directory = demo.trace_directory
+                pricing_table = demo.pricing_table
+                print(
+                    "repocompass-dashboard: sanitized ephemeral demo loaded; "
+                    "provider calls and mutation routes are disabled",
+                    file=sys.stderr,
+                )
+            else:
+                repository_path = arguments.repo_path
+                checkpoint_database = arguments.checkpoint_db
+                raw_store_database = arguments.raw_store_db
+                memory_database = arguments.memory_db
+                trace_directory = arguments.trace_dir
+                pricing_table = (
+                    None
+                    if arguments.pricing_file is None
+                    else load_pricing_table_file(arguments.pricing_file)
+                )
+            if repository_path is None:  # pragma: no cover - parser owns this branch
+                raise ValueError("repository path is required")
             checkpointer = stack.enter_context(
-                open_sqlite_checkpointer(arguments.checkpoint_db)
+                open_sqlite_checkpointer(checkpoint_database)
             )
-            raw_run_store = stack.enter_context(
-                open_raw_run_store(arguments.raw_store_db)
-            )
-            memory_store = stack.enter_context(open_memory_store(arguments.memory_db))
+            raw_run_store = stack.enter_context(open_raw_run_store(raw_store_database))
+            memory_store = stack.enter_context(open_memory_store(memory_database))
             operation_store = (
                 stack.enter_context(
                     open_service_operation_store(arguments.operation_db)
@@ -173,19 +231,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             query_service = DashboardQueryService(
                 runner,
                 raw_run_store=raw_run_store,
-                trace_store=JsonlTraceStore(arguments.trace_dir),
-                repository_root=arguments.repo_path,
+                trace_store=JsonlTraceStore(trace_directory),
+                repository_root=repository_path,
                 memory_store=memory_store,
                 pricing_table=pricing_table,
                 lifecycle_mutations_enabled=arguments.enable_lifecycle_mutations,
                 memory_mutations_enabled=arguments.enable_memory_mutations,
+                demo_mode=arguments.demo,
             )
             lifecycle_service = (
                 InvestigationService(
                     runner,
                     operation_store=operation_store,
                     trace_sink=JsonlTraceSink(),
-                    trace_directory=arguments.trace_dir,
+                    trace_directory=trace_directory,
                 )
                 if operation_store is not None
                 else None
@@ -219,6 +278,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 timeout_keep_alive=5,
             )
     except (
+        DashboardDemoError,
         MemoryStoreError,
         OSError,
         RawStoreError,
@@ -229,6 +289,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"repocompass-dashboard: error: {error}", file=sys.stderr)
         return 1
     return 0
+
+
+def _option_was_supplied(arguments: Sequence[str], option: str) -> bool:
+    return any(value == option or value.startswith(f"{option}=") for value in arguments)
 
 
 if __name__ == "__main__":

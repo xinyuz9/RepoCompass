@@ -18,6 +18,7 @@ const system: DashboardSystemInfo = {
   commit_sha: commitSha,
   workspace_name: "RepoCompass",
   workspace_path: ".",
+  demo_mode: false,
   memory_available: true,
   pricing_configured: true,
   lifecycle_mutations_enabled: true,

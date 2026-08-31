@@ -35,6 +35,7 @@ from repocompass.dashboard.contracts import (
     DashboardMemoryAudit,
     DashboardMemoryDeleteCommand,
     DashboardThreadDetail,
+    DashboardThreadView,
 )
 from repocompass.memory.contracts import (
     MemoryFactKind,
@@ -166,26 +167,28 @@ def _thread_detail(context: ToolExecutionContext) -> DashboardThreadDetail:
         ),
     )
     return DashboardThreadDetail(
-        thread=ThreadInvestigationView(
-            thread_id="thread-1",
-            execution_state=ThreadExecutionState.INTERRUPTED,
-            turn_number=1,
-            objective="Locate authentication.",
-            plan=None,
-            plan_revision_count=2,
-            max_plan_revisions=2,
-            next_nodes=("human_review",),
-            termination_status=None,
-            step_stop_reason=None,
-            candidate_result=candidate,
-            evaluation_report=evaluation,
-            structure=None,
-            context_pack=None,
-            memory_recall_report=None,
-            cost_budget=None,
-            final_result=None,
-            pending_review=review,
-            interrupt_id="interrupt-1",
+        thread=DashboardThreadView.from_internal(
+            ThreadInvestigationView(
+                thread_id="thread-1",
+                execution_state=ThreadExecutionState.INTERRUPTED,
+                turn_number=1,
+                objective="Locate authentication.",
+                plan=None,
+                plan_revision_count=2,
+                max_plan_revisions=2,
+                next_nodes=("human_review",),
+                termination_status=None,
+                step_stop_reason=None,
+                candidate_result=candidate,
+                evaluation_report=evaluation,
+                structure=None,
+                context_pack=None,
+                memory_recall_report=None,
+                cost_budget=None,
+                final_result=None,
+                pending_review=review,
+                interrupt_id="interrupt-1",
+            )
         ),
         attempts=(
             DashboardRunSummary(

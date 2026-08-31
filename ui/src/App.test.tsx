@@ -12,6 +12,7 @@ const system = {
   commit_sha: "b".repeat(40),
   workspace_name: "RepoCompass",
   workspace_path: ".",
+  demo_mode: false,
   memory_available: true,
   pricing_configured: false,
   lifecycle_mutations_enabled: false,

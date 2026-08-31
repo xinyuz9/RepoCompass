@@ -14,6 +14,7 @@ export interface DashboardSystemInfo {
   commit_sha: string | null;
   workspace_name: string;
   workspace_path: ".";
+  demo_mode: boolean;
   memory_available: boolean;
   pricing_configured: boolean;
   lifecycle_mutations_enabled: boolean;
@@ -204,13 +205,12 @@ export interface CandidateResult {
   unresolved_questions: string[];
 }
 
-export interface FinalResult {
+export interface DashboardFinalResult {
   relevant_files: string[];
   relevant_symbols: string[];
   evidence: string[];
   summary: string;
   unresolved_questions: string[];
-  structure: InvestigationStructure | null;
 }
 
 export interface HumanReviewRequest {
@@ -235,7 +235,7 @@ export interface ThreadInvestigationView {
   candidate_result: CandidateResult | null;
   evaluation_report: EvaluationReport | null;
   structure: InvestigationStructure | null;
-  final_result: FinalResult | null;
+  final_result: DashboardFinalResult | null;
   pending_review: HumanReviewRequest | null;
   interrupt_id: string | null;
 }

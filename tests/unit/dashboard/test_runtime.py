@@ -194,6 +194,69 @@ def test_runtime_parser_rejects_non_loopback_host_and_invalid_port(
     assert invalid_port.value.code == 2
 
 
+def test_runtime_demo_is_ephemeral_read_only_and_credential_free(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "demo-repository"
+    repository.mkdir()
+    state = tmp_path / "demo-state"
+    generated_destinations: list[Path] = []
+
+    def fake_demo(destination: Path):
+        generated_destinations.append(destination)
+        return type("DemoWorkspace", (), {
+            "repository_path": repository,
+            "checkpoint_database": state / "checkpoints.sqlite",
+            "raw_store_database": state / "raw.sqlite",
+            "memory_database": state / "memory.sqlite",
+            "trace_directory": state / "traces",
+            "pricing_table": None,
+        })()
+
+    def forbid_workflow_models():
+        raise AssertionError("demo serving must use inspection-only models")
+
+    def fake_run(app, **kwargs) -> None:
+        del kwargs
+        client = TestClient(app)
+        system = client.get("/api/v1/system").json()
+        document = client.get("/api/v1/openapi.json").json()
+        assert system["demo_mode"] is True
+        assert system["lifecycle_mutations_enabled"] is False
+        assert system["memory_mutations_enabled"] is False
+        assert client.get("/api/v1/threads").json()["threads"] == []
+        assert "/api/v1/investigations" not in document["paths"]
+        assert "/api/v1/memory/{memory_id}" not in document["paths"]
+
+    monkeypatch.setattr(runtime, "create_dashboard_demo", fake_demo)
+    monkeypatch.setattr(runtime, "create_workflow_models", forbid_workflow_models)
+    monkeypatch.setattr(runtime.uvicorn, "run", fake_run)
+
+    assert runtime.main(["--demo"]) == 0
+    assert len(generated_destinations) == 1
+    assert not generated_destinations[0].exists()
+
+
+@pytest.mark.parametrize(
+    "conflict",
+    [
+        ("--repo-path", "."),
+        ("--checkpoint-db", "state.sqlite"),
+        ("--pricing-file", "pricing.json"),
+        ("--enable-lifecycle-mutations",),
+        ("--enable-memory-mutations",),
+    ],
+)
+def test_runtime_demo_rejects_real_workspace_and_mutation_options(
+    conflict: tuple[str, ...],
+) -> None:
+    with pytest.raises(SystemExit) as rejected:
+        runtime.main(["--demo", *conflict])
+
+    assert rejected.value.code == 2
+
+
 def test_runtime_reports_missing_repository_without_starting_server(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

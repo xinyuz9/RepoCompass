@@ -27,6 +27,7 @@ const system = {
   commit_sha: commitSha,
   workspace_name: "RepoCompass",
   workspace_path: ".",
+  demo_mode: true,
   memory_available: true,
   pricing_configured: false,
   lifecycle_mutations_enabled: false,
@@ -105,6 +106,7 @@ describe("App URL navigation", () => {
     renderApp();
 
     expect(await screen.findByRole("heading", { name: "No ContextPack persisted" })).toBeVisible();
+    expect(screen.getByText("sanitized demo")).toBeVisible();
     expect(requestedPaths).toContain("/api/v1/runs/run-1");
     expect(within(screen.getByRole("navigation", { name: "Primary lenses" }))
       .getByRole("button", { name: "Context" })).toHaveClass("is-active");

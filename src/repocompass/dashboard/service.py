@@ -27,6 +27,7 @@ from repocompass.dashboard.contracts import (
     DashboardThreadCatalog,
     DashboardThreadDetail,
     DashboardThreadSummary,
+    DashboardThreadView,
     EvaluatorReplayFrame,
     PlanReplayFrame,
     PublicTraceEvent,
@@ -107,6 +108,7 @@ class DashboardQueryService:
         pricing_table: PricingTable | None = None,
         lifecycle_mutations_enabled: bool = False,
         memory_mutations_enabled: bool = False,
+        demo_mode: bool = False,
     ) -> None:
         if not callable(getattr(runner, "inspect_thread", None)):
             raise TypeError("runner must implement inspect_thread")
@@ -124,6 +126,8 @@ class DashboardQueryService:
             raise TypeError("lifecycle_mutations_enabled must be a bool")
         if type(memory_mutations_enabled) is not bool:
             raise TypeError("memory_mutations_enabled must be a bool")
+        if type(demo_mode) is not bool:
+            raise TypeError("demo_mode must be a bool")
         if memory_mutations_enabled and memory_store is None:
             raise ValueError("memory mutations require a memory store")
 
@@ -136,6 +140,7 @@ class DashboardQueryService:
         self._pricing_table = pricing_table
         self._lifecycle_mutations_enabled = lifecycle_mutations_enabled
         self._memory_mutations_enabled = memory_mutations_enabled
+        self._demo_mode = demo_mode
 
     @property
     def repository_context(self) -> ToolExecutionContext:
@@ -152,6 +157,7 @@ class DashboardQueryService:
             repository_id=context.repository_id,
             commit_sha=context.commit_sha,
             workspace_name=self._repository_root.name or "repository",
+            demo_mode=self._demo_mode,
             pricing_configured=self._pricing_table is not None,
             memory_available=self._memory_store is not None,
             lifecycle_mutations_enabled=self._lifecycle_mutations_enabled,
@@ -241,7 +247,7 @@ class DashboardQueryService:
             plans.extend(attempt_plans)
             evaluations.extend(attempt_evaluations)
         return DashboardThreadDetail(
-            thread=view,
+            thread=DashboardThreadView.from_internal(view),
             attempts=tuple(summaries),
             plan_timeline=tuple(plans),
             evaluator_timeline=tuple(evaluations),

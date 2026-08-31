@@ -12,6 +12,7 @@ import {
   Network,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -191,6 +192,11 @@ export function App() {
                   <FolderGit2 size={13} />
                   {system.data.workspace_name}<code>/{system.data.workspace_path}</code>
                 </span>
+                {system.data.demo_mode ? (
+                  <span className="demo-indicator">
+                    <Sparkles size={12} />sanitized demo
+                  </span>
+                ) : null}
                 <span className="live-indicator"><i /> local</span>
                 <span className="snapshot-chip">
                   <GitCommitHorizontal size={13} />
