@@ -1,6 +1,7 @@
 import type {
   DashboardContinueCommand,
   DashboardHumanResponseCommand,
+  DashboardLifecycleOperationStatus,
   DashboardMemoryAudit,
   DashboardMemoryCatalog,
   DashboardMemoryDeleteCommand,
@@ -139,6 +140,14 @@ export const dashboardQueries = {
     queryKey: ["dashboard", "runs", runId] as const,
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       getJson<DashboardRunDetail>(`/runs/${encodeURIComponent(runId)}`, signal),
+  }),
+  operation: (requestId: string) => ({
+    queryKey: ["dashboard", "operations", requestId] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      getJson<DashboardLifecycleOperationStatus>(
+        `/operations/${encodeURIComponent(requestId)}`,
+        signal,
+      ),
   }),
   memory: {
     queryKey: ["dashboard", "memory"] as const,

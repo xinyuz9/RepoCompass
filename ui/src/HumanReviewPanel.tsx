@@ -12,6 +12,10 @@ import { useState } from "react";
 
 import { DashboardApiError, respondToReview } from "./api";
 import { compactId } from "./format";
+import {
+  forgetLifecycleRequest,
+  rememberLifecycleRequest,
+} from "./lifecycle-request-store";
 import type {
   DashboardHumanResponseCommand,
   DashboardThreadDetail,
@@ -62,7 +66,8 @@ export function HumanReviewPanel({
     mutationFn: (command: DashboardHumanResponseCommand) =>
       respondToReview(thread.thread_id, command),
     retry: false,
-    onSuccess: () => {
+    onSuccess: (result) => {
+      forgetLifecycleRequest(result.request_id);
       void queryClient.invalidateQueries({ queryKey: ["dashboard", "threads"] });
     },
   });
@@ -85,12 +90,20 @@ export function HumanReviewPanel({
       },
     };
     setSubmittedCommand(command);
+    rememberLifecycleRequest({
+      kind: "respond",
+      thread_id: thread.thread_id,
+      command,
+    });
     mutation.mutate(command);
   };
   const retry = () => {
     if (submittedCommand && !mutation.isPending) mutation.mutate(submittedCommand);
   };
   const unlock = () => {
+    if (submittedCommand) {
+      forgetLifecycleRequest(submittedCommand.request_id);
+    }
     mutation.reset();
     setSubmittedCommand(null);
   };

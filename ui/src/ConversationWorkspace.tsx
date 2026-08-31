@@ -24,6 +24,10 @@ import {
   startInvestigation,
 } from "./api";
 import { HumanReviewPanel } from "./HumanReviewPanel";
+import {
+  forgetLifecycleRequest,
+  rememberLifecycleRequest,
+} from "./lifecycle-request-store";
 import type {
   DashboardContinueCommand,
   DashboardResumeCommand,
@@ -111,12 +115,14 @@ function NewGoalWorkspace({
     mutationFn: startInvestigation,
     retry: false,
     onSuccess: (result) => {
+      forgetLifecycleRequest(result.request_id);
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       onThreadActivated(result.thread_id);
     },
   });
 
   const resetCommand = () => {
+    if (lockedCommand) forgetLifecycleRequest(lockedCommand.request_id);
     setLockedCommand(null);
     mutation.reset();
   };
@@ -132,6 +138,11 @@ function NewGoalWorkspace({
       max_attempt_cost_usd: costBudget.trim() || null,
     };
     setLockedCommand(command);
+    rememberLifecycleRequest({
+      kind: "start",
+      thread_id: null,
+      command,
+    });
     mutation.mutate(command);
   };
 
@@ -231,6 +242,7 @@ function ThreadConversation({
     useState<DashboardResumeCommand | null>(null);
 
   const afterLifecycle = (result: InvestigationOperationResult) => {
+    forgetLifecycleRequest(result.request_id);
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     onThreadActivated(result.thread_id);
   };
@@ -258,6 +270,11 @@ function ThreadConversation({
       expected_commit_sha: system.commit_sha,
     };
     setContinueCommand(command);
+    rememberLifecycleRequest({
+      kind: "continue",
+      thread_id: thread.thread_id,
+      command,
+    });
     continueMutation.mutate(command);
   };
   const resume = () => {
@@ -269,6 +286,11 @@ function ThreadConversation({
       expected_commit_sha: system.commit_sha,
     };
     setResumeCommand(command);
+    rememberLifecycleRequest({
+      kind: "resume",
+      thread_id: thread.thread_id,
+      command,
+    });
     resumeMutation.mutate(command);
   };
 
@@ -359,6 +381,9 @@ function ThreadConversation({
               error={continueMutation.error}
               onRetry={() => continueCommand && continueMutation.mutate(continueCommand)}
               onReset={() => {
+                if (continueCommand) {
+                  forgetLifecycleRequest(continueCommand.request_id);
+                }
                 setContinueCommand(null);
                 continueMutation.reset();
               }}

@@ -13,7 +13,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { DashboardApiError, dashboardQueries } from "./api";
 import {
@@ -21,14 +21,21 @@ import {
   type InspectorLens,
 } from "./ConversationWorkspace";
 import { HumanReviewPanel } from "./HumanReviewPanel";
+import { LifecycleRecoveryCenter } from "./lifecycle-recovery";
 import { ObservabilityPanel } from "./ObservabilityPanel";
 import { TaskGraph } from "./TaskGraph";
 import { ThreadList } from "./ThreadList";
 import type { DashboardThreadDetail } from "./types";
+import {
+  isRunLens,
+  readDashboardNavigation,
+  writeDashboardNavigation,
+  type DashboardLens,
+  type DashboardNavigationMode,
+  type DashboardNavigationState,
+} from "./url-state";
 
-type Lens = "chat" | InspectorLens;
-
-const LENSES: { id: Lens; label: string; icon: typeof Network }[] = [
+const LENSES: { id: DashboardLens; label: string; icon: typeof Network }[] = [
   { id: "chat", label: "Chat", icon: MessageSquareText },
   { id: "topology", label: "Path", icon: Network },
   { id: "plan", label: "Plan", icon: ListChecks },
@@ -42,14 +49,21 @@ export function App() {
   const queryClient = useQueryClient();
   const system = useQuery({ ...dashboardQueries.system, staleTime: 60_000 });
   const catalog = useQuery({ ...dashboardQueries.threads, staleTime: 20_000 });
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [composingNew, setComposingNew] = useState(false);
+  const [navigation, setNavigation] = useState(readDashboardNavigation);
   const [filter, setFilter] = useState("");
-  const [lens, setLens] = useState<Lens>("chat");
+  const {
+    threadId: selectedThreadId,
+    lens,
+    runId: requestedRunId,
+    composingNew,
+  } = navigation;
 
+  const defaultThreadId = selectedThreadId
+    ?? catalog.data?.threads[0]?.thread_id
+    ?? null;
   const activeThreadId = composingNew
     ? null
-    : (selectedThreadId ?? catalog.data?.threads[0]?.thread_id ?? null);
+    : defaultThreadId;
   const thread = useQuery({
     ...dashboardQueries.thread(activeThreadId ?? ""),
     enabled: activeThreadId !== null,
@@ -65,17 +79,66 @@ export function App() {
     );
   }, [catalog.data, filter]);
 
+  const navigate = useCallback((
+    next: DashboardNavigationState,
+    mode: DashboardNavigationMode = "push",
+  ) => {
+    setNavigation(next);
+    writeDashboardNavigation(next, mode);
+  }, []);
+
+  useEffect(() => {
+    const restoreNavigation = () => setNavigation(readDashboardNavigation());
+    window.addEventListener("popstate", restoreNavigation);
+    return () => window.removeEventListener("popstate", restoreNavigation);
+  }, []);
+
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-  const openNewGoal = () => {
-    setComposingNew(true);
-    setLens("chat");
-  };
-  const activateThread = (threadId: string) => {
-    setSelectedThreadId(threadId);
-    setComposingNew(false);
-    setLens("chat");
-  };
-  const openInspector = (nextLens: InspectorLens) => setLens(nextLens);
+  const openNewGoal = useCallback(() => navigate({
+    threadId: null,
+    lens: "chat",
+    runId: null,
+    composingNew: true,
+  }), [navigate]);
+  const activateThread = useCallback((threadId: string) => navigate({
+    threadId,
+    lens: "chat",
+    runId: null,
+    composingNew: false,
+  }), [navigate]);
+  const selectThread = useCallback((threadId: string) => navigate({
+    threadId,
+    lens: "chat",
+    runId: null,
+    composingNew: false,
+  }), [navigate]);
+  const openInspector = useCallback((nextLens: InspectorLens) => navigate({
+    threadId: activeThreadId,
+    lens: nextLens,
+    runId: null,
+    composingNew: false,
+  }), [activeThreadId, navigate]);
+  const selectLens = useCallback((nextLens: DashboardLens) => {
+    const keepComposing = nextLens === "chat" && composingNew;
+    const threadId = keepComposing ? null : defaultThreadId;
+    navigate({
+      threadId,
+      lens: nextLens,
+      runId: isRunLens(nextLens) && threadId === selectedThreadId
+        ? requestedRunId
+        : null,
+      composingNew: keepComposing,
+    });
+  }, [composingNew, defaultThreadId, navigate, requestedRunId, selectedThreadId]);
+  const selectRun = useCallback((runId: string, replaceHistory: boolean) => {
+    if (!defaultThreadId) return;
+    navigate({
+      threadId: defaultThreadId,
+      lens,
+      runId,
+      composingNew: false,
+    }, replaceHistory ? "replace" : "push");
+  }, [defaultThreadId, lens, navigate]);
   const rootError = system.error ?? catalog.error;
 
   return (
@@ -90,7 +153,7 @@ export function App() {
               key={id}
               type="button"
               className={lens === id ? "is-active" : ""}
-              onClick={() => setLens(id)}
+              onClick={() => selectLens(id)}
               aria-label={label}
               title={label}
             >
@@ -112,11 +175,7 @@ export function App() {
         currentCommitSha={system.data?.commit_sha ?? null}
         onQueryChange={setFilter}
         onNew={openNewGoal}
-        onSelect={(threadId) => {
-          setSelectedThreadId(threadId);
-          setComposingNew(false);
-          setLens("chat");
-        }}
+        onSelect={selectThread}
       />
 
       <main className="main-stage">
@@ -146,6 +205,8 @@ export function App() {
           </div>
         </header>
 
+        <LifecycleRecoveryCenter onThreadActivated={activateThread} />
+
         {rootError ? <ErrorState error={rootError} onRetry={refresh} /> : null}
         {!rootError && (catalog.isPending || system.isPending) ? <LoadingState /> : null}
         {!rootError && activeThreadId && thread.isError ? (
@@ -174,6 +235,8 @@ export function App() {
             detail={thread.data}
             lifecycleMutationsEnabled={system.data?.lifecycle_mutations_enabled ?? false}
             memoryMutationsEnabled={system.data?.memory_mutations_enabled ?? false}
+            requestedRunId={requestedRunId}
+            onRunSelected={selectRun}
           />
         ) : null}
 
@@ -195,11 +258,15 @@ function InvestigationStage({
   detail,
   lifecycleMutationsEnabled,
   memoryMutationsEnabled,
+  requestedRunId,
+  onRunSelected,
 }: {
   lens: InspectorLens;
   detail: DashboardThreadDetail;
   lifecycleMutationsEnabled: boolean;
   memoryMutationsEnabled: boolean;
+  requestedRunId: string | null;
+  onRunSelected: (runId: string, replaceHistory: boolean) => void;
 }) {
   const { thread, attempts } = detail;
   const slice = thread.structure?.reading_path.graph_slice;
@@ -250,6 +317,8 @@ function InvestigationStage({
           lens={lens}
           detail={detail}
           memoryMutationsEnabled={memoryMutationsEnabled}
+          requestedRunId={requestedRunId}
+          onRunSelected={onRunSelected}
         />
       )}
     </div>

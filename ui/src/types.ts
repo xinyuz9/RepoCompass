@@ -312,6 +312,20 @@ export interface InvestigationOperationResult {
   recovered_from_checkpoint: boolean;
 }
 
+export type InvestigationOperationKind = "start" | "resume" | "continue" | "respond";
+export type InvestigationOperationState = "pending" | "completed";
+
+export interface DashboardLifecycleOperationStatus {
+  schema_version: 1;
+  request_id: string;
+  kind: InvestigationOperationKind;
+  thread_id: string;
+  state: InvestigationOperationState;
+  reserved_at_ms: number;
+  latest_attempt: RawRunAttempt | null;
+  result: InvestigationOperationResult | null;
+}
+
 export interface DashboardMemoryDeleteCommand {
   schema_version: 1;
   request_id: string;
