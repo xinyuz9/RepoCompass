@@ -17,6 +17,7 @@ from langchain_core.messages import BaseMessage
 from langchain_core.outputs import LLMResult
 
 from repocompass.agent.cost import ModelPrice
+from repocompass.agent.admission import PrecallBudgetDenied
 
 NANODOLLARS = 1_000_000_000
 MAX_INPUT_BYTES = 262_144
@@ -24,6 +25,10 @@ MAX_INPUT_BYTES = 262_144
 
 class BudgetAdmissionError(RuntimeError):
     """No provider call may proceed under the current batch budget."""
+
+
+class BudgetReservationDenied(PrecallBudgetDenied, BudgetAdmissionError):
+    """Expected, non-billable stop on insufficient batch or attempt capacity."""
 
 
 def _units(amount: Decimal) -> int:
@@ -103,6 +108,17 @@ class SQLiteSpendLedger:
             self._db.execute(
                 "INSERT OR IGNORE INTO call_pricing SELECT id,? FROM calls", (row[1],)
             )
+            self._db.execute(
+                "CREATE TABLE IF NOT EXISTS attempt_budgets "
+                "(id TEXT PRIMARY KEY, ceiling INTEGER NOT NULL, pricing TEXT NOT NULL)"
+            )
+            self._db.execute(
+                "CREATE TABLE IF NOT EXISTS call_attempts "
+                "(call_id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL)"
+            )
+            self._db.execute(
+                "CREATE INDEX IF NOT EXISTS call_attempts_by_attempt ON call_attempts(attempt_id)"
+            )
             self._db.commit()
         except Exception:
             self._db.rollback()
@@ -115,7 +131,57 @@ class SQLiteSpendLedger:
     def __exit__(self, *_):
         self._db.close()
 
-    def reserve(self, call_id: str, maximum_cost: Decimal) -> None:
+    def begin_attempt(self, attempt_id: str, *, limit_usd: str) -> None:
+        """Bind an immutable attempt ceiling; reopening never resets its spending."""
+        ceiling = _units(Decimal(limit_usd))
+        if not attempt_id or len(attempt_id) > 128 or ceiling <= 0:
+            raise ValueError("invalid attempt budget identity or ceiling")
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                batch_limit = self._db.execute(
+                    "SELECT ceiling FROM budget WHERE id=1"
+                ).fetchone()[0]
+                if ceiling > batch_limit:
+                    raise ValueError("attempt limit must not exceed batch limit")
+                self._db.execute(
+                    "INSERT OR IGNORE INTO attempt_budgets VALUES (?,?,?)",
+                    (attempt_id, ceiling, self.pricing_id),
+                )
+                row = self._db.execute(
+                    "SELECT ceiling,pricing FROM attempt_budgets WHERE id=?",
+                    (attempt_id,),
+                ).fetchone()
+                if row != (ceiling, self.pricing_id):
+                    raise ValueError("existing attempt budget/pricing identity differs")
+                self._db.commit()
+            except Exception:
+                self._db.rollback()
+                raise
+
+    def attempt_summary(self, attempt_id: str) -> dict:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT ceiling,pricing FROM attempt_budgets WHERE id=?", (attempt_id,)
+            ).fetchone()
+            if row is None or row[1] != self.pricing_id:
+                raise ValueError("unknown attempt budget/pricing identity")
+            count, spent = self._db.execute(
+                "SELECT COUNT(*),COALESCE(SUM(charged),0) FROM calls "
+                "JOIN call_attempts ON calls.id=call_attempts.call_id WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+        return {
+            "attempt_id": attempt_id,
+            "limit_usd": _dollars(row[0]),
+            "charged_or_reserved_usd": _dollars(spent),
+            "remaining_usd": _dollars(max(0, row[0] - spent)),
+            "invocations": count,
+        }
+
+    def reserve(
+        self, call_id: str, maximum_cost: Decimal, *, attempt_id: str | None = None
+    ) -> None:
         amount = _units(maximum_cost)
         if not call_id or len(call_id) > 128 or amount <= 0:
             raise ValueError("invalid provider reservation")
@@ -129,9 +195,21 @@ class SQLiteSpendLedger:
                     "SELECT COALESCE(SUM(charged),0) FROM calls"
                 ).fetchone()[0]
                 if blocked or spent + amount > limit:
-                    raise BudgetAdmissionError(
-                        "batch cost ceiling denies the next provider call"
-                    )
+                    raise BudgetReservationDenied("batch_cost_reservation_denied")
+                if attempt_id is not None:
+                    attempt = self._db.execute(
+                        "SELECT ceiling,pricing FROM attempt_budgets WHERE id=?",
+                        (attempt_id,),
+                    ).fetchone()
+                    if attempt is None or attempt[1] != self.pricing_id:
+                        raise ValueError("unknown attempt budget/pricing identity")
+                    attempt_spent = self._db.execute(
+                        "SELECT COALESCE(SUM(charged),0) FROM calls "
+                        "JOIN call_attempts ON calls.id=call_attempts.call_id WHERE attempt_id=?",
+                        (attempt_id,),
+                    ).fetchone()[0]
+                    if attempt_spent + amount > attempt[0]:
+                        raise BudgetReservationDenied("attempt_cost_reservation_denied")
                 if self._db.execute(
                     "SELECT 1 FROM calls WHERE id=?", (call_id,)
                 ).fetchone():
@@ -145,6 +223,10 @@ class SQLiteSpendLedger:
                 self._db.execute(
                     "INSERT INTO call_pricing VALUES (?,?)", (call_id, self.pricing_id)
                 )
+                if attempt_id is not None:
+                    self._db.execute(
+                        "INSERT INTO call_attempts VALUES (?,?)", (call_id, attempt_id)
+                    )
                 self._db.commit()
             except Exception:
                 self._db.rollback()
@@ -231,13 +313,19 @@ class BudgetCallback(BaseCallbackHandler):
     run_inline = True
 
     def __init__(
-        self, ledger: SQLiteSpendLedger, price: ModelPrice, *, max_output_tokens: int
+        self,
+        ledger: SQLiteSpendLedger,
+        price: ModelPrice,
+        *,
+        max_output_tokens: int,
+        attempt_id: str | None = None,
     ):
         if not 64 <= max_output_tokens <= 8192:
             raise ValueError("output cap must be between 64 and 8192")
         self.ledger = ledger
         self.price = price
         self.max_output_tokens = max_output_tokens
+        self.attempt_id = attempt_id
         self._ceilings: dict[str, int] = {}
 
     def _cost(self, input_tokens: int, output_tokens: int) -> Decimal:
@@ -269,8 +357,14 @@ class BudgetCallback(BaseCallbackHandler):
         actual_cap = params.get("max_tokens", params.get("max_completion_tokens"))
         if actual_cap is not None and actual_cap != self.max_output_tokens:
             raise BudgetAdmissionError("provider output cap differs from reserved cap")
+        if params.get("n", 1) != 1:
+            raise BudgetAdmissionError("multiple completions are not admitted")
         ceiling = wire_bytes + 4096
-        self.ledger.reserve(str(run_id), self._cost(ceiling, self.max_output_tokens))
+        self.ledger.reserve(
+            str(run_id),
+            self._cost(ceiling, self.max_output_tokens),
+            attempt_id=self.attempt_id,
+        )
         self._ceilings[str(run_id)] = ceiling
 
     def on_llm_end(self, response: LLMResult, *, run_id, **kwargs) -> None:

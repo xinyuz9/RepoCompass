@@ -91,3 +91,22 @@ def test_budget_fallback_rejects_missing_or_allowing_decision() -> None:
                 "cost_budget": _within_budget(),
             }
         )
+
+
+@pytest.mark.parametrize(
+    "reason", ["attempt_cost_reservation_denied", "batch_cost_reservation_denied"]
+)
+@pytest.mark.parametrize("budget", [None, _within_budget()])
+def test_precall_denial_does_not_require_fabricated_overshoot(reason, budget):
+    state = {
+        "objective": "Locate authentication.",
+        "candidate_result": None,
+        "cost_budget": budget,
+        "step_stop_reason": reason,
+    }
+    assert route_after_model_invocation(state) == "cost_budget_exhausted"
+    result = finalize_cost_budget_exhausted(state)
+    assert result["termination_status"] == "exhausted"
+    assert result["step_stop_reason"] == reason
+    assert "reservation" in result["final_result"].summary
+    assert "overshoot" not in result["final_result"].summary

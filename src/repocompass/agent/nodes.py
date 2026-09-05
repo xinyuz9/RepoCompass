@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
@@ -21,6 +21,7 @@ from langchain_core.tools import BaseTool
 from langgraph.graph import MessagesState
 from langgraph.types import interrupt
 from pydantic import BaseModel, ValidationError
+from repocompass.agent.admission import PRECALL_BUDGET_STOP_REASONS, PrecallBudgetDenied
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.context import ContextItem, ContextPack, MemoryRecallReport
@@ -121,20 +122,23 @@ def _next_context_build_count(state: Mapping[str, object]) -> int:
 
 @dataclass(frozen=True, slots=True)
 class _ModelCostBudgetDenied:
-    budget: AttemptCostBudgetSummary
+    budget: AttemptCostBudgetSummary | None
+    stop_reason: str = ATTEMPT_COST_BUDGET_STOP_REASON
 
 
 class CostBudgetDeniedUpdate(TypedDict):
-    cost_budget: AttemptCostBudgetSummary
+    cost_budget: AttemptCostBudgetSummary | None
     step_stop_reason: str
 
 
 def _cost_budget_denied_update(
-    budget: AttemptCostBudgetSummary,
+    budget: AttemptCostBudgetSummary | None,
+    *,
+    stop_reason: str = ATTEMPT_COST_BUDGET_STOP_REASON,
 ) -> CostBudgetDeniedUpdate:
     return {
         "cost_budget": budget,
-        "step_stop_reason": ATTEMPT_COST_BUDGET_STOP_REASON,
+        "step_stop_reason": stop_reason,
     }
 
 
@@ -177,6 +181,11 @@ def _invoke_model(
         )
     except CostBudgetExceededError as error:
         return _ModelCostBudgetDenied(error.budget)
+    except PrecallBudgetDenied as error:
+        return _ModelCostBudgetDenied(
+            recorder.assess_cost_budget(state=state, config=config),
+            stop_reason=error.stop_reason,
+        )
 
 
 def _parse_structured_response(
@@ -328,7 +337,9 @@ def create_plan_investigation_node(
             ),
         )
         if isinstance(response, _ModelCostBudgetDenied):
-            return _cost_budget_denied_update(response.budget)  # type: ignore[return-value]
+            return _cost_budget_denied_update(
+                response.budget, stop_reason=response.stop_reason
+            )  # type: ignore[return-value]
         assert isinstance(response, InvestigationPlan)
 
         return {
@@ -554,7 +565,9 @@ def create_agent_node(
             parse=_parse_explorer_response,
         )
         if isinstance(response, _ModelCostBudgetDenied):
-            return _cost_budget_denied_update(response.budget)  # type: ignore[return-value]
+            return _cost_budget_denied_update(
+                response.budget, stop_reason=response.stop_reason
+            )  # type: ignore[return-value]
         assert isinstance(response, AIMessage)
         return {
             "messages": [response],
@@ -915,7 +928,9 @@ def create_build_candidate_node(
             ),
         )
         if isinstance(response, _ModelCostBudgetDenied):
-            return _cost_budget_denied_update(response.budget)  # type: ignore[return-value]
+            return _cost_budget_denied_update(
+                response.budget, stop_reason=response.stop_reason
+            )  # type: ignore[return-value]
         assert isinstance(response, CandidateResult)
 
         return {
@@ -1077,7 +1092,9 @@ def create_evaluate_candidate_node(
             ),
         )
         if isinstance(response, _ModelCostBudgetDenied):
-            return _cost_budget_denied_update(response.budget)  # type: ignore[return-value]
+            return _cost_budget_denied_update(
+                response.budget, stop_reason=response.stop_reason
+            )  # type: ignore[return-value]
         assert isinstance(response, SemanticAssessment)
 
         return {
@@ -1347,7 +1364,9 @@ def create_revise_plan_node(
             ),
         )
         if isinstance(response, _ModelCostBudgetDenied):
-            return _cost_budget_denied_update(response.budget)  # type: ignore[return-value]
+            return _cost_budget_denied_update(
+                response.budget, stop_reason=response.stop_reason
+            )  # type: ignore[return-value]
         assert isinstance(response, InvestigationPlan)
 
         revised_by_id = {step.id: step for step in response.steps}
@@ -1388,6 +1407,7 @@ class CostBudgetFinalizerInput(TypedDict):
     candidate_result: CandidateResult | None
     cost_budget: AttemptCostBudgetSummary | None
     investigation_structure: InvestigationStructure | None
+    step_stop_reason: NotRequired[str | None]
 
 
 class CostBudgetFinalizerUpdate(TypedDict):
@@ -1402,15 +1422,25 @@ def finalize_cost_budget_exhausted(
     """Publish the best available result without making another model call."""
 
     budget = state["cost_budget"]
-    if budget is None or budget.next_invocation_allowed:
+    stop_reason = state.get("step_stop_reason")
+    precall_denied = stop_reason in PRECALL_BUDGET_STOP_REASONS
+    if not precall_denied and (budget is None or budget.next_invocation_allowed):
         raise ValueError("cost budget fallback requires a denied decision")
     objective = state["objective"].strip()
     if not objective:
         raise ValueError("cost budget fallback requires a non-empty objective")
-    budget_message = (
-        "Investigation stopped before another model invocation because the "
-        f"attempt cost budget denied it ({budget.reason.value})."
-    )
+    if precall_denied:
+        budget_message = (
+            "Investigation stopped before another model invocation because its "
+            f"cost reservation did not fit the configured spending limits ({stop_reason})."
+        )
+    else:
+        assert budget is not None
+        stop_reason = ATTEMPT_COST_BUDGET_STOP_REASON
+        budget_message = (
+            "Investigation stopped before another model invocation because the "
+            f"attempt cost budget denied it ({budget.reason.value})."
+        )
     structure = state.get("investigation_structure")
     if structure is not None and not isinstance(structure, InvestigationStructure):
         raise TypeError("investigation_structure is invalid")
@@ -1443,7 +1473,7 @@ def finalize_cost_budget_exhausted(
         )
     return {
         "termination_status": "exhausted",
-        "step_stop_reason": ATTEMPT_COST_BUDGET_STOP_REASON,
+        "step_stop_reason": stop_reason,
         "final_result": result,
     }
 

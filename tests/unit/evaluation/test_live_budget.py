@@ -15,6 +15,7 @@ from repocompass.evaluation.live_budget import (
     BudgetAdmissionError,
     BudgetCallback,
     SQLiteSpendLedger,
+    BudgetReservationDenied,
 )
 
 
@@ -200,3 +201,87 @@ def test_mixed_price_connections_share_atomic_remaining_budget(tmp_path):
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sum(pool.map(reserve, range(2))) == 1
+
+
+def test_attempt_admission_is_atomic_with_batch_and_survives_reopen(tmp_path):
+    path = tmp_path / "budget.sqlite"
+    with SQLiteSpendLedger(path, limit_usd="1", pricing_id="a" * 64) as ledger:
+        ledger.begin_attempt("target", limit_usd="0.1")
+        ledger.reserve("first", Decimal("0.08"), attempt_id="target")
+        ledger.uncertain("first", "failed_unknown_usage")
+        with pytest.raises(
+            BudgetReservationDenied, match="attempt_cost_reservation_denied"
+        ):
+            ledger.reserve("denied", Decimal("0.03"), attempt_id="target")
+        assert ledger.summary()["invocations"] == 1
+        assert ledger.attempt_summary("target")["charged_or_reserved_usd"] == "0.08"
+    with SQLiteSpendLedger(path, limit_usd="1", pricing_id="a" * 64) as ledger:
+        ledger.begin_attempt("target", limit_usd="0.1")
+        with pytest.raises(ValueError, match="identity"):
+            ledger.begin_attempt("target", limit_usd="0.2")
+        ledger.begin_attempt("warmup", limit_usd="0.1")
+        ledger.reserve("warm", Decimal("0.1"), attempt_id="warmup")
+        assert ledger.summary()["charged_or_reserved_usd"] == "0.18"
+        with pytest.raises(BudgetReservationDenied):
+            ledger.reserve("still-denied", Decimal("0.03"), attempt_id="target")
+
+
+def test_attempt_and_batch_both_apply_without_partial_reservations(tmp_path):
+    with SQLiteSpendLedger(
+        tmp_path / "budget.sqlite", limit_usd="1", pricing_id="a" * 64
+    ) as ledger:
+        ledger.reserve("historical", Decimal("0.95"))
+        ledger.begin_attempt("new", limit_usd="0.1")
+        with pytest.raises(
+            BudgetReservationDenied, match="batch_cost_reservation_denied"
+        ):
+            ledger.reserve("denied", Decimal("0.06"), attempt_id="new")
+        assert ledger.attempt_summary("new")["invocations"] == 0
+        with pytest.raises(ValueError, match="identity"):
+            ledger.reserve("unknown", Decimal("0.01"), attempt_id="unregistered")
+        assert ledger.summary()["invocations"] == 1
+
+
+def test_reported_usage_releases_both_reservations_but_overshoot_blocks_batch(tmp_path):
+    with SQLiteSpendLedger(
+        tmp_path / "budget.sqlite", limit_usd="1", pricing_id="a" * 64
+    ) as ledger:
+        ledger.begin_attempt("target", limit_usd="0.1")
+        ledger.reserve("first", Decimal("0.08"), attempt_id="target")
+        ledger.settle("first", Decimal("0.01"))
+        ledger.reserve("second", Decimal("0.08"), attempt_id="target")
+        assert ledger.attempt_summary("target")["charged_or_reserved_usd"] == "0.09"
+        with pytest.raises(BudgetAdmissionError):
+            ledger.settle("second", Decimal("0.1"))
+        assert ledger.attempt_summary("target")["charged_or_reserved_usd"] == "0.11"
+        assert ledger.summary()["blocked"]
+
+
+def test_concurrent_attempt_reservations_cannot_double_spend(tmp_path):
+    path = tmp_path / "budget.sqlite"
+    with SQLiteSpendLedger(path, limit_usd="1", pricing_id="a" * 64) as ledger:
+        ledger.begin_attempt("target", limit_usd="0.1")
+
+    def reserve(index):
+        with SQLiteSpendLedger(path, limit_usd="1", pricing_id="a" * 64) as ledger:
+            try:
+                ledger.reserve(str(index), Decimal("0.06"), attempt_id="target")
+            except BudgetReservationDenied:
+                return False
+            return True
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sum(pool.map(reserve, range(2))) == 1
+
+
+def test_attempt_pricing_binding_cannot_be_reinterpreted(tmp_path):
+    path = tmp_path / "budget.sqlite"
+    with SQLiteSpendLedger(path, limit_usd="1", pricing_id="a" * 64) as ledger:
+        ledger.begin_attempt("target", limit_usd="0.1")
+    with SQLiteSpendLedger(
+        path, limit_usd="1", pricing_id="b" * 64, allow_pricing_extension=True
+    ) as ledger:
+        with pytest.raises(ValueError, match="identity"):
+            ledger.begin_attempt("target", limit_usd="0.1")
+        with pytest.raises(ValueError, match="identity"):
+            ledger.reserve("wrong-price", Decimal("0.01"), attempt_id="target")

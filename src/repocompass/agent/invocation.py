@@ -13,6 +13,7 @@ from typing import TypeVar
 from langchain_core.messages import AnyMessage, BaseMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
+from repocompass.agent.admission import PrecallBudgetDenied
 
 from repocompass.agent.context import (
     RawArtifactKind,
@@ -308,6 +309,10 @@ class RawRunRecorder:
             raw_response = invoke(invocation_messages)
             provider_completed = True
             parsed = parse(raw_response)
+        except PrecallBudgetDenied:
+            # The provider was never called. Keep the attempted input/context for
+            # audit, but do not invent a failed invocation or unknown token usage.
+            raise
         except Exception:
             latency_ms = self._latency_ms(started_ns)
             output_artifact_id = None

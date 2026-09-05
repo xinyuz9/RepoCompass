@@ -103,7 +103,8 @@ def assess_tool_progress(
         fingerprint = audit.fingerprint.digest
         if fingerprint not in successful_tool_fingerprints:
             successful_tool_fingerprints.add(fingerprint)
-            new_tool_progress_observed = True
+        # A new query that returns identical evidence is not progress. Keep its
+        # request identity for audit, but only novel observed results reset stalls.
         if (
             audit.result_digest is not None
             and audit.result_digest not in evidence_fingerprints

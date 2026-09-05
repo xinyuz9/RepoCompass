@@ -9,6 +9,7 @@ import os
 import sqlite3
 from contextlib import closing
 from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 from time import monotonic
 from urllib.parse import urlsplit
@@ -20,7 +21,9 @@ from langchain_openai import ChatOpenAI
 
 from repocompass.agent.checkpoint import open_sqlite_checkpointer
 from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
-from repocompass.agent.cost import CostUnavailableReason
+from repocompass.agent.cost import CostUnavailableReason, validate_cost_budget_usd
+from repocompass.memory.contracts import MemoryScope
+from repocompass.tools.gateway import ToolExecutionContext
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.lifecycle import HumanReviewPolicy
 from repocompass.agent.trace_sink import JsonlTraceSink
@@ -175,6 +178,49 @@ def bounded_model(settings, guard: BudgetCallback, *, http_client=None):
     return ChatOpenAI(**options)
 
 
+def attempt_model(settings, price, ledger, args, *, run_id: str, limit_usd: str):
+    ledger.begin_attempt(run_id, limit_usd=limit_usd)
+    guard = BudgetCallback(
+        ledger, price, max_output_tokens=args.max_output_tokens, attempt_id=run_id
+    )
+    return bounded_model(settings, guard)
+
+
+def prewarm_readiness(outcome, memory, checkout: Path) -> dict:
+    """Validate an accepted label-free episode; never call it a repository fact."""
+    context = ToolExecutionContext(checkout)
+    episodes = memory.list_episodic_memories(
+        context=context, source_run_id=outcome.trace.run_id, max_results=1
+    )
+    accepted_ids = [
+        episode.episode_id
+        for episode in episodes
+        if episode.termination_status == "accepted"
+    ]
+    repository_entries = memory.list_memory_metadata(
+        context=context, memory_scope=MemoryScope.REPOSITORY, max_results=50
+    )
+    ready = bool(
+        outcome.termination_status == "accepted"
+        and outcome.final_result is not None
+        and outcome.final_result.relevant_files
+        and outcome.final_result.evidence
+        and accepted_ids
+    )
+    return {
+        "ready": ready,
+        "criterion": "accepted_nonempty_episode_v1",
+        "accepted_episode_ids": accepted_ids,
+        "repository_memory_count": len(repository_entries),
+        "repository_memory_query_limit": 50,
+        "memory_kind": "observed_episode_not_verified_repository_fact",
+    }
+
+
+class PrewarmNotReadyError(RuntimeError):
+    """The target run was not started because its prewarm contract was not met."""
+
+
 def budget_path(args, root: Path, cache: Path) -> Path:
     """An explicitly shared ledger must already exist; a typo must not reset funds."""
     if args.allow_pricing_extension and args.budget_db is None:
@@ -266,6 +312,8 @@ def parser() -> argparse.ArgumentParser:
         help="register this reviewed pricing identity in the existing shared budget",
     )
     result.add_argument("--limit-usd", default="5")
+    result.add_argument("--attempt-limit-usd", default="0.1")
+    result.add_argument("--warmup-limit-usd", default="0.1")
     result.add_argument("--case-count", type=int, default=10)
     result.add_argument("--repeats", type=int, default=2)
     result.add_argument(
@@ -349,10 +397,16 @@ def _cell(
             observation_path.read_text()
         ), False
     directory.mkdir(parents=True, exist_ok=True)
+    run_id = f"pilot-{uuid4()}"
     # An interrupted paid call is never silently retried under a new identity.
     with (directory / "started.json").open("x", encoding="utf-8") as stream:
         json.dump(
-            {"task_id": case.task.task_id, "variant": variant.value, "repeat": repeat},
+            {
+                "task_id": case.task.task_id,
+                "variant": variant.value,
+                "repeat": repeat,
+                "run_id": run_id,
+            },
             stream,
         )
         stream.flush()
@@ -360,29 +414,38 @@ def _cell(
     price = prices.lookup(settings.provider.value, settings.model)
     if price is None:
         raise ValueError("provider/model has no reviewed price")
-    guard = BudgetCallback(ledger, price, max_output_tokens=args.max_output_tokens)
-    model = bounded_model(settings, guard)
-    run_id = f"pilot-{uuid4()}"
-    warmup = {"requested": args.warm_memory, "state": "not_applicable"}
+    warmup = {"requested": args.warm_memory, "state": "not_applicable", "ready": False}
+    target_started = False
     with (
         open_sqlite_checkpointer(directory / "checkpoints.sqlite") as checkpointer,
         open_raw_run_store(directory / "raw.sqlite") as raw,
         open_memory_store(directory / "memory.sqlite") as memory,
     ):
         is_memory = variant is LocalizationVariant.EVALUATOR_LOOP_CONTEXT_BUILDER_MEMORY
-        runner = AgentRunner(
-            WorkflowModels.from_single_model(model),
-            checkpointer=checkpointer,
-            raw_run_store=raw,
-            memory_store=memory if is_memory else None,
-            pricing_table=prices,
-            architecture_profile=localization_architecture_profile(variant),
-        )
         if is_memory and args.warm_memory:
             warmup["state"] = "started"
             warm_started = monotonic()
             warm_before = ledger.summary()["charged_or_reserved_usd"]
+            warm_run_id = f"warmup-{uuid4()}"
+            warmup["run_id"] = warm_run_id
             try:
+                model = attempt_model(
+                    settings,
+                    price,
+                    ledger,
+                    args,
+                    run_id=warm_run_id,
+                    limit_usd=args.warmup_limit_usd,
+                )
+                runner = AgentRunner(
+                    WorkflowModels.from_single_model(model),
+                    checkpointer=checkpointer,
+                    raw_run_store=raw,
+                    memory_store=memory,
+                    pricing_table=prices,
+                    architecture_profile=localization_architecture_profile(variant),
+                    run_id_factory=lambda: warm_run_id,
+                )
                 warm = runner.run(
                     RunRequest(
                         repo_path=checkout,
@@ -392,7 +455,7 @@ def _cell(
                         max_no_progress_rounds=2,
                         max_plan_revisions=1,
                         context_budget_tokens=args.context_budget_tokens,
-                        max_attempt_cost_usd="0.1",
+                        max_attempt_cost_usd=args.warmup_limit_usd,
                         human_review_policy=HumanReviewPolicy.NEVER,
                         memory_retrieval_enabled=True,
                     )
@@ -401,23 +464,17 @@ def _cell(
                     warm.trace, directory / "traces" / f"{warm.trace.run_id}.jsonl"
                 )
                 warmup.update(state=warm.termination_status, run_id=warm.trace.run_id)
+                warmup.update(prewarm_readiness(warm, memory, checkout))
+                warmup["stop_reason"] = warm.step_stop_reason
             except Exception as error:
                 warmup.update(state="failed", **public_error_metadata(error))
             warmup.update(
                 latency_ms=int((monotonic() - warm_started) * 1000),
                 batch_reserved_before_usd=warm_before,
                 batch_reserved_after_usd=ledger.summary()["charged_or_reserved_usd"],
+                attempt_budget=ledger.attempt_summary(warm_run_id),
             )
         persist(directory / "warmup.json", warmup)
-        runner = AgentRunner(
-            WorkflowModels.from_single_model(model),
-            checkpointer=checkpointer,
-            raw_run_store=raw,
-            memory_store=memory if is_memory else None,
-            pricing_table=prices,
-            architecture_profile=localization_architecture_profile(variant),
-            run_id_factory=lambda: run_id,
-        )
         request = create_localization_run_request(
             task=case.task,
             repository_path=checkout,
@@ -427,9 +484,30 @@ def _cell(
         error_info = {"error_code": None}
         started = monotonic()
         try:
-            if warmup["state"] == "failed":
-                raise RuntimeError("label-free memory prewarm did not complete")
+            if is_memory and args.warm_memory and not warmup["ready"]:
+                raise PrewarmNotReadyError(
+                    "label-free memory prewarm was not accepted; target not started"
+                )
+            model = attempt_model(
+                settings,
+                price,
+                ledger,
+                args,
+                run_id=run_id,
+                limit_usd=args.attempt_limit_usd,
+            )
+            runner = AgentRunner(
+                WorkflowModels.from_single_model(model),
+                checkpointer=checkpointer,
+                raw_run_store=raw,
+                memory_store=memory if is_memory else None,
+                pricing_table=prices,
+                architecture_profile=localization_architecture_profile(variant),
+                run_id_factory=lambda: run_id,
+            )
+            target_started = True
             outcome = runner.run(request)
+            error_info["stop_reason"] = outcome.step_stop_reason
             observation = adapt_localization_run_outcome(
                 dataset_manifest_id=manifest.manifest_id,
                 case=case,
@@ -456,6 +534,7 @@ def _cell(
                 int((monotonic() - started) * 1000),
             )
         validate_snapshot(case.task, checkout)
+        usage_report = raw.get_attempt_usage_cost_report(run_id, prices)
         persist(directory / "observation.json", observation.model_dump(mode="json"))
         persist(
             directory / "receipt.json",
@@ -463,6 +542,15 @@ def _cell(
                 "provenance": "live_provider",
                 **error_info,
                 "run_id": run_id,
+                "target_started": target_started,
+                "attempt_budget": ledger.attempt_summary(run_id)
+                if target_started
+                else None,
+                "target_usage_cost_report": (
+                    usage_report.model_dump(mode="json")
+                    if usage_report is not None
+                    else None
+                ),
                 "warmup": warmup,
                 "budget": ledger.summary(),
                 "telemetry_note": "Failure costs remain reserved in the batch ledger; never interpreted as zero.",
@@ -486,6 +574,13 @@ def execute(args) -> dict:
         raise ValueError("provider output cap must be between 64 and 8192")
     if not 1024 <= args.context_budget_tokens <= 131072:
         raise ValueError("context budget must be between 1024 and 131072")
+    validate_cost_budget_usd(args.limit_usd)
+    validate_cost_budget_usd(args.attempt_limit_usd)
+    validate_cost_budget_usd(args.warmup_limit_usd)
+    if max(Decimal(args.attempt_limit_usd), Decimal(args.warmup_limit_usd)) > Decimal(
+        args.limit_usd
+    ):
+        raise ValueError("attempt and warmup limits must not exceed the batch limit")
     original = load_localization_dataset_file(args.dataset)
     if args.case_count > len(original.cases):
         raise ValueError("case count exceeds the frozen manifest")
@@ -538,13 +633,13 @@ def execute(args) -> dict:
         max_no_progress_rounds=2,
         max_plan_revisions=1,
         context_budget_tokens=args.context_budget_tokens,
-        max_attempt_cost_usd="0.1",
+        max_attempt_cost_usd=args.attempt_limit_usd,
         max_repository_memory_results=3,
         max_episodic_memory_results=3,
     )
     variants = tuple(v for v in LocalizationVariant if v.value in args.variants)
     config = {
-        "schema_version": 1,
+        "schema_version": 3,
         "provenance": "live_provider",
         "manifest_id": manifest.manifest_id,
         "budget_profile": budget.model_dump(mode="json"),
@@ -558,10 +653,14 @@ def execute(args) -> dict:
         "memory_isolation": "fresh-per-case-variant-repeat; no target-answer reuse",
         "provider_retries": 0,
         "price_basis": "peak_ceiling_not_invoice",
+        "admission_policy": "atomic_batch_and_attempt_v1",
+        "prewarm_validation": "accepted_nonempty_episode_v1",
+        "warmup_limit_usd": args.warmup_limit_usd,
+        "progress_policy": "observed_result_novelty_v2",
     }
     if args.provider == "openai" or args.budget_db is not None:
         config.update(
-            schema_version=2,
+            schema_version=3,
             provider=args.provider,
             endpoint=provider_endpoint(settings),
             budget_db=str(ledger_path),

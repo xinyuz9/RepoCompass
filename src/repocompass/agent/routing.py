@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import MessagesState
 
 from repocompass.agent.cost import AttemptCostBudgetSummary
+from repocompass.agent.admission import PRECALL_BUDGET_STOP_REASONS
 
 ATTEMPT_COST_BUDGET_STOP_REASON = "attempt_cost_budget_exhausted"
 ControllerAction = Literal[
@@ -128,6 +129,8 @@ def route_after_model_invocation(
     budget = state.get("cost_budget")
     if budget is not None and not isinstance(budget, AttemptCostBudgetSummary):
         raise TypeError("Graph cost_budget is invalid")
+    if stop_reason in PRECALL_BUDGET_STOP_REASONS:
+        return "cost_budget_exhausted"
     if stop_reason == ATTEMPT_COST_BUDGET_STOP_REASON:
         if budget is None or budget.next_invocation_allowed:
             raise ValueError("cost budget stop requires a denied budget decision")

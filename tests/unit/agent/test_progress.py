@@ -333,3 +333,24 @@ def test_progress_assessment_rejects_malformed_checkpoint_payload() -> None:
 
     with pytest.raises(ValueError, match="Invalid progress snapshot payload"):
         assess_tool_progress(state)
+
+
+def test_different_queries_with_identical_results_do_not_reset_stall_limit():
+    def allowed(fingerprint):
+        return _audit(
+            fingerprint=fingerprint * 64,
+            outcome=ToolDecisionOutcome.ALLOWED,
+            reason=ToolDecisionReason.ALLOWED,
+            result_digest="f" * 64,
+        )
+
+    state = _state([allowed("1")], threshold=2)
+    first = assess_tool_progress(state)
+    second_state = _next_state(state, first, [allowed("2")])
+    second = assess_tool_progress(second_state)
+    third = assess_tool_progress(_next_state(second_state, second, [allowed("3")]))
+    assert second["consecutive_no_progress_rounds"] == 1
+    assert third["step_stop_reason"] == STEP_NO_PROGRESS_REASON
+    snapshot = decode_progress_snapshot(third["progress_snapshot"])
+    assert len(snapshot.successful_tool_fingerprints) == 3
+    assert len(snapshot.evidence_fingerprints) == 1
