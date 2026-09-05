@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "version": "openai-standard-ceiling-observed-2026-09-05",
+  "effective_from": "2026-09-05",
+  "entries": [
+    {
+      "schema_version": 1,
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "input_usd_per_million_tokens": "0.75",
+      "output_usd_per_million_tokens": "4.5",
+      "cached_input_usd_per_million_tokens": "0.075",
+      "reasoning_output_usd_per_million_tokens": "same_as_output"
+    }
+  ]
+}

@@ -6,6 +6,8 @@ import argparse
 import hashlib
 import json
 import os
+import sqlite3
+from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 from time import monotonic
@@ -13,6 +15,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 from repocompass.agent.checkpoint import open_sqlite_checkpointer
@@ -47,7 +50,11 @@ from repocompass.evaluation.localization_harness import (
 )
 from repocompass.evaluation.localization_metrics import evaluate_localization_dataset
 from repocompass.memory.store import open_memory_store
-from repocompass.models.config import DeepSeekModelSettings, load_model_settings
+from repocompass.models.config import (
+    DeepSeekModelSettings,
+    OpenAIModelSettings,
+    load_model_settings,
+)
 from repocompass.models.factory import WorkflowModels
 from repocompass.pricing import load_pricing_table_file
 from repocompass.storage.raw_store import open_raw_run_store
@@ -67,31 +74,129 @@ class ProviderConnectivityError(RuntimeError):
     """A credential-free connectivity probe failed before paid admission."""
 
 
-def check_provider_connectivity(base_url: str) -> None:
+def check_provider_connectivity(base_url: str, *, provider: str = "deepseek") -> None:
     """Fail before reserving a cell when the configured TLS route is broken."""
     endpoint = urlsplit(base_url)
+    hosts = {"deepseek": "api.deepseek.com", "openai": "api.openai.com"}
     if (
-        endpoint.scheme != "https"
-        or endpoint.hostname != "api.deepseek.com"
+        provider not in hosts
+        or endpoint.scheme != "https"
+        or endpoint.hostname != hosts.get(provider)
         or endpoint.username is not None
         or endpoint.password is not None
         or endpoint.port not in (None, 443)
         or endpoint.query
         or endpoint.fragment
+        or endpoint.path not in ("", "/", "/v1", "/v1/")
     ):
         raise ValueError(
             "provider endpoint must be the direct credential-free HTTPS origin"
         )
     try:
         with httpx.Client(timeout=10, follow_redirects=False) as client:
-            # 401/403/404 still establish TLS connectivity; never send credentials.
-            response = client.head("https://api.deepseek.com")
-            if response.status_code >= 500 or response.status_code == 407:
+            # An unauthenticated 401 proves routing, not credentials/model access.
+            if provider == "openai":
+                response = client.get("https://api.openai.com/v1/models")
+                accepted = (200, 401)
+            else:
+                response = client.head("https://api.deepseek.com")
+                accepted = (200, 401, 403, 404)
+            if response.status_code not in accepted:
                 raise ProviderConnectivityError("provider route is unavailable")
     except httpx.HTTPError:
         raise ProviderConnectivityError(
             "provider TLS/HTTP connectivity failed"
         ) from None
+
+
+def pilot_settings(provider: str, model: str | None):
+    """Never reinterpret a DeepSeek generic key as an OpenAI credential."""
+    if provider == "openai":
+        load_dotenv(override=False)
+        key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not key:
+            raise ValueError(
+                "OpenAI pilot requires OPENAI_API_KEY; do not reuse the DeepSeek key"
+            )
+        selected = model or "gpt-5.4-mini"
+        if selected != "gpt-5.4-mini":
+            raise ValueError("OpenAI pilot currently admits only reviewed gpt-5.4-mini")
+        return OpenAIModelSettings(model=selected, api_key=key)
+    settings = load_model_settings()
+    if not isinstance(settings, DeepSeekModelSettings):
+        raise ValueError(
+            "DeepSeek pilot requires explicitly configured DeepSeek settings"
+        )
+    return replace(settings, model=model or "deepseek-v4-flash")
+
+
+def provider_endpoint(settings) -> str:
+    return (
+        "https://api.openai.com/v1"
+        if isinstance(settings, OpenAIModelSettings)
+        else settings.base_url
+    )
+
+
+def bounded_model(settings, guard: BudgetCallback, *, http_client=None):
+    """Only supported text parameters; no SDK retries or hidden provider fallback."""
+    options = {
+        "model": settings.model,
+        "api_key": settings.api_key,
+        "base_url": provider_endpoint(settings),
+        "use_responses_api": False,
+        "metadata": {
+            "repocompass_provider": settings.provider.value,
+            "repocompass_model": settings.model,
+        },
+        "max_retries": 0,
+        "timeout": 45.0,
+        "callbacks": [guard],
+        "cache": False,
+        "disable_streaming": True,
+        "n": 1,
+    }
+    if http_client is not None:
+        options["http_client"] = http_client
+    if isinstance(settings, OpenAIModelSettings):
+        options.update(
+            max_completion_tokens=guard.max_output_tokens,
+            reasoning_effort="none",
+            service_tier="default",
+            store=False,
+        )
+    else:
+        options.update(
+            max_tokens=guard.max_output_tokens,
+            temperature=0.0,
+            extra_body={"thinking": {"type": "disabled"}},
+        )
+    return ChatOpenAI(**options)
+
+
+def budget_path(args, root: Path, cache: Path) -> Path:
+    """An explicitly shared ledger must already exist; a typo must not reset funds."""
+    if args.allow_pricing_extension and args.budget_db is None:
+        raise ValueError("--allow-pricing-extension requires an existing --budget-db")
+    if args.budget_db is None:
+        return root / "budget.sqlite"
+    selected = args.budget_db.expanduser()
+    if selected.is_symlink() or not selected.is_file():
+        raise ValueError("--budget-db must name an existing non-symlink ledger")
+    selected = selected.resolve()
+    if selected.is_relative_to(cache):
+        raise ValueError("shared budget must remain outside Agent-visible source cache")
+    try:
+        with closing(sqlite3.connect(f"{selected.as_uri()}?mode=ro", uri=True)) as db:
+            rows = db.execute(
+                "SELECT id,ceiling,pricing,blocked FROM budget"
+            ).fetchall()
+            if len(rows) != 1 or rows[0][0] != 1:
+                raise ValueError("shared budget has no valid singleton budget identity")
+            db.execute("SELECT id,reserved,charged,status FROM calls LIMIT 0")
+    except sqlite3.Error:
+        raise ValueError("--budget-db is not an initialized spending ledger") from None
+    return selected
 
 
 def public_error_metadata(error: Exception) -> dict:
@@ -147,11 +252,18 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument("--allow-paid-api", action="store_true")
     result.add_argument(
-        "--pricing-file",
-        type=Path,
-        default=Path("examples/pricing.deepseek-peak-2026-09-05.json"),
+        "--provider", choices=("deepseek", "openai"), default="deepseek"
     )
-    result.add_argument("--model", default="deepseek-v4-flash")
+    result.add_argument("--pricing-file", type=Path)
+    result.add_argument("--model")
+    result.add_argument(
+        "--budget-db", type=Path, help="existing shared ledger; never resets funds"
+    )
+    result.add_argument(
+        "--allow-pricing-extension",
+        action="store_true",
+        help="register this reviewed pricing identity in the existing shared budget",
+    )
     result.add_argument("--limit-usd", default="5")
     result.add_argument("--case-count", type=int, default=10)
     result.add_argument("--repeats", type=int, default=2)
@@ -241,24 +353,7 @@ def _cell(
     if price is None:
         raise ValueError("provider/model has no reviewed price")
     guard = BudgetCallback(ledger, price, max_output_tokens=args.max_output_tokens)
-    model = ChatOpenAI(
-        model=settings.model,
-        api_key=settings.api_key,
-        base_url=settings.base_url,
-        temperature=0.0,
-        use_responses_api=False,
-        extra_body={"thinking": {"type": "disabled"}},
-        metadata={
-            "repocompass_provider": "deepseek",
-            "repocompass_model": settings.model,
-        },
-        max_tokens=args.max_output_tokens,
-        max_retries=0,
-        timeout=45.0,
-        callbacks=[guard],
-        cache=False,
-        disable_streaming=True,
-    )
+    model = bounded_model(settings, guard)
     run_id = f"pilot-{uuid4()}"
     warmup = {"requested": args.warm_memory, "state": "not_applicable"}
     with (
@@ -417,18 +512,14 @@ def execute(args) -> dict:
     )
     if args.action == "prepare":
         return {"prepared_cases": len(paths), "provider_calls": 0}
-    settings = load_model_settings()
-    if (
-        not isinstance(settings, DeepSeekModelSettings)
-        or urlsplit(settings.base_url).hostname != "api.deepseek.com"
-    ):
-        raise ValueError(
-            "this bounded pilot supports the directly priced DeepSeek HTTPS endpoint only"
-        )
-    if urlsplit(settings.base_url).scheme != "https":
-        raise ValueError("provider endpoint must use HTTPS")
-    settings = replace(settings, model=args.model)
-    prices = load_pricing_table_file(args.pricing_file)
+    settings = pilot_settings(args.provider, args.model)
+    pricing_file = args.pricing_file or Path(
+        "examples/pricing.openai-standard-2026-09-05.json"
+        if args.provider == "openai"
+        else "examples/pricing.deepseek-peak-2026-09-05.json"
+    )
+    prices = load_pricing_table_file(pricing_file)
+    ledger_path = budget_path(args, root, cache)
     if prices.lookup(settings.provider.value, settings.model) is None:
         raise ValueError("selected model has no reviewed pricing entry")
     budget = create_localization_budget_profile(
@@ -458,14 +549,29 @@ def execute(args) -> dict:
         "provider_retries": 0,
         "price_basis": "peak_ceiling_not_invoice",
     }
+    if args.provider == "openai" or args.budget_db is not None:
+        config.update(
+            schema_version=2,
+            provider=args.provider,
+            endpoint=provider_endpoint(settings),
+            budget_db=str(ledger_path),
+            price_basis="standard_cache_miss_ceiling_not_invoice"
+            if args.provider == "openai"
+            else "peak_ceiling_not_invoice",
+        )
+        if args.provider == "openai":
+            config.update(reasoning_effort="none", service_tier="default", store=False)
     persist(root / "config.json", config)
-    check_provider_connectivity(settings.base_url)
+    check_provider_connectivity(provider_endpoint(settings), provider=args.provider)
     observations = []
     new_cells = 0
     failures = 0
     stopped = None
     with SQLiteSpendLedger(
-        root / "budget.sqlite", limit_usd=args.limit_usd, pricing_id=prices.table_id
+        ledger_path,
+        limit_usd=args.limit_usd,
+        pricing_id=prices.table_id,
+        allow_pricing_extension=args.allow_pricing_extension,
     ) as ledger:
         # Case-balanced order permits a useful paired pilot before a bounded pause.
         for case in manifest.cases:
@@ -540,7 +646,12 @@ def execute(args) -> dict:
         "stopped": stopped,
         "spending": spending,
     }
-    persist(root / f"progress-{len(observations)}-{new_cells}.json", result)
+    progress_id = hashlib.sha256(
+        json.dumps(result, sort_keys=True).encode()
+    ).hexdigest()[:12]
+    persist(
+        root / f"progress-{len(observations)}-{new_cells}-{progress_id}.json", result
+    )
     return result
 
 

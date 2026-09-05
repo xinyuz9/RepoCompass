@@ -39,7 +39,14 @@ def _dollars(value: int) -> str:
 class SQLiteSpendLedger:
     """Atomic reservations shared by concurrent processes and restarts."""
 
-    def __init__(self, path: Path, *, limit_usd: str, pricing_id: str) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        limit_usd: str,
+        pricing_id: str,
+        allow_pricing_extension: bool = False,
+    ) -> None:
         limit = _units(Decimal(limit_usd))
         if limit <= 0 or limit > 1000 * NANODOLLARS:
             raise ValueError("batch limit must be positive and at most 1000 USD")
@@ -51,6 +58,7 @@ class SQLiteSpendLedger:
             raise ValueError("budget path must not be a symlink")
         path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = RLock()
+        self.pricing_id = pricing_id
         self._db = sqlite3.connect(path, timeout=30, check_same_thread=False)
         try:
             self._db.execute("PRAGMA journal_mode=WAL")
@@ -63,16 +71,41 @@ class SQLiteSpendLedger:
                 "CREATE TABLE IF NOT EXISTS calls "
                 "(id TEXT PRIMARY KEY, reserved INTEGER, charged INTEGER, status TEXT)"
             )
+            self._db.execute("BEGIN IMMEDIATE")
             self._db.execute(
                 "INSERT OR IGNORE INTO budget VALUES (1,?,?,0)", (limit, pricing_id)
             )
-            self._db.commit()
             row = self._db.execute(
                 "SELECT ceiling,pricing FROM budget WHERE id=1"
             ).fetchone()
-            if row != (limit, pricing_id):
+            if row[0] != limit:
                 raise ValueError("existing ledger budget/pricing identity differs")
+            # Preserve the original table identity and every historical charge.
+            # Separate tables keep the original calls schema readable by old tools.
+            self._db.execute(
+                "CREATE TABLE IF NOT EXISTS authorized_pricing (id TEXT PRIMARY KEY)"
+            )
+            self._db.execute(
+                "INSERT OR IGNORE INTO authorized_pricing VALUES (?)", (row[1],)
+            )
+            known = self._db.execute(
+                "SELECT 1 FROM authorized_pricing WHERE id=?", (pricing_id,)
+            ).fetchone()
+            if known is None and not allow_pricing_extension:
+                raise ValueError("existing ledger budget/pricing identity differs")
+            self._db.execute(
+                "INSERT OR IGNORE INTO authorized_pricing VALUES (?)", (pricing_id,)
+            )
+            self._db.execute(
+                "CREATE TABLE IF NOT EXISTS call_pricing "
+                "(call_id TEXT PRIMARY KEY, pricing TEXT NOT NULL)"
+            )
+            self._db.execute(
+                "INSERT OR IGNORE INTO call_pricing SELECT id,? FROM calls", (row[1],)
+            )
+            self._db.commit()
         except Exception:
+            self._db.rollback()
             self._db.close()
             raise
 
@@ -109,6 +142,9 @@ class SQLiteSpendLedger:
                     "INSERT INTO calls VALUES (?,?,?,'reserved')",
                     (call_id, amount, amount),
                 )
+                self._db.execute(
+                    "INSERT INTO call_pricing VALUES (?,?)", (call_id, self.pricing_id)
+                )
                 self._db.commit()
             except Exception:
                 self._db.rollback()
@@ -122,7 +158,9 @@ class SQLiteSpendLedger:
             self._db.execute("BEGIN IMMEDIATE")
             try:
                 row = self._db.execute(
-                    "SELECT reserved,status FROM calls WHERE id=?", (call_id,)
+                    "SELECT reserved,status FROM calls JOIN call_pricing "
+                    "ON calls.id=call_pricing.call_id WHERE calls.id=? AND pricing=?",
+                    (call_id, self.pricing_id),
                 ).fetchone()
                 if row is None or row[1] != "reserved":
                     raise BudgetAdmissionError("unknown or already settled invocation")
@@ -151,8 +189,9 @@ class SQLiteSpendLedger:
             raise ValueError("invalid uncertainty status")
         with self._lock, self._db:
             self._db.execute(
-                "UPDATE calls SET status=? WHERE id=? AND status='reserved'",
-                (status, call_id),
+                "UPDATE calls SET status=? WHERE id=? AND status='reserved' "
+                "AND id IN (SELECT call_id FROM call_pricing WHERE pricing=?)",
+                (status, call_id, self.pricing_id),
             )
 
     def summary(self) -> dict:
@@ -164,9 +203,17 @@ class SQLiteSpendLedger:
                 "SELECT COUNT(*),COALESCE(SUM(charged),0),"
                 "COALESCE(SUM(CASE WHEN status='settled' THEN 1 ELSE 0 END),0) FROM calls"
             ).fetchone()
+            pricing_ids = [
+                row[0]
+                for row in self._db.execute(
+                    "SELECT id FROM authorized_pricing ORDER BY id"
+                )
+            ]
         return {
             "limit_usd": _dollars(limit),
             "pricing_table_id": pricing,
+            "active_pricing_table_id": self.pricing_id,
+            "authorized_pricing_table_ids": pricing_ids,
             "charged_or_reserved_usd": _dollars(spent),
             "remaining_usd": _dollars(max(0, limit - spent)),
             "invocations": count,

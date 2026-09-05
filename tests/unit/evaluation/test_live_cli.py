@@ -17,13 +17,18 @@ from repocompass.evaluation.live_budget import (
 )
 from repocompass.evaluation.live_cli import (
     ProviderConnectivityError,
+    bounded_model,
+    budget_path,
     check_provider_connectivity,
     consecutive_new_failures,
     main,
     persist,
+    pilot_settings,
     public_error_metadata,
 )
 from repocompass.evaluation.localization_contracts import LocalizationRunStatus
+from repocompass.models.config import OpenAIModelSettings, DeepSeekModelSettings
+from repocompass.pricing import load_pricing_table_file
 
 
 def test_restart_does_not_stop_on_reused_failures():
@@ -43,7 +48,7 @@ def test_error_projection_does_not_leak_exception_payload():
     }
 
 
-@pytest.mark.parametrize("status", [200, 401, 404, 503])
+@pytest.mark.parametrize("status", [200, 401, 404, 302, 407, 421, 429, 503])
 def test_connectivity_probe_is_credential_free_and_does_not_redirect(
     monkeypatch, status
 ):
@@ -59,7 +64,7 @@ def test_connectivity_probe_is_credential_free_and_does_not_redirect(
         return original(transport=httpx.MockTransport(transport), **kwargs)
 
     monkeypatch.setattr("repocompass.evaluation.live_cli.httpx.Client", client)
-    if status >= 500:
+    if status not in (200, 401, 403, 404):
         with pytest.raises(ProviderConnectivityError):
             check_provider_connectivity("https://api.deepseek.com/v1")
     else:
@@ -77,6 +82,7 @@ def test_connectivity_probe_is_credential_free_and_does_not_redirect(
         "https://secret@api.deepseek.com",
         "https://api.deepseek.com:8443",
         "https://api.deepseek.com?key=secret",
+        "https://api.deepseek.com/v1/arbitrary/path",
     ],
 )
 def test_connectivity_probe_rejects_unreviewed_authority(endpoint):
@@ -187,3 +193,158 @@ def test_real_langchain_callback_runs_before_http_request(
                 with pytest.raises(BudgetAdmissionError):
                     model.invoke([HumanMessage(content="Trace.")])
             assert len(calls) == expected_calls
+
+
+@pytest.mark.parametrize("status", [200, 401, 302, 403, 404, 421, 503])
+def test_openai_probe_uses_unauthenticated_models_endpoint(monkeypatch, status):
+    requests = []
+    original = httpx.Client
+
+    def transport(request):
+        requests.append(request)
+        return httpx.Response(status)
+
+    monkeypatch.setattr(
+        "repocompass.evaluation.live_cli.httpx.Client",
+        lambda **kw: original(transport=httpx.MockTransport(transport), **kw),
+    )
+    if status in (200, 401):
+        check_provider_connectivity("https://api.openai.com/v1", provider="openai")
+    else:
+        with pytest.raises(ProviderConnectivityError):
+            check_provider_connectivity("https://api.openai.com/v1", provider="openai")
+    assert len(requests) == 1
+    assert requests[0].method == "GET"
+    assert str(requests[0].url) == "https://api.openai.com/v1/models"
+    assert "authorization" not in requests[0].headers
+
+
+def test_openai_never_reuses_deepseek_key_or_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        "repocompass.evaluation.live_cli.load_dotenv", lambda **kw: None
+    )
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("REPOCOMPASS_API_KEY", "deepseek-only")
+    monkeypatch.setenv("REPOCOMPASS_MODEL_PROVIDER", "deepseek")
+    monkeypatch.setenv("REPOCOMPASS_BASE_URL", "https://api.deepseek.com")
+    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+        pilot_settings("openai", None)
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-only")
+    settings = pilot_settings("openai", None)
+    assert settings.api_key == "openai-only"
+    assert settings.model == "gpt-5.4-mini"
+    assert "openai-only" not in repr(settings)
+    with pytest.raises(ValueError, match="reviewed"):
+        pilot_settings("openai", "unreviewed-model")
+    with pytest.raises(ValueError):
+        check_provider_connectivity("https://api.deepseek.com", provider="openai")
+
+
+def test_shared_budget_must_exist_and_stay_outside_source_cache(tmp_path):
+    args = SimpleNamespace(budget_db=None, allow_pricing_extension=True)
+    with pytest.raises(ValueError, match="requires"):
+        budget_path(args, tmp_path / "out", tmp_path / "cache")
+    args.budget_db = tmp_path / "typo.sqlite"
+    with pytest.raises(ValueError, match="existing"):
+        budget_path(args, tmp_path / "out", tmp_path / "cache")
+    assert not args.budget_db.exists()
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    args.budget_db = cache / "budget.sqlite"
+    args.budget_db.touch()
+    with pytest.raises(ValueError, match="source cache"):
+        budget_path(args, tmp_path / "out", cache)
+    args.budget_db = tmp_path / "empty.sqlite"
+    args.budget_db.touch()
+    with pytest.raises(ValueError, match="initialized"):
+        budget_path(args, tmp_path / "out", cache)
+    with SQLiteSpendLedger(args.budget_db, limit_usd="5", pricing_id="a" * 64):
+        pass
+    assert budget_path(args, tmp_path / "out", cache) == args.budget_db
+
+
+@pytest.mark.parametrize("provider", ["deepseek", "openai"])
+@pytest.mark.parametrize("limit,expected_calls", [("1", 1), ("0.000001", 0)])
+def test_bounded_provider_model_has_correct_wire_contract(
+    tmp_path, provider, limit, expected_calls, monkeypatch
+):
+    requests = []
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://unreviewed.invalid")
+    monkeypatch.setenv("OPENAI_API_KEY", "wrong-ambient-key")
+    settings = (
+        OpenAIModelSettings(model="gpt-5.4-mini", api_key="openai-only")
+        if provider == "openai"
+        else DeepSeekModelSettings(
+            model="deepseek-v4-flash",
+            api_key="deepseek-only",
+            base_url="https://api.deepseek.com",
+        )
+    )
+    prices = load_pricing_table_file(
+        Path(
+            "examples/pricing.openai-standard-2026-09-05.json"
+            if provider == "openai"
+            else "examples/pricing.deepseek-peak-2026-09-05.json"
+        )
+    )
+
+    def transport(request):
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-test",
+                "object": "chat.completion",
+                "created": 1,
+                "model": settings.model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "Done"},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 2,
+                    "total_tokens": 12,
+                },
+            },
+        )
+
+    with SQLiteSpendLedger(
+        tmp_path / "budget.sqlite", limit_usd=limit, pricing_id=prices.table_id
+    ) as ledger:
+        guard = BudgetCallback(
+            ledger, prices.lookup(provider, settings.model), max_output_tokens=128
+        )
+        with httpx.Client(transport=httpx.MockTransport(transport)) as client:
+            model = bounded_model(settings, guard, http_client=client)
+            assert model.root_client.max_retries == 0
+            if expected_calls:
+                assert model.invoke([HumanMessage(content="Trace")]).content == "Done"
+                assert ledger.summary()["settled_invocations"] == 1
+            else:
+                with pytest.raises(BudgetAdmissionError):
+                    model.invoke([HumanMessage(content="Trace")])
+            assert len(requests) == expected_calls
+            if not requests:
+                return
+            request = requests[0]
+            assert request.url.host == (
+                "api.openai.com" if provider == "openai" else "api.deepseek.com"
+            )
+            assert request.headers["authorization"] == f"Bearer {settings.api_key}"
+            payload = json.loads(request.content)
+            assert payload["max_completion_tokens"] == 128
+            assert payload["n"] == 1
+            if provider == "openai":
+                assert payload["reasoning_effort"] == "none"
+                assert payload["service_tier"] == "default"
+                assert payload["store"] is False
+                assert "thinking" not in payload
+                assert "temperature" not in payload
+                assert ledger.summary()["charged_or_reserved_usd"] == "0.0000165"
+            else:
+                assert payload["thinking"] == {"type": "disabled"}
+                assert "reasoning_effort" not in payload
