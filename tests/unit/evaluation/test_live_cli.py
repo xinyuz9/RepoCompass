@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -14,7 +15,85 @@ from repocompass.evaluation.live_budget import (
     BudgetCallback,
     SQLiteSpendLedger,
 )
-from repocompass.evaluation.live_cli import main, persist
+from repocompass.evaluation.live_cli import (
+    ProviderConnectivityError,
+    check_provider_connectivity,
+    consecutive_new_failures,
+    main,
+    persist,
+    public_error_metadata,
+)
+from repocompass.evaluation.localization_contracts import LocalizationRunStatus
+
+
+def test_restart_does_not_stop_on_reused_failures():
+    failed = SimpleNamespace(status=LocalizationRunStatus.FAILED)
+    assert consecutive_new_failures(0, failed, False) == 0
+    assert consecutive_new_failures(0, failed, True) == 1
+    assert consecutive_new_failures(1, failed, True) == 2
+    assert consecutive_new_failures(1, SimpleNamespace(status=None), True) == 0
+
+
+def test_error_projection_does_not_leak_exception_payload():
+    error = RuntimeError("secret-key https://user:password@provider.test")
+    error.__cause__ = ValueError("private prompt")
+    assert public_error_metadata(error) == {
+        "error_code": "RuntimeError",
+        "cause_code": "ValueError",
+    }
+
+
+@pytest.mark.parametrize("status", [200, 401, 404, 503])
+def test_connectivity_probe_is_credential_free_and_does_not_redirect(
+    monkeypatch, status
+):
+    calls = []
+    original = httpx.Client
+
+    def transport(request):
+        calls.append(request)
+        return httpx.Response(status)
+
+    def client(**kwargs):
+        assert kwargs["follow_redirects"] is False
+        return original(transport=httpx.MockTransport(transport), **kwargs)
+
+    monkeypatch.setattr("repocompass.evaluation.live_cli.httpx.Client", client)
+    if status >= 500:
+        with pytest.raises(ProviderConnectivityError):
+            check_provider_connectivity("https://api.deepseek.com/v1")
+    else:
+        check_provider_connectivity("https://api.deepseek.com/v1")
+    assert len(calls) == 1
+    assert calls[0].method == "HEAD"
+    assert "authorization" not in calls[0].headers
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "http://api.deepseek.com",
+        "https://other.invalid",
+        "https://secret@api.deepseek.com",
+        "https://api.deepseek.com:8443",
+        "https://api.deepseek.com?key=secret",
+    ],
+)
+def test_connectivity_probe_rejects_unreviewed_authority(endpoint):
+    with pytest.raises(ValueError):
+        check_provider_connectivity(endpoint)
+
+
+def test_connectivity_failure_is_sanitized(monkeypatch):
+    def failed(*args, **kwargs):
+        raise httpx.ConnectError("private network detail")
+
+    monkeypatch.setattr(httpx.Client, "head", failed)
+    with pytest.raises(
+        ProviderConnectivityError, match="connectivity failed"
+    ) as caught:
+        check_provider_connectivity("https://api.deepseek.com")
+    assert caught.value.__cause__ is None
 
 
 def test_opt_in_is_required_before_any_source_or_model_work(

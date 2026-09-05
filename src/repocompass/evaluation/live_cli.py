@@ -12,6 +12,7 @@ from time import monotonic
 from urllib.parse import urlsplit
 from uuid import uuid4
 
+import httpx
 from langchain_openai import ChatOpenAI
 
 from repocompass.agent.checkpoint import open_sqlite_checkpointer
@@ -60,6 +61,55 @@ WARMUP_OBJECTIVE = (
     "Identify the repository's package public entrypoints and test configuration. "
     "Use only repository evidence. Do not diagnose or solve any issue."
 )
+
+
+class ProviderConnectivityError(RuntimeError):
+    """A credential-free connectivity probe failed before paid admission."""
+
+
+def check_provider_connectivity(base_url: str) -> None:
+    """Fail before reserving a cell when the configured TLS route is broken."""
+    endpoint = urlsplit(base_url)
+    if (
+        endpoint.scheme != "https"
+        or endpoint.hostname != "api.deepseek.com"
+        or endpoint.username is not None
+        or endpoint.password is not None
+        or endpoint.port not in (None, 443)
+        or endpoint.query
+        or endpoint.fragment
+    ):
+        raise ValueError(
+            "provider endpoint must be the direct credential-free HTTPS origin"
+        )
+    try:
+        with httpx.Client(timeout=10, follow_redirects=False) as client:
+            # 401/403/404 still establish TLS connectivity; never send credentials.
+            response = client.head("https://api.deepseek.com")
+            if response.status_code >= 500 or response.status_code == 407:
+                raise ProviderConnectivityError("provider route is unavailable")
+    except httpx.HTTPError:
+        raise ProviderConnectivityError(
+            "provider TLS/HTTP connectivity failed"
+        ) from None
+
+
+def public_error_metadata(error: Exception) -> dict:
+    """Do not copy provider messages, URLs, request headers or response bodies."""
+    result = {"error_code": type(error).__name__}
+    status = getattr(error, "status_code", None)
+    if type(status) is int and 100 <= status <= 599:
+        result["http_status"] = status
+    if error.__cause__ is not None:
+        result["cause_code"] = type(error.__cause__).__name__
+    return result
+
+
+def consecutive_new_failures(previous: int, observation, created: bool) -> int:
+    """Retained failures remain in reports but do not prevent advancing a restart."""
+    if not created:
+        return previous
+    return previous + 1 if observation.status is LocalizationRunStatus.FAILED else 0
 
 
 def persist(path: Path, value) -> None:
@@ -211,7 +261,6 @@ def _cell(
     )
     run_id = f"pilot-{uuid4()}"
     warmup = {"requested": args.warm_memory, "state": "not_applicable"}
-    started = monotonic()
     with (
         open_sqlite_checkpointer(directory / "checkpoints.sqlite") as checkpointer,
         open_raw_run_store(directory / "raw.sqlite") as raw,
@@ -228,6 +277,8 @@ def _cell(
         )
         if is_memory and args.warm_memory:
             warmup["state"] = "started"
+            warm_started = monotonic()
+            warm_before = ledger.summary()["charged_or_reserved_usd"]
             try:
                 warm = runner.run(
                     RunRequest(
@@ -243,10 +294,17 @@ def _cell(
                         memory_retrieval_enabled=True,
                     )
                 )
-                JsonlTraceSink().write(warm.trace, directory / "warm-trace.jsonl")
+                JsonlTraceSink().write(
+                    warm.trace, directory / "traces" / f"{warm.trace.run_id}.jsonl"
+                )
                 warmup.update(state=warm.termination_status, run_id=warm.trace.run_id)
             except Exception as error:
-                warmup.update(state="failed", error_code=type(error).__name__)
+                warmup.update(state="failed", **public_error_metadata(error))
+            warmup.update(
+                latency_ms=int((monotonic() - warm_started) * 1000),
+                batch_reserved_before_usd=warm_before,
+                batch_reserved_after_usd=ledger.summary()["charged_or_reserved_usd"],
+            )
         persist(directory / "warmup.json", warmup)
         runner = AgentRunner(
             WorkflowModels.from_single_model(model),
@@ -263,8 +321,11 @@ def _cell(
             budget_profile=budget,
             variant=variant,
         )
-        error_code = None
+        error_info = {"error_code": None}
+        started = monotonic()
         try:
+            if warmup["state"] == "failed":
+                raise RuntimeError("label-free memory prewarm did not complete")
             outcome = runner.run(request)
             observation = adapt_localization_run_outcome(
                 dataset_manifest_id=manifest.manifest_id,
@@ -276,9 +337,11 @@ def _cell(
                 latency_ms=int((monotonic() - started) * 1000),
                 pricing_table_id=prices.table_id,
             )
-            JsonlTraceSink().write(outcome.trace, directory / "trace.jsonl")
+            JsonlTraceSink().write(
+                outcome.trace, directory / "traces" / f"{outcome.trace.run_id}.jsonl"
+            )
         except Exception as error:
-            error_code = type(error).__name__
+            error_info = public_error_metadata(error)
             observation = _failed_observation(
                 manifest,
                 case,
@@ -295,7 +358,7 @@ def _cell(
             directory / "receipt.json",
             {
                 "provenance": "live_provider",
-                "error_code": error_code,
+                **error_info,
                 "run_id": run_id,
                 "warmup": warmup,
                 "budget": ledger.summary(),
@@ -396,6 +459,7 @@ def execute(args) -> dict:
         "price_basis": "peak_ceiling_not_invoice",
     }
     persist(root / "config.json", config)
+    check_provider_connectivity(settings.base_url)
     observations = []
     new_cells = 0
     failures = 0
@@ -431,11 +495,7 @@ def execute(args) -> dict:
                     )
                     observations.append(observation)
                     new_cells += int(created)
-                    failures = (
-                        failures + 1
-                        if observation.status is LocalizationRunStatus.FAILED
-                        else 0
-                    )
+                    failures = consecutive_new_failures(failures, observation, created)
                     print(
                         json.dumps(
                             {
