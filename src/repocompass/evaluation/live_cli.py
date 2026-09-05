@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 from repocompass.agent.checkpoint import open_sqlite_checkpointer
+from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
 from repocompass.agent.cost import CostUnavailableReason
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.lifecycle import HumanReviewPolicy
@@ -275,6 +276,13 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument("--max-output-tokens", type=int, default=2048)
     result.add_argument(
+        "--context-budget-tokens",
+        type=int,
+        default=8192,
+        help="hard context UTF-8 byte upper bound, not reported model tokens; "
+        f"production default is {DEFAULT_CONTEXT_BUDGET_TOKENS}; changes require a new output",
+    )
+    result.add_argument(
         "--variants",
         nargs="+",
         choices=[v.value for v in LocalizationVariant],
@@ -383,7 +391,7 @@ def _cell(
                         max_explorer_calls_per_step=4,
                         max_no_progress_rounds=2,
                         max_plan_revisions=1,
-                        context_budget_tokens=8192,
+                        context_budget_tokens=args.context_budget_tokens,
                         max_attempt_cost_usd="0.1",
                         human_review_policy=HumanReviewPolicy.NEVER,
                         memory_retrieval_enabled=True,
@@ -476,6 +484,8 @@ def execute(args) -> dict:
         raise ValueError("variants must be unique")
     if not 64 <= args.max_output_tokens <= 8192:
         raise ValueError("provider output cap must be between 64 and 8192")
+    if not 1024 <= args.context_budget_tokens <= 131072:
+        raise ValueError("context budget must be between 1024 and 131072")
     original = load_localization_dataset_file(args.dataset)
     if args.case_count > len(original.cases):
         raise ValueError("case count exceeds the frozen manifest")
@@ -527,7 +537,7 @@ def execute(args) -> dict:
         max_explorer_calls_per_step=5,
         max_no_progress_rounds=2,
         max_plan_revisions=1,
-        context_budget_tokens=8192,
+        context_budget_tokens=args.context_budget_tokens,
         max_attempt_cost_usd="0.1",
         max_repository_memory_results=3,
         max_episodic_memory_results=3,

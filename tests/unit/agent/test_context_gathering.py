@@ -341,6 +341,25 @@ def test_evaluator_gather_contains_only_validated_evaluation_inputs(
     assert source.verification_status is VerificationStatus.VERIFIED
     assert source.source.location is not None
     assert source.source.location.path == "src/auth.py"
+    # Active payloads shed only formatting, not validation findings or claims.
+    for kind, expected in (
+        (ContextSourceKind.CANDIDATE, candidate.model_dump(mode="json")),
+        (
+            ContextSourceKind.EVALUATOR_REQUEST,
+            [issue.model_dump(mode="json") for issue in issues],
+        ),
+    ):
+        item = next(item for item in gathered.pack.items if item.source.kind is kind)
+        payload = item.content.split("\n", 1)[1]
+        assert json.loads(payload) == expected
+        assert "\n" not in payload
+        raw = next(
+            artifact
+            for artifact in gathered.raw_artifacts
+            if artifact.metadata.artifact_id == item.source.raw_artifact_id
+        )
+        assert json.loads(raw.content) == expected
+        assert len(payload.encode()) < len(raw.content)
 
 
 def test_replanner_gather_keeps_required_feedback_and_human_input() -> None:
@@ -365,3 +384,35 @@ def test_replanner_gather_keeps_required_feedback_and_human_input() -> None:
         RawArtifactKind.HUMAN_INPUT,
         RawArtifactKind.MODEL_OUTPUT,
     }
+    for kind, expected in (
+        (ContextSourceKind.PLAN_STEP, _plan()),
+        (ContextSourceKind.CANDIDATE, _candidate()),
+        (ContextSourceKind.EVALUATOR_REQUEST, _report()),
+    ):
+        item = next(item for item in gathered.pack.items if item.source.kind is kind)
+        payload = item.content.split("\n", 1)[1]
+        assert json.loads(payload) == expected.model_dump(mode="json")
+        assert "\n" not in payload
+        raw = next(
+            artifact
+            for artifact in gathered.raw_artifacts
+            if artifact.metadata.artifact_id == item.source.raw_artifact_id
+        )
+        assert raw.content.decode() == expected.model_dump_json(indent=2)
+
+
+def test_compaction_does_not_truncate_required_context_or_bypass_hard_budget():
+    from repocompass.agent.context_builder import ContextBudgetError
+
+    with pytest.raises(ContextBudgetError, match="mandatory"):
+        gather_replanner_context(
+            objective="Explain authentication.",
+            investigation_plan=_plan(),
+            candidate_result=_candidate(),
+            evaluation_report=_report(),
+            human_feedback="Keep all required findings.",
+            plan_revision_count=1,
+            max_tool_calls_per_step=8,
+            max_explorer_calls_per_step=4,
+            budget_tokens=1024,
+        )

@@ -24,11 +24,52 @@ from repocompass.evaluation.live_cli import (
     main,
     persist,
     pilot_settings,
+    parser,
     public_error_metadata,
 )
 from repocompass.evaluation.localization_contracts import LocalizationRunStatus
 from repocompass.models.config import OpenAIModelSettings, DeepSeekModelSettings
 from repocompass.pricing import load_pricing_table_file
+
+
+@pytest.mark.parametrize("budget", [0, 1023, 131073])
+def test_invalid_context_budget_fails_before_source_or_provider_work(
+    tmp_path, capsys, budget
+):
+    assert (
+        main(
+            [
+                "run",
+                "--cache-root",
+                str(tmp_path / "cache"),
+                "--output",
+                str(tmp_path / "out"),
+                "--allow-paid-api",
+                "--context-budget-tokens",
+                str(budget),
+            ]
+        )
+        == 1
+    )
+    assert "context budget" in capsys.readouterr().out
+    assert not (tmp_path / "out").exists()
+
+
+def test_context_budget_is_explicit_without_relabelling_legacy_default(tmp_path):
+    base = [
+        "run",
+        "--cache-root",
+        str(tmp_path / "cache"),
+        "--output",
+        str(tmp_path / "out"),
+    ]
+    assert parser().parse_args(base).context_budget_tokens == 8192
+    assert (
+        parser()
+        .parse_args([*base, "--context-budget-tokens", "32768"])
+        .context_budget_tokens
+        == 32768
+    )
 
 
 def test_restart_does_not_stop_on_reused_failures():

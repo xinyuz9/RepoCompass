@@ -351,7 +351,7 @@ def gather_evaluator_context(
     )
     candidate_content = candidate_result.model_dump_json(indent=2)
     candidate_item, candidate_artifact = _make_item(
-        content=f"Validated candidate:\n{candidate_content}",
+        content=f"Validated candidate:\n{candidate_result.model_dump_json()}",
         raw_content=candidate_content,
         raw_kind=RawArtifactKind.MODEL_OUTPUT,
         source_kind=ContextSourceKind.CANDIDATE,
@@ -371,7 +371,13 @@ def gather_evaluator_context(
             indent=2,
         )
         issues_item, issues_artifact = _make_item(
-            content=f"Deterministic validation findings:\n{issues_content}",
+            content="Deterministic validation findings:\n"
+            + json.dumps(
+                [issue.model_dump(mode="json") for issue in deterministic_issues],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
             raw_content=issues_content,
             raw_kind=RawArtifactKind.TOOL_OUTPUT,
             source_kind=ContextSourceKind.EVALUATOR_REQUEST,
@@ -468,7 +474,7 @@ def gather_replanner_context(
             _objective_and_step_provenance(objective, active_step),
         ),
         (
-            f"Current plan:\n{investigation_plan.model_dump_json(indent=2)}",
+            f"Current plan:\n{investigation_plan.model_dump_json()}",
             investigation_plan.model_dump_json(indent=2),
             RawArtifactKind.MODEL_OUTPUT,
             ContextSourceKind.PLAN_STEP,
@@ -476,7 +482,7 @@ def gather_replanner_context(
             (ProvenanceLink(kind=ProvenanceKind.PLAN_STEP, id=active_step.id),),
         ),
         (
-            f"Current candidate:\n{candidate_result.model_dump_json(indent=2)}",
+            f"Current candidate:\n{candidate_result.model_dump_json()}",
             candidate_result.model_dump_json(indent=2),
             RawArtifactKind.MODEL_OUTPUT,
             ContextSourceKind.CANDIDATE,
@@ -484,7 +490,7 @@ def gather_replanner_context(
             (ProvenanceLink(kind=ProvenanceKind.PLAN_STEP, id=active_step.id),),
         ),
         (
-            f"Evaluation report:\n{evaluation_report.model_dump_json(indent=2)}",
+            f"Evaluation report:\n{evaluation_report.model_dump_json()}",
             evaluation_report.model_dump_json(indent=2),
             RawArtifactKind.MODEL_OUTPUT,
             ContextSourceKind.EVALUATOR_REQUEST,
