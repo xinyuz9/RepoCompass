@@ -435,6 +435,8 @@ def test_goal_resume_and_follow_up_are_bound_to_repository_snapshot(
     started = service.start_investigation(
         DashboardStartCommand(
             request_id="dashboard-start-1",
+            expected_repository_id=context.repository_id,
+            expected_commit_sha=context.commit_sha,
             goal="Trace authentication.",
             focus_path="src/api.py",
             memory_retrieval_enabled=True,
@@ -506,13 +508,111 @@ def test_goal_resume_and_follow_up_are_bound_to_repository_snapshot(
         service.start_investigation(
             DashboardStartCommand(
                 request_id="dashboard-start-escape",
+                expected_repository_id=context.repository_id,
+                expected_commit_sha=context.commit_sha,
                 goal="Escape.",
                 focus_path="../outside",
             )
         )
 
 
-def test_disabled_lifecycle_command_fails_closed(tmp_path: Path) -> None:
+@pytest.mark.parametrize("kind", ["resume", "continue"])
+def test_exact_replay_survives_changed_thread_state(tmp_path: Path, kind: str) -> None:
+    _, context = _create_repository(tmp_path)
+    query = _Query(context)
+    lifecycle = _Lifecycle()
+    service = DashboardCommandService(query, lifecycle_service=lifecycle)
+    # A successful operation may leave the thread completed or awaiting review.
+    query.thread_detail = query.thread_detail.model_copy(update={
+        "thread": query.thread_detail.thread.model_copy(update={
+            "execution_state": (
+                ThreadExecutionState.COMPLETED if kind == "resume"
+                else ThreadExecutionState.INTERRUPTED
+            ),
+        }),
+    })
+    result = _operation_result("lost-response").model_copy(
+        update={"idempotent_replay": True}
+    )
+    snapshot = dict(
+        expected_repository_id=context.repository_id,
+        expected_commit_sha=context.commit_sha,
+    )
+    if kind == "resume":
+        lifecycle.replay_result = result
+        command = DashboardResumeCommand(request_id="lost-response", **snapshot)
+        assert service.resume_thread("thread-1", command) == result
+        lifecycle.replay_result = None
+        with pytest.raises(DashboardCommandConflictError, match="not resumable"):
+            service.resume_thread("thread-1", command.model_copy(update={
+                "request_id": "new-request",
+            }))
+    else:
+        lifecycle.continue_replay_result = result
+        follow_up = DashboardContinueCommand(
+            request_id="lost-response", prompt="Trace rejection.", **snapshot
+        )
+        assert service.continue_thread("thread-1", follow_up) == result
+        lifecycle.continue_replay_result = None
+        with pytest.raises(DashboardCommandConflictError, match="not completed"):
+            service.continue_thread("thread-1", follow_up.model_copy(update={
+                "request_id": "new-request",
+            }))
+    assert not lifecycle.response_requests
+    assert not lifecycle.continue_requests
+
+
+@pytest.mark.parametrize("field,value", [
+    ("expected_repository_id", "f" * 64),
+    ("expected_commit_sha", "f" * 40),
+])
+def test_start_rejects_stale_browser_before_reserving_or_calling_model(
+    tmp_path: Path, field: str, value: str,
+) -> None:
+    _, context = _create_repository(tmp_path)
+    lifecycle = _Lifecycle()
+    service = DashboardCommandService(_Query(context), lifecycle_service=lifecycle)
+    snapshot = dict(
+        expected_repository_id=context.repository_id,
+        expected_commit_sha=context.commit_sha,
+    )
+    snapshot[field] = value
+    command = DashboardStartCommand(request_id="stale-start", goal="Trace.", **snapshot)
+    with pytest.raises(DashboardCommandConflictError, match="stale"):
+        service.start_investigation(command)
+    assert not lifecycle.start_requests
+
+
+@pytest.mark.parametrize("kind", ["start", "continue"])
+def test_focus_composition_limit_fails_before_lifecycle(
+    tmp_path: Path, kind: str,
+) -> None:
+    _, context = _create_repository(tmp_path)
+    query = _Query(context)
+    query.thread_detail = query.thread_detail.model_copy(update={
+        "thread": query.thread_detail.thread.model_copy(update={
+            "execution_state": ThreadExecutionState.COMPLETED,
+        }),
+    })
+    lifecycle = _Lifecycle()
+    service = DashboardCommandService(query, lifecycle_service=lifecycle)
+    snapshot = dict(
+        request_id="long-focused-goal", focus_path="src",
+        expected_repository_id=context.repository_id,
+        expected_commit_sha=context.commit_sha,
+    )
+    with pytest.raises(DashboardCommandConflictError, match="combined.*16384"):
+        if kind == "start":
+            service.start_investigation(DashboardStartCommand(goal="x" * 16_384, **snapshot))
+        else:
+            service.continue_thread("thread-1", DashboardContinueCommand(
+                prompt="x" * 16_384, **snapshot,
+            ))
+    assert not lifecycle.start_requests
+    assert not lifecycle.continue_requests
+
+
+def test_disabled_review_command_fails_closed(tmp_path: Path) -> None:
     _, context = _create_repository(tmp_path)
     service = DashboardCommandService(_Query(context))
     command = DashboardHumanResponseCommand(

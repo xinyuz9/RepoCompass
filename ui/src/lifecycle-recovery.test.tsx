@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LifecycleRecoveryCenter } from "./lifecycle-recovery";
@@ -9,10 +9,18 @@ import {
 } from "./lifecycle-request-store";
 import type { DashboardStartCommand } from "./types";
 
+const workspace = {
+  repository_id: "a".repeat(64),
+  commit_sha: "b".repeat(40),
+  lifecycle_mutations_enabled: true,
+};
+
 afterEach(() => {
   cleanup();
   window.sessionStorage.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("LifecycleRecoveryCenter", () => {
@@ -105,7 +113,7 @@ describe("LifecycleRecoveryCenter", () => {
   });
 });
 
-function renderRecovery(onThreadActivated = vi.fn()) {
+function renderRecovery(onThreadActivated = vi.fn(), system = workspace) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -114,16 +122,54 @@ function renderRecovery(onThreadActivated = vi.fn()) {
   });
   return render(
     <QueryClientProvider client={client}>
-      <LifecycleRecoveryCenter onThreadActivated={onThreadActivated} />
+      <LifecycleRecoveryCenter system={system} onThreadActivated={onThreadActivated} />
     </QueryClientProvider>,
   );
 }
+
+describe("recovery safety and bounded polling", () => {
+  it.each([403, 404, 503])("stops automatic polling after HTTP %i and allows manual status retry", async (status) => {
+    vi.useFakeTimers();
+    rememberLifecycleRequest(startDraft());
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({
+      status, detail: "Request unavailable", title: "Unavailable",
+      type: "urn:repocompass:problem:unavailable", instance: "/api/v1/operations/request-start",
+    }), { status, headers: { "content-type": "application/problem+json" } })));
+    vi.stubGlobal("fetch", fetchMock);
+    renderRecovery();
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Retry status" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Retry status" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { ...workspace, lifecycle_mutations_enabled: false },
+    { ...workspace, repository_id: "c".repeat(64) },
+    { ...workspace, commit_sha: "c".repeat(40) },
+  ])("never polls or replays a disabled or mismatched workspace", async (system) => {
+    rememberLifecycleRequest(startDraft());
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const onThreadActivated = vi.fn();
+    renderRecovery(onThreadActivated, system);
+    await act(async () => {});
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(onThreadActivated).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Replay exact request" })).not.toBeInTheDocument();
+    expect(readLifecycleRequests()).toHaveLength(1);
+  });
+});
 
 function startDraft() {
   const command: DashboardStartCommand = {
     schema_version: 1,
     request_id: "request-start",
     goal: "Trace the proposal verifier.",
+    expected_repository_id: "a".repeat(64),
+    expected_commit_sha: "b".repeat(40),
     focus_path: "src/repocompass",
     human_review_policy: "before_finalize",
     memory_retrieval_enabled: true,

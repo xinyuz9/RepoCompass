@@ -398,6 +398,8 @@ class DashboardStartCommand(_DashboardModel):
     schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
     request_id: str = Field(pattern=REQUEST_ID_PATTERN)
     goal: str = Field(min_length=1, max_length=16_384)
+    expected_repository_id: Sha256Digest
+    expected_commit_sha: CommitSha | None
     focus_path: str = Field(default=".", min_length=1, max_length=2_048)
     human_review_policy: HumanReviewPolicy = HumanReviewPolicy.BEFORE_FINALIZE
     memory_retrieval_enabled: bool = True

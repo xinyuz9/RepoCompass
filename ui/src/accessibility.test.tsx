@@ -14,6 +14,14 @@ afterEach(() => {
 });
 
 describe("dashboard accessibility", () => {
+  it("labels a pending bootstrap as a valid accessible status", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    const view = renderWithClient(<App />);
+    expect(screen.getByRole("status", { name: "Loading dashboard data" })).toBeVisible();
+    const results = await axe.run(view.container, axeOptions);
+    expect(results.violations).toEqual([]);
+  });
+
   it("has no detectable structural violations in the first-run shell", async () => {
     const fetchMock = vi.fn((input: string | URL | Request) => {
       const system = {

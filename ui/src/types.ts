@@ -303,6 +303,8 @@ export interface DashboardHumanResponseCommand {
 export interface DashboardStartCommand {
   schema_version: 1;
   request_id: string;
+  expected_repository_id: string;
+  expected_commit_sha: string | null;
   goal: string;
   focus_path: string;
   human_review_policy: "never" | "before_finalize";

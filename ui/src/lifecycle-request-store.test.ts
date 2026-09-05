@@ -45,6 +45,30 @@ describe("lifecycle request recovery store", () => {
   });
 
   it("rejects malformed or oversized browser-controlled command envelopes", () => {
+    window.sessionStorage.setItem(STORAGE_KEY, "not json");
+    expect(readLifecycleRequests()).toEqual([]);
+  });
+
+  it.each(["a", "调", "🧭"])("retains full contract length using Unicode code points: %s", (character) => {
+    const draft = startDraft("long-goal", character.repeat(16_384));
+    draft.command.focus_path = "a".repeat(2_048);
+    rememberLifecycleRequest(draft);
+    expect(readLifecycleRequests()[0]?.command).toEqual(draft.command);
+  });
+
+  it("evicts oldest envelopes by UTF-8 bytes while retaining the newest request", () => {
+    for (let index = 0; index < 8; index += 1) {
+      rememberLifecycleRequest(startDraft(`large-${index}`, "调".repeat(16_384)));
+    }
+    const records = readLifecycleRequests();
+    expect(records.length).toBeGreaterThan(0);
+    expect(records.length).toBeLessThan(8);
+    expect(records.at(-1)?.command.request_id).toBe("large-7");
+    expect(new TextEncoder().encode(window.sessionStorage.getItem(STORAGE_KEY)!).length)
+      .toBeLessThanOrEqual(131_072);
+  });
+
+  it("rejects invalid browser-controlled command envelopes", () => {
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify([{
       schema_version: 1,
       recorded_at_ms: 1,
@@ -64,6 +88,8 @@ function startDraft(requestId: string, goal: string) {
   const command: DashboardStartCommand = {
     schema_version: 1,
     request_id: requestId,
+    expected_repository_id: "a".repeat(64),
+    expected_commit_sha: "b".repeat(40),
     goal,
     focus_path: ".",
     human_review_policy: "before_finalize",

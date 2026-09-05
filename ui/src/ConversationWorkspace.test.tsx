@@ -103,6 +103,8 @@ describe("ConversationWorkspace lifecycle commands", () => {
     expect(body).toMatchObject({
       schema_version: 1,
       goal: "Trace the proposal verifier.",
+      expected_repository_id: repositoryId,
+      expected_commit_sha: commitSha,
       focus_path: "src/repocompass",
       human_review_policy: "before_finalize",
       memory_retrieval_enabled: true,

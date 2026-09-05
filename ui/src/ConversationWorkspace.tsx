@@ -131,6 +131,8 @@ function NewGoalWorkspace({
     const command: DashboardStartCommand = {
       schema_version: 1,
       request_id: createRequestId("start"),
+      expected_repository_id: system.repository_id,
+      expected_commit_sha: system.commit_sha,
       goal: goal.trim(),
       focus_path: focusPath.trim() || ".",
       human_review_policy: reviewEnabled ? "before_finalize" : "never",

@@ -199,6 +199,13 @@ class DashboardCommandService:
         service = self._require_lifecycle_service()
         with self._mutation_lock:
             context = self._query_service.repository_context
+            if (
+                command.expected_repository_id != context.repository_id
+                or command.expected_commit_sha != context.commit_sha
+            ):
+                raise DashboardCommandConflictError(
+                    "visible repository snapshot is stale; refresh before starting"
+                )
             focus_path = _validate_focus_path(
                 context.repository_root, command.focus_path
             )
@@ -229,12 +236,17 @@ class DashboardCommandService:
                 expected_repository_id=command.expected_repository_id,
                 expected_commit_sha=command.expected_commit_sha,
             )
-            if detail.thread.execution_state is not ThreadExecutionState.RESUMABLE:
-                raise DashboardCommandConflictError("thread is not resumable")
             request = ResumeInvestigationRequest(
                 request_id=command.request_id,
                 thread_id=detail.thread.thread_id,
             )
+            replay = self._invoke_lifecycle(
+                lambda: service.replay_resume_investigation(request)
+            )
+            if replay is not None:
+                return replay
+            if detail.thread.execution_state is not ThreadExecutionState.RESUMABLE:
+                raise DashboardCommandConflictError("thread is not resumable")
             return self._invoke_lifecycle(lambda: service.resume_investigation(request))
 
     def continue_thread(
@@ -254,8 +266,6 @@ class DashboardCommandService:
                 expected_repository_id=command.expected_repository_id,
                 expected_commit_sha=command.expected_commit_sha,
             )
-            if detail.thread.execution_state is not ThreadExecutionState.COMPLETED:
-                raise DashboardCommandConflictError("thread is not completed")
             focus_path = _validate_focus_path(
                 self._query_service.repository_context.repository_root,
                 command.focus_path,
@@ -270,6 +280,8 @@ class DashboardCommandService:
             )
             if replay is not None:
                 return replay
+            if detail.thread.execution_state is not ThreadExecutionState.COMPLETED:
+                raise DashboardCommandConflictError("thread is not completed")
             return self._invoke_lifecycle(
                 lambda: service.continue_investigation(request)
             )
@@ -469,4 +481,9 @@ def _validate_focus_path(repository_root: Path, value: str) -> str:
 def _apply_focus(prompt: str, focus_path: str) -> str:
     if focus_path == ".":
         return prompt
-    return f"{prompt}\n\nFocus this investigation on `{focus_path}`."
+    combined = f"{prompt}\n\nFocus this investigation on `{focus_path}`."
+    if len(combined) > 16_384:
+        raise DashboardCommandConflictError(
+            "combined goal and focus exceed 16384 characters; shorten the goal or focus"
+        )
+    return combined

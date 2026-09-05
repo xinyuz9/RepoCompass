@@ -1,6 +1,91 @@
 import { expect, test } from "@playwright/test";
 import axe from "axe-core";
 
+test("keeps persisted recovery inert in the real read-only demo", async ({ page, request }) => {
+  const system = await (await request.get("/api/v1/system")).json();
+  const tracker = recoveryTracker(system);
+  const unsafeRequests: string[] = [];
+  page.on("request", (entry) => {
+    if (entry.url().includes("/operations/") || entry.method() === "POST") {
+      unsafeRequests.push(entry.url());
+    }
+  });
+  await page.goto("/");
+  await page.evaluate((value) => {
+    sessionStorage.setItem("repocompass.pending-lifecycle.v1", JSON.stringify([value]));
+  }, tracker);
+  await page.reload();
+  await expect(page.getByText("Read-only workspace · recovery paused")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Replay exact request" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Hide tracker for browser-recovery" }).click();
+  await expect(page.getByRole("region", { name: "Lifecycle request recovery" })).toHaveCount(0);
+  expect(unsafeRequests).toEqual([]);
+});
+
+test("fault-injected 404 recovery stops polling and replays one exact request after refresh", async ({ page, request }, testInfo) => {
+  // Browser-contract fault injection only: no live model or mutation-capable backend.
+  const system = await (await request.get("/api/v1/system")).json();
+  const catalog = await (await request.get("/api/v1/threads")).json();
+  const tracker = recoveryTracker(system);
+  let statusReads = 0;
+  const posts: { body: unknown; key: string | undefined }[] = [];
+  await page.route("**/api/v1/system", async (route) => {
+    await route.fulfill({ json: { ...system, lifecycle_mutations_enabled: true } });
+  });
+  await page.route("**/api/v1/operations/browser-recovery", async (route) => {
+    statusReads += 1;
+    await route.fulfill({ status: 404, contentType: "application/problem+json", body: JSON.stringify({
+      schema_version: 1, status: 404, title: "Not found", detail: "No reservation exists.",
+      type: "urn:repocompass:problem:operation-not-found", instance: "/api/v1/operations/browser-recovery",
+    }) });
+  });
+  await page.route("**/api/v1/investigations", async (route) => {
+    posts.push({ body: route.request().postDataJSON(), key: route.request().headers()["idempotency-key"] });
+    await route.fulfill({ json: {
+      schema_version: 1, request_id: tracker.command.request_id,
+      thread_id: catalog.threads[0].thread_id, execution_state: "completed",
+      run_id: catalog.threads[0].latest_attempt.run_id,
+      idempotent_replay: true, recovered_from_checkpoint: false,
+    } });
+  });
+  await page.goto("/");
+  await page.evaluate((value) => {
+    sessionStorage.setItem("repocompass.pending-lifecycle.v1", JSON.stringify([value]));
+  }, tracker);
+  await page.clock.install();
+  await page.reload();
+  await expect(page.getByText("Request was not reserved")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Investigation result" })).toBeVisible();
+  await page.clock.runFor(10_000);
+  expect(statusReads).toBe(1);
+  expect(posts).toEqual([]);
+  await expect(page.getByRole("button", { name: "Retry status" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await page.evaluate(axe.source);
+  const scan = await page.evaluate(async () => {
+    const browserAxe = (window as unknown as { axe: typeof import("axe-core") }).axe;
+    return browserAxe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] } });
+  });
+  expect(scan.violations.map(({ id, nodes }) => ({ id, nodes: nodes.map(({ html, failureSummary }) => ({ html, failureSummary })) }))).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("recovery.png"), fullPage: true });
+  await page.getByRole("button", { name: "Replay exact request" }).click();
+  await expect(page.getByRole("region", { name: "Lifecycle request recovery" })).toHaveCount(0);
+  expect(posts).toEqual([{ body: tracker.command, key: tracker.command.request_id }]);
+  expect(await page.evaluate(() => sessionStorage.getItem("repocompass.pending-lifecycle.v1"))).toBeNull();
+});
+
+function recoveryTracker(system: { repository_id: string; commit_sha: string | null }) {
+  return {
+    schema_version: 1, recorded_at_ms: Date.now(), kind: "start", thread_id: null,
+    command: {
+      schema_version: 1, request_id: "browser-recovery", goal: "Trace the policy boundary.",
+      expected_repository_id: system.repository_id, expected_commit_sha: system.commit_sha,
+      focus_path: ".", human_review_policy: "before_finalize",
+      memory_retrieval_enabled: true, max_attempt_cost_usd: null,
+    },
+  };
+}
+
 test("replays real demo evidence, navigates inspectors, and keeps a readable workspace", async ({ page }, testInfo) => {
   const pageErrors: string[] = [];
   const failedResponses: string[] = [];

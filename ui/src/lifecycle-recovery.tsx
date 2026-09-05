@@ -27,12 +27,18 @@ import {
 } from "./lifecycle-request-store";
 import type {
   DashboardLifecycleOperationStatus,
+  DashboardSystemInfo,
   InvestigationOperationResult,
 } from "./types";
 
+type RecoveryWorkspace = Pick<DashboardSystemInfo,
+  "repository_id" | "commit_sha" | "lifecycle_mutations_enabled">;
+
 export function LifecycleRecoveryCenter({
+  system,
   onThreadActivated,
 }: {
+  system: RecoveryWorkspace | undefined;
   onThreadActivated: (threadId: string) => void;
 }) {
   const [requests, setRequests] = useState(readLifecycleRequests);
@@ -55,6 +61,7 @@ export function LifecycleRecoveryCenter({
         <LifecycleRecoveryItem
           key={request.command.request_id}
           request={request}
+          system={system}
           onThreadActivated={onThreadActivated}
         />
       ))}
@@ -64,17 +71,29 @@ export function LifecycleRecoveryCenter({
 
 function LifecycleRecoveryItem({
   request,
+  system,
   onThreadActivated,
 }: {
   request: StoredLifecycleRequest;
+  system: RecoveryWorkspace | undefined;
   onThreadActivated: (threadId: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const blockReason = recoveryBlockReason(request, system);
+  const canObserve = blockReason === null;
+  const operationQuery = dashboardQueries.operation(request.command.request_id);
   const operation = useQuery({
-    ...dashboardQueries.operation(request.command.request_id),
+    ...operationQuery,
+    queryKey: [...operationQuery.queryKey, system?.repository_id, system?.commit_sha],
+    enabled: canObserve,
     retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     refetchInterval: (query) =>
-      query.state.data?.state === "completed" ? false : 1_500,
+      !canObserve || query.state.status === "error"
+        || query.state.data?.state === "completed"
+        || query.state.data?.latest_attempt?.status === "failed"
+        ? false : 1_500,
   });
   const completeRecovery = useCallback(
     (result: InvestigationOperationResult) => {
@@ -85,28 +104,33 @@ function LifecycleRecoveryItem({
     [onThreadActivated, queryClient],
   );
   const replay = useMutation({
-    mutationFn: () => replayLifecycleRequest(request),
+    mutationFn: () => {
+      if (!canObserve) return Promise.reject(new Error(blockReason ?? "Recovery paused"));
+      return replayLifecycleRequest(request);
+    },
     retry: false,
     onSuccess: (result) => completeRecovery(result),
+    onError: () => { void operation.refetch(); },
   });
 
   useEffect(() => {
     const result = operation.data?.result;
-    if (operation.data?.state === "completed" && result) completeRecovery(result);
-  }, [completeRecovery, operation.data]);
+    if (canObserve && operation.data?.state === "completed" && result) completeRecovery(result);
+  }, [canObserve, completeRecovery, operation.data]);
 
   const notFound = operation.error instanceof DashboardApiError
     && operation.error.status === 404;
   const attemptFailed = operation.data?.latest_attempt?.status === "failed";
-  const canReplay = notFound || attemptFailed;
-  const phase = operationPhase(operation.data, operation.error, operation.isPending);
+  const canReplay = canObserve && (notFound || attemptFailed);
+  const phase = blockReason ?? operationPhase(operation.data, operation.error, operation.isPending);
   const running = operation.data?.latest_attempt?.status === "running";
   const threadId = operation.data?.thread_id;
 
   return (
-    <article className={`recovery-item${attemptFailed || operation.isError ? " is-alert" : ""}`}>
+    <article className={`recovery-item${blockReason || attemptFailed || operation.isError ? " is-alert" : ""}`}>
       <span className="recovery-item__signal">
-        {running || replay.isPending || operation.isPending
+        {blockReason ? <AlertTriangle size={16} />
+          : running || replay.isPending || operation.isPending
           ? <LoaderCircle className="is-spinning" size={16} />
           : operation.data?.state === "completed"
             ? <CheckCircle2 size={16} />
@@ -124,7 +148,7 @@ function LifecycleRecoveryItem({
         </span>
       </div>
       <div className="recovery-item__actions">
-        {threadId ? (
+        {canObserve && threadId ? (
           <button type="button" onClick={() => onThreadActivated(threadId)}>
             Open thread
           </button>
@@ -138,8 +162,8 @@ function LifecycleRecoveryItem({
             <RotateCcw size={12} />Replay exact request
           </button>
         ) : null}
-        {operation.isError && !notFound ? (
-          <button type="button" onClick={() => void operation.refetch()}>
+        {canObserve && (operation.isError || attemptFailed) ? (
+          <button type="button" disabled={operation.isFetching || replay.isPending} onClick={() => void operation.refetch()}>
             <RefreshCw size={12} />Retry status
           </button>
         ) : null}
@@ -163,15 +187,26 @@ function replayLifecycleRequest(
   request: StoredLifecycleRequest,
 ): Promise<InvestigationOperationResult> {
   switch (request.kind) {
-    case "start":
-      return startInvestigation(request.command);
-    case "resume":
-      return resumeThread(request.thread_id, request.command);
-    case "continue":
-      return continueThread(request.thread_id, request.command);
-    case "respond":
-      return respondToReview(request.thread_id, request.command);
+    case "start": return startInvestigation(request.command);
+    case "resume": return resumeThread(request.thread_id, request.command);
+    case "continue": return continueThread(request.thread_id, request.command);
+    case "respond": return respondToReview(request.thread_id, request.command);
   }
+}
+
+function recoveryBlockReason(
+  request: StoredLifecycleRequest,
+  system: RecoveryWorkspace | undefined,
+): string | null {
+  if (!system) return "Waiting for workspace identity";
+  if (!system.lifecycle_mutations_enabled) return "Read-only workspace · recovery paused";
+  if (request.kind !== "respond" && (
+    request.command.expected_repository_id !== system.repository_id
+    || request.command.expected_commit_sha !== system.commit_sha
+  )) {
+    return "Repository snapshot changed · open the original workspace or start a new goal";
+  }
+  return null;
 }
 
 function operationPhase(

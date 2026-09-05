@@ -518,6 +518,7 @@ def test_explicit_mutations_require_idempotency_and_same_origin() -> None:
         json={
             "schema_version": 1,
             "request_id": "start-command-1",
+            **snapshot,
             "goal": "Trace authentication.",
             "focus_path": ".",
             "human_review_policy": "before_finalize",
@@ -526,6 +527,13 @@ def test_explicit_mutations_require_idempotency_and_same_origin() -> None:
         },
         headers={"Idempotency-Key": "start-command-1"},
     )
+    unbound_start = client.post(
+        "/api/v1/investigations",
+        json={"request_id": "unbound-start", "goal": "Trace."},
+        headers={"Idempotency-Key": "unbound-start"},
+    )
+    assert unbound_start.status_code == 422
+    assert len(commands.start_calls) == 1
     resumed = client.post(
         "/api/v1/threads/thread-1/resume",
         json={"schema_version": 1, "request_id": "resume-command-1", **snapshot},

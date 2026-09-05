@@ -196,12 +196,17 @@
 .recovery-item.is-alert { color: var(--amber); border-color: rgba(231, 173, 92, .22); background: var(--amber-soft); }
 .recovery-item__signal { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid currentColor; border-radius: 9px; }
 .recovery-item__copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
-.recovery-item__copy strong { color: var(--text-soft); font-size: 10px; }
-.recovery-item__copy span { overflow: hidden; color: var(--muted); font-family: "JetBrains Mono Variable", monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.recovery-item__actions { display: flex; align-items: center; gap: 5px; }
-.recovery-item__actions button { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 0 7px; color: currentColor; border: 1px solid currentColor; border-radius: 7px; background: rgba(8, 13, 16, .48); font-size: 9px; cursor: pointer; }
+.recovery-item__copy strong { color: var(--text-soft); font-size: 13px; line-height: 1.45; }
+.recovery-item__copy span { overflow: hidden; color: var(--muted); font-family: "JetBrains Mono Variable", monospace; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.recovery-item__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.recovery-item__actions button { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 9px; color: currentColor; border: 1px solid currentColor; border-radius: 7px; background: rgba(8, 13, 16, .48); font-size: 12px; cursor: pointer; }
 .recovery-item__actions button:disabled { opacity: .45; cursor: wait; }
-.recovery-item > p { grid-column: 2 / -1; margin: -2px 0 2px; color: var(--danger); font-size: 9px; }
+.recovery-item > p { grid-column: 2 / -1; margin: -2px 0 2px; color: var(--danger); font-size: 12px; }
+@media (max-width: 930px) {
+  .recovery-item { grid-template-columns: auto minmax(0, 1fr); }
+  .recovery-item__actions { grid-column: 1 / -1; }
+  .recovery-item__actions button { min-height: 40px; }
+}
 
 .conversation-goal { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 24px clamp(22px, 4vw, 54px) 18px; border-bottom: 1px solid var(--line); background: rgba(8, 13, 16, .36); }
 .conversation-goal h1 { max-width: 820px; margin: 7px 0 6px; font-size: clamp(20px, 2.4vw, 31px); font-weight: 610; line-height: 1.25; letter-spacing: -.045em; }

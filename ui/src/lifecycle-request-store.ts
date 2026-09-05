@@ -13,8 +13,8 @@ const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const THREAD_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 const REPOSITORY_ID = /^[0-9a-f]{64}$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
-const MAX_PROMPT_LENGTH = 4_000;
-const MAX_PATH_LENGTH = 1_024;
+const MAX_PROMPT_LENGTH = 16_384;
+const MAX_PATH_LENGTH = 2_048;
 
 export type LifecycleRequestDraft =
   | { kind: "start"; thread_id: null; command: DashboardStartCommand }
@@ -87,8 +87,13 @@ function writeLifecycleRequests(records: StoredLifecycleRequest[]): void {
     if (records.length === 0) {
       window.sessionStorage.removeItem(STORAGE_KEY);
     } else {
-      const encoded = JSON.stringify(records);
-      if (new TextEncoder().encode(encoded).length > MAX_STORAGE_BYTES) return;
+      const bounded = records.slice(-MAX_PENDING_REQUESTS);
+      let encoded = JSON.stringify(bounded);
+      // Keep the newest recoverable request even when multibyte goals fill the cap.
+      while (new TextEncoder().encode(encoded).length > MAX_STORAGE_BYTES) {
+        bounded.shift();
+        encoded = JSON.stringify(bounded);
+      }
       window.sessionStorage.setItem(STORAGE_KEY, encoded);
     }
     window.dispatchEvent(new Event(CHANGE_EVENT));
@@ -133,6 +138,7 @@ function isStoredLifecycleRequest(value: unknown): value is StoredLifecycleReque
 function isStartCommand(command: Record<string, unknown>): boolean {
   return (
     isBoundedString(command.goal, 1, MAX_PROMPT_LENGTH)
+    && isExpectedSnapshot(command)
     && isBoundedString(command.focus_path, 1, MAX_PATH_LENGTH)
     && (command.human_review_policy === "never"
       || command.human_review_policy === "before_finalize")
@@ -187,8 +193,8 @@ function isBoundedString(
 ): value is string {
   return (
     typeof value === "string"
-    && value.length >= minimumLength
-    && value.length <= maximumLength
+    && Array.from(value).length >= minimumLength
+    && Array.from(value).length <= maximumLength
   );
 }
 

@@ -242,7 +242,7 @@ export function App() {
           </div>
         </header>
 
-        <LifecycleRecoveryCenter onThreadActivated={activateThread} />
+        <LifecycleRecoveryCenter system={system.data} onThreadActivated={activateThread} />
 
         {rootError ? <ErrorState error={rootError} onRetry={refresh} /> : null}
         {!rootError && (catalog.isPending || system.isPending) ? <LoadingState /> : null}
@@ -379,7 +379,7 @@ function StructureEmpty() {
 
 function LoadingState({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`loading-state${compact ? " is-compact" : ""}`} aria-label="Loading dashboard data">
+    <div className={`loading-state${compact ? " is-compact" : ""}`} role="status" aria-label="Loading dashboard data">
       <span /><span /><span />
     </div>
   );
