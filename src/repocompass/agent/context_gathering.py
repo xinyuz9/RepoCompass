@@ -13,6 +13,7 @@ from repocompass.agent.context import (
     ContextItem,
     ContextPack,
     ContextSection,
+    MAX_CONTEXT_ITEMS,
     ContextSourceKind,
     RawArtifactKind,
     RawArtifactMetadata,
@@ -26,6 +27,7 @@ from repocompass.agent.context import (
 )
 from repocompass.agent.context_builder import (
     ContextBudgetPolicy,
+    ContextCandidateError,
     ContextSelectionStrategy,
     ContextSectionReservation,
     build_active_context,
@@ -1093,8 +1095,19 @@ def _build_gathered_context(
                 reserved_tokens=budget_tokens // 8,
             )
         )
+    # Replayed tool evidence can legitimately occur in multiple completed turns.
+    # Collapse exact identities only: different provenance must remain distinct,
+    # and inconsistent content under one identity must never be silently chosen.
+    if len(candidates) > MAX_CONTEXT_ITEMS:
+        raise ContextCandidateError("active context has too many candidates")
+    unique_candidates: dict[str, ContextItem] = {}
+    for item in candidates:
+        existing = unique_candidates.get(item.item_id)
+        if existing is not None and existing != item:
+            raise ValueError("content-addressed context candidate conflicts")
+        unique_candidates[item.item_id] = item
     pack = build_active_context(
-        candidates=candidates,
+        candidates=tuple(unique_candidates.values()),
         policy=ContextBudgetPolicy(
             budget_tokens=budget_tokens,
             selection_strategy=selection_strategy,

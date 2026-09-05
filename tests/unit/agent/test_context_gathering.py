@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from repocompass.agent.candidate import CandidateResult, EvidenceItem
@@ -37,6 +38,67 @@ def _step() -> PlanStep:
         expected_evidence=["A source file and exact line range."],
         status="active",
     )
+
+
+def test_exact_replayed_tool_evidence_is_idempotent_but_new_provenance_is_retained(
+    tmp_path,
+):
+    message = ToolMessage(
+        content="src/auth.py",
+        name="list_tree",
+        tool_call_id="stable-call",
+        status="success",
+    )
+
+    def gather(messages):
+        return gather_explorer_context(
+            repo_path=tmp_path,
+            objective="Locate authentication.",
+            active_step=_step(),
+            remaining_tool_calls=2,
+            remaining_explorer_calls=2,
+            messages=messages,
+            evaluation_report=None,
+            budget_tokens=8192,
+        )
+
+    once = gather((message,))
+    replay = gather((message, message.model_copy()))
+    assert replay == once
+    other = gather(
+        (message, message.model_copy(update={"tool_call_id": "different-call"}))
+    )
+    assert len(other.pack.items) == len(once.pack.items) + 1
+
+
+def test_conflicting_context_identity_is_not_silently_deduplicated():
+    from repocompass.agent.context_gathering import _build_gathered_context
+    from repocompass.agent.context_builder import ContextCandidateError
+
+    gathered = gather_planner_context(
+        objective="Find entrypoint.",
+        max_tool_calls_per_step=2,
+        max_explorer_calls_per_step=2,
+        budget_tokens=8192,
+    )
+    item = gathered.pack.items[0]
+    conflict = item.model_copy(update={"priority": 1})
+    with pytest.raises(ValueError, match="context candidate conflicts"):
+        _build_gathered_context(
+            candidates=(item, conflict),
+            raw_artifacts=gathered.raw_artifacts,
+            budget_tokens=8192,
+            reserve_evidence=False,
+            reserve_feedback=False,
+        )
+    with pytest.raises(ContextCandidateError, match="too many candidates"):
+        _build_gathered_context(
+            candidates=(item,) * 1025,
+            raw_artifacts=gathered.raw_artifacts,
+            budget_tokens=8192,
+            reserve_evidence=False,
+            reserve_feedback=False,
+        )
 
 
 def _plan() -> InvestigationPlan:
