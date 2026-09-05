@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "version": "deepseek-peak-ceiling-observed-2026-09-05",
+  "effective_from": "2026-09-05",
+  "entries": [
+    {
+      "schema_version": 1,
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "input_usd_per_million_tokens": "0.44",
+      "output_usd_per_million_tokens": "1.32",
+      "cached_input_usd_per_million_tokens": "0.014",
+      "reasoning_output_usd_per_million_tokens": "same_as_output"
+    },
+    {
+      "schema_version": 1,
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "input_usd_per_million_tokens": "1.32",
+      "output_usd_per_million_tokens": "3.96",
+      "cached_input_usd_per_million_tokens": "0.044",
+      "reasoning_output_usd_per_million_tokens": "same_as_output"
+    }
+  ]
+}
