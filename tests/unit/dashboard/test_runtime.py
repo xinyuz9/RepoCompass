@@ -205,14 +205,18 @@ def test_runtime_demo_is_ephemeral_read_only_and_credential_free(
 
     def fake_demo(destination: Path):
         generated_destinations.append(destination)
-        return type("DemoWorkspace", (), {
-            "repository_path": repository,
-            "checkpoint_database": state / "checkpoints.sqlite",
-            "raw_store_database": state / "raw.sqlite",
-            "memory_database": state / "memory.sqlite",
-            "trace_directory": state / "traces",
-            "pricing_table": None,
-        })()
+        return type(
+            "DemoWorkspace",
+            (),
+            {
+                "repository_path": repository,
+                "checkpoint_database": state / "checkpoints.sqlite",
+                "raw_store_database": state / "raw.sqlite",
+                "memory_database": state / "memory.sqlite",
+                "trace_directory": state / "traces",
+                "pricing_table": None,
+            },
+        )()
 
     def forbid_workflow_models():
         raise AssertionError("demo serving must use inspection-only models")
