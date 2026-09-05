@@ -31,15 +31,20 @@ const KIND_ORDER: Record<EvidenceNode["kind"], number> = {
   unresolved_symbol: 7,
 };
 
-export function buildTaskGraph(structure: InvestigationStructure): TaskGraphModel {
+export function buildTaskGraph(structure: InvestigationStructure, readingPathOnly = false): TaskGraphModel {
   const { graph_slice: slice, steps } = structure.reading_path;
+  const readingIds = new Set(steps.map((step) => step.entity_id));
+  const visibleNodes = readingPathOnly && readingIds.size
+    ? slice.nodes.filter((node) => readingIds.has(node.entity_id))
+    : slice.nodes;
+  const visibleIds = new Set(visibleNodes.map((node) => node.entity_id));
   const depthByEntity = new Map(
     slice.node_depths.map((item) => [item.entity_id, item]),
   );
   const readingOrder = new Map(steps.map((step) => [step.entity_id, step.ordinal]));
   const groups = new Map<number, EvidenceNode[]>();
 
-  for (const entity of slice.nodes) {
+  for (const entity of visibleNodes) {
     const depth = depthByEntity.get(entity.entity_id)?.depth ?? 0;
     const group = groups.get(depth) ?? [];
     group.push(entity);
@@ -74,7 +79,8 @@ export function buildTaskGraph(structure: InvestigationStructure): TaskGraphMode
 
   return {
     nodes,
-    edges: slice.edges.map(toFlowEdge),
+    edges: slice.edges.filter((edge) => visibleIds.has(edge.source_entity_id)
+      && visibleIds.has(edge.target_entity_id)).map(toFlowEdge),
     readingSteps: [...steps].sort((left, right) => left.ordinal - right.ordinal),
   };
 }

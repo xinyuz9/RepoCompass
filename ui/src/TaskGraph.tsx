@@ -39,7 +39,8 @@ interface TaskGraphProps {
 }
 
 export function TaskGraph({ threadId, structure }: TaskGraphProps) {
-  const model = useMemo(() => buildTaskGraph(structure), [structure]);
+  const [readingPathOnly, setReadingPathOnly] = useState(true);
+  const model = useMemo(() => buildTaskGraph(structure, readingPathOnly), [structure, readingPathOnly]);
   const firstEntity = model.readingSteps[0]?.entity_id ?? model.nodes[0]?.id ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(firstEntity);
   const selectedExists = model.nodes.some((node) => node.id === selectedId);
@@ -69,12 +70,17 @@ export function TaskGraph({ threadId, structure }: TaskGraphProps) {
   return (
     <section className="graph-workspace" aria-label="Task-specific evidence graph">
       <div className="graph-canvas">
+        <div className="graph-scope" role="group" aria-label="Graph scope">
+          <button type="button" aria-pressed={readingPathOnly} onClick={() => setReadingPathOnly(true)}>Reading route</button>
+          <button type="button" aria-pressed={!readingPathOnly} onClick={() => setReadingPathOnly(false)}>All evidence ({structure.reading_path.graph_slice.nodes.length})</button>
+        </div>
         <div className="graph-canvas__legend" aria-label="Graph legend">
           <span><i className="legend-line legend-line--verified" />verified</span>
           <span><i className="legend-line legend-line--inferred" />inferred</span>
           <span><i className="legend-seed" />seed</span>
         </div>
         <ReactFlow
+          key={readingPathOnly ? "reading-route" : "all-evidence"}
           nodes={flowNodes}
           edges={model.edges}
           nodeTypes={NODE_TYPES}
@@ -97,13 +103,13 @@ export function TaskGraph({ threadId, structure }: TaskGraphProps) {
             color="rgba(151, 177, 166, 0.13)"
           />
           <Controls showInteractive={false} position="bottom-left" />
-          <MiniMap
+          {!readingPathOnly ? <MiniMap
             pannable
             zoomable
             position="bottom-right"
             nodeColor={miniMapColor}
             maskColor="rgba(8, 13, 16, 0.72)"
-          />
+          /> : null}
         </ReactFlow>
       </div>
 

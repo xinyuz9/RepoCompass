@@ -175,6 +175,17 @@ function NewGoalWorkspace({
             onChange={(event) => setGoal(event.target.value)}
           />
         </label>
+        <div className="goal-suggestions" aria-label="Example investigation goals">
+          {[
+            ["Trace a request", "Trace the main request path from its entry point and cite the functions involved."],
+            ["Find regression coverage", "Find the tests that protect the main workflow and identify missing coverage."],
+            ["Map dependencies", "Explain the main module dependencies with source evidence."],
+          ].map(([label, objective]) => (
+            <button key={label} type="button"
+              disabled={!enabled || lockedCommand !== null || mutation.isPending || mutation.isSuccess}
+              onClick={() => setGoal(objective ?? "")}>{label}</button>
+          ))}
+        </div>
         <ComposerOptions
           system={system}
           focusPath={focusPath}
@@ -230,10 +241,6 @@ function ThreadConversation({
     latestAttempt.repository_id !== system.repository_id
     || latestAttempt.commit_sha !== system.commit_sha
   );
-  const summary = thread.final_result?.summary
-    ?? thread.candidate_result?.summary
-    ?? thread.evaluation_report?.semantic_assessment.summary
-    ?? "The latest attempt ended before a validated result was produced.";
   const [prompt, setPrompt] = useState("");
   const [focusPath, setFocusPath] = useState(".");
   const [continueCommand, setContinueCommand] =
@@ -311,7 +318,7 @@ function ThreadConversation({
         <article className="chat-message chat-message--user">
           <span className="chat-avatar"><UserRound size={16} /></span>
           <div>
-            <header><strong>You</strong><small>goal · turn 1</small></header>
+            <header><strong>You</strong><small>recorded objective</small></header>
             <p>{thread.objective}</p>
           </div>
         </article>
@@ -325,7 +332,7 @@ function ThreadConversation({
                 {thread.execution_state}
               </span>
             </header>
-            <p>{summary}</p>
+            <InvestigationResult thread={thread} onOpenLens={onOpenLens} />
             <AttemptRail attempts={attempts.map((item) => item.attempt)} />
             <div className="inspector-shortcuts" aria-label="Open investigation inspector">
               {INSPECTORS.map((item) => (
@@ -354,7 +361,7 @@ function ThreadConversation({
       </div>
 
       <footer className="conversation-command">
-        {thread.execution_state === "completed" ? (
+        {thread.execution_state === "completed" && enabled ? (
           <>
             <div className="follow-up-box">
               <label>
@@ -406,10 +413,84 @@ function ThreadConversation({
         ) : null}
 
         {!enabled ? (
-          <p className="command-hint"><ShieldAlert size={15} />Lifecycle controls are read-only. Restart the dashboard with <code>--enable-lifecycle-mutations</code>.</p>
+          <div className="read-only-notice">
+            <ShieldAlert size={18} />
+            <div>
+              <strong>{system.demo_mode ? "Explore a completed example" : "Read-only workspace"}</strong>
+              <p>{system.demo_mode
+                ? "This example uses scripted model responses with real tools and storage. Explore the evidence, memory and cost; it does not measure model quality."
+                : "You can inspect saved investigations. To run new goals, enable lifecycle controls when starting the dashboard."}</p>
+            </div>
+          </div>
         ) : null}
       </footer>
     </div>
+  );
+}
+
+export function InvestigationResult({
+  thread,
+  onOpenLens,
+}: {
+  thread: DashboardThreadDetail["thread"];
+  onOpenLens: (lens: InspectorLens) => void;
+}) {
+  const result = thread.final_result;
+  const candidate = thread.candidate_result;
+  const evidence = result?.evidence ?? candidate?.evidence.map((item) => item.claim) ?? [];
+  const files = result?.relevant_files ?? [...new Set(candidate?.evidence.map((item) => item.path) ?? [])];
+  const questions = result?.unresolved_questions ?? candidate?.unresolved_questions ?? [];
+  const status = thread.termination_status;
+  const label = thread.pending_review ? "Awaiting review"
+    : status === "cancelled" ? "Cancelled"
+    : status === "exhausted" ? "Best effort"
+    : result && status === "accepted" ? "Accepted"
+    : "Working draft";
+  if (!result && !candidate) {
+    return (
+      <section className="result-card" aria-label="Investigation result">
+        <h2>No result yet</h2>
+        <p>The latest checkpoint has no result to display. Inspect Run trace for the last completed step.</p>
+        <button className="result-card__open" type="button" onClick={() => onOpenLens("trace")}>Inspect last attempt</button>
+      </section>
+    );
+  }
+  return (
+    <section className={`result-card result-card--${status ?? "draft"}`} aria-label="Investigation result">
+      <div className="result-card__heading">
+        <h2>{result ? "Investigation result" : "Candidate result"}</h2>
+        <span className="result-card__status">{label}</span>
+      </div>
+      <p>{result?.summary ?? candidate?.summary}</p>
+      {status === "exhausted" || status === "cancelled" ? (
+        <p className="result-card__note">Stopped without acceptance. Review the evidence and open questions before relying on this result.</p>
+      ) : !result ? (
+        <p className="result-card__note">This candidate has not been finalized.</p>
+      ) : null}
+      {files.length ? (
+        <>
+          <h3>Relevant files · {files.length}</h3>
+          <div className="result-files">{files.map((file) => <code key={file}>{file}</code>)}</div>
+        </>
+      ) : null}
+      <h3>Evidence · {evidence.length}</h3>
+      {evidence.length ? <ol>{evidence.slice(0, 3).map((claim, index) => <li key={index}>{claim}</li>)}</ol>
+        : <p className="result-card__note">No evidence was reported.</p>}
+      {evidence.length > 3 ? (
+        <details>
+          <summary>Show {evidence.length - 3} more evidence items</summary>
+          <ol start={4}>{evidence.slice(3).map((claim, index) => <li key={index}>{claim}</li>)}</ol>
+        </details>
+      ) : null}
+      <h3>Open questions · {questions.length}</h3>
+      {questions.length ? <ul>{questions.map((question, index) => <li key={index}>{question}</li>)}</ul>
+        : <p className="result-card__note">No unresolved questions were reported.</p>}
+      {thread.structure ? (
+        <button className="result-card__open" type="button" onClick={() => onOpenLens("topology")}>
+          <FileCode2 size={15} />Explore source evidence
+        </button>
+      ) : null}
+    </section>
   );
 }
 

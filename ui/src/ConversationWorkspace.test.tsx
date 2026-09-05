@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ConversationWorkspace } from "./ConversationWorkspace";
+import { ConversationWorkspace, InvestigationResult } from "./ConversationWorkspace";
 import type {
   DashboardSystemInfo,
   DashboardThreadDetail,
@@ -31,6 +31,48 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace lifecycle commands", () => {
+  it("distinguishes exhausted completion from an accepted result and retains open questions", () => {
+    const detail = threadDetail({ executionState: "completed", attemptCommitSha: commitSha });
+    detail.thread.termination_status = "exhausted";
+    detail.thread.final_result = {
+      summary: "The request handler was located, but the caller is unresolved.",
+      relevant_files: ["src/handler.py"], relevant_symbols: [],
+      evidence: ["handler validates the request."],
+      unresolved_questions: ["Which caller starts the request?"],
+    };
+    render(<InvestigationResult thread={detail.thread} onOpenLens={vi.fn()} />);
+    expect(screen.getByText("Best effort")).toBeVisible();
+    expect(screen.queryByText("Accepted")).not.toBeInTheDocument();
+    expect(screen.getByText("Which caller starts the request?")).toBeVisible();
+    expect(screen.getByText("src/handler.py")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Explore source evidence" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a candidate explicitly provisional and exposes its remaining evidence on demand", () => {
+    const detail = threadDetail({ executionState: "resumable", attemptCommitSha: commitSha });
+    detail.thread.candidate_result = {
+      summary: "A provisional finding.", relations: [], unresolved_questions: [],
+      evidence: ["First", "Second", "Third", "Fourth"].map((claim) => ({
+        claim, path: "src/handler.py", symbol: null, line_start: 1, line_end: 2,
+      })),
+    };
+    render(<InvestigationResult thread={detail.thread} onOpenLens={vi.fn()} />);
+    expect(screen.getByText("Working draft")).toBeVisible();
+    expect(screen.getByText("This candidate has not been finalized.")).toBeVisible();
+    expect(screen.getByText("Fourth")).not.toBeVisible();
+    fireEvent.click(screen.getByText("Show 1 more evidence items"));
+    expect(screen.getByText("Fourth")).toBeVisible();
+  });
+
+  it("offers trace inspection when a checkpoint has no result", () => {
+    const onOpenLens = vi.fn();
+    const detail = threadDetail({ executionState: "resumable", attemptCommitSha: commitSha });
+    render(<InvestigationResult thread={detail.thread} onOpenLens={onOpenLens} />);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect last attempt" }));
+    expect(onOpenLens).toHaveBeenCalledWith("trace");
+    expect(screen.queryByText("Accepted")).not.toBeInTheDocument();
+  });
+
   it("starts a goal with an idempotency key and never accepts a browser repository root", async () => {
     const onThreadActivated = vi.fn();
     const fetchMock = vi.fn((_input: string | URL | Request, init?: RequestInit) => {

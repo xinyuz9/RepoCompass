@@ -10,11 +10,13 @@ import {
   ListChecks,
   MessageSquareText,
   Network,
+  PanelLeftClose,
+  PanelLeftOpen,
   RefreshCw,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DashboardApiError, dashboardQueries } from "./api";
 import {
@@ -52,6 +54,20 @@ export function App() {
   const catalog = useQuery({ ...dashboardQueries.threads, staleTime: 20_000 });
   const [navigation, setNavigation] = useState(readDashboardNavigation);
   const [filter, setFilter] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    !window.matchMedia?.("(max-width: 930px)").matches);
+  const sidebarToggle = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && sidebarOpen
+        && document.getElementById("investigation-threads")?.contains(document.activeElement)) {
+        setSidebarOpen(false);
+        sidebarToggle.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [sidebarOpen]);
   const {
     threadId: selectedThreadId,
     lens,
@@ -107,12 +123,13 @@ export function App() {
     runId: null,
     composingNew: false,
   }), [navigate]);
-  const selectThread = useCallback((threadId: string) => navigate({
-    threadId,
-    lens: "chat",
-    runId: null,
-    composingNew: false,
-  }), [navigate]);
+  const selectThread = useCallback((threadId: string) => {
+    if (window.matchMedia?.("(max-width: 930px)").matches) {
+      setSidebarOpen(false);
+      sidebarToggle.current?.focus();
+    }
+    navigate({ threadId, lens: "chat", runId: null, composingNew: false });
+  }, [navigate]);
   const openInspector = useCallback((nextLens: InspectorLens) => navigate({
     threadId: activeThreadId,
     lens: nextLens,
@@ -143,7 +160,8 @@ export function App() {
   const rootError = system.error ?? catalog.error;
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-sidebar-open={sidebarOpen}>
+      <a className="skip-link" href="#workspace-content">Skip to workspace</a>
       <aside className="lens-rail" aria-label="Investigation lenses">
         <div className="brand-mark" title="RepoCompass">
           <Compass size={23} strokeWidth={1.7} />
@@ -156,6 +174,7 @@ export function App() {
               className={lens === id ? "is-active" : ""}
               onClick={() => selectLens(id)}
               aria-label={label}
+              aria-current={lens === id ? "page" : undefined}
               title={label}
             >
               <Icon size={19} />
@@ -169,6 +188,7 @@ export function App() {
       </aside>
 
       <ThreadList
+        hidden={!sidebarOpen}
         threads={visibleThreads}
         selectedId={activeThreadId}
         query={filter}
@@ -179,11 +199,22 @@ export function App() {
         onSelect={selectThread}
       />
 
-      <main className="main-stage">
+      <main className="main-stage" id="workspace-content" tabIndex={-1}>
         <header className="topbar">
           <div className="topbar__brand">
+            <button
+              ref={sidebarToggle}
+              type="button"
+              className="icon-button sidebar-toggle"
+              aria-label={sidebarOpen ? "Hide investigations" : "Show investigations"}
+              aria-expanded={sidebarOpen}
+              aria-controls="investigation-threads"
+              onClick={() => setSidebarOpen((open) => !open)}
+            >
+              {sidebarOpen ? <PanelLeftClose size={19} /> : <PanelLeftOpen size={19} />}
+            </button>
             <span className="wordmark">RepoCompass</span>
-            <span>agent investigation workbench</span>
+            <span>repository investigation</span>
           </div>
           <div className="topbar__status">
             {system.data ? (

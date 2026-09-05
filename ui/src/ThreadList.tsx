@@ -10,6 +10,7 @@ import {
 import type { DashboardThreadSummary, ExecutionState } from "./types";
 
 interface ThreadListProps {
+  hidden?: boolean;
   threads: DashboardThreadSummary[];
   selectedId: string | null;
   query: string;
@@ -21,6 +22,7 @@ interface ThreadListProps {
 }
 
 export function ThreadList({
+  hidden = false,
   threads,
   selectedId,
   query,
@@ -31,7 +33,7 @@ export function ThreadList({
   onSelect,
 }: ThreadListProps) {
   return (
-    <aside className="thread-panel" aria-label="Investigation threads">
+    <aside className="thread-panel" id="investigation-threads" aria-label="Investigation threads" hidden={hidden}>
       <div className="thread-panel__header">
         <div>
           <p className="eyebrow">workspace</p>
@@ -64,6 +66,7 @@ export function ThreadList({
               key={thread.thread_id}
               type="button"
               className={`thread-card${thread.thread_id === selectedId ? " is-active" : ""}${stale ? " is-stale" : ""}`}
+              aria-current={thread.thread_id === selectedId ? "true" : undefined}
               onClick={() => onSelect(thread.thread_id)}
             >
               <div className="thread-card__topline">
@@ -80,7 +83,7 @@ export function ThreadList({
           );
         })}
         {threads.length === 0 ? (
-          <p className="thread-list__empty">No matching investigations.</p>
+          <p className="thread-list__empty">{query.trim() ? "No matching investigations." : "Your investigations will appear here. Start with a question about your repository."}</p>
         ) : null}
       </div>
     </aside>

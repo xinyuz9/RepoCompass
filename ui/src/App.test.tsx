@@ -58,6 +58,13 @@ describe("App query shell", () => {
 
     expect(await screen.findByRole("heading", { name: "Declare the current goal" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Declare current goal" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Hide investigations" }));
+    expect(screen.queryByRole("complementary", { name: "Investigation threads" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show investigations" }));
+    screen.getByRole("textbox", { name: "Filter investigations" }).focus();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("button", { name: "Show investigations" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Show investigations" })).toHaveAttribute("aria-expanded", "false");
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
     view.rerender(

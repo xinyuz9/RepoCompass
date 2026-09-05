@@ -14,6 +14,8 @@ htmlcov/
 .venv
 .wheel-smoke/
 ui/node_modules/
+ui/test-results/
+ui/playwright-report/
 
 # Local environment files
 .env
