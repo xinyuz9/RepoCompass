@@ -1,6 +1,31 @@
 import { expect, test } from "@playwright/test";
 import axe from "axe-core";
 
+test("reads public history from real continued checkpoints without mutations", async ({ page }, testInfo) => {
+  const writes: string[] = [];
+  page.on("request", (request) => {
+    if (!["GET", "HEAD"].includes(request.method())) writes.push(request.url());
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Earlier turns · 1" }).click();
+  const turn = page.getByRole("region", { name: "Turn 1", exact: true });
+  await expect(turn).toBeVisible();
+  await expect(turn.getByText("Trace how proposal verification gates application and identify the regression test.")).toBeVisible();
+  await expect(turn.getByText("accepted", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await page.evaluate(axe.source);
+  const scan = await page.evaluate(async () => {
+    const browserAxe = (window as unknown as { axe: typeof import("axe-core") }).axe;
+    return browserAxe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] } });
+  });
+  expect(scan.violations.map(({ id }) => id)).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("conversation-history.png"), fullPage: true });
+  await page.reload();
+  await page.getByRole("button", { name: "Earlier turns · 1" }).click();
+  await expect(turn).toBeVisible();
+  expect(writes).toEqual([]);
+});
+
 test("keeps persisted recovery inert in the real read-only demo", async ({ page, request }) => {
   const system = await (await request.get("/api/v1/system")).json();
   const tracker = recoveryTracker(system);

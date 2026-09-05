@@ -26,6 +26,33 @@ from repocompass.storage.raw_store import open_raw_run_store
 from repocompass.structure import StructuralVerificationStatus
 
 
+def test_real_sqlite_continuation_exposes_public_history_after_restart(tmp_path):
+    workspace = create_dashboard_demo(tmp_path / "multi", turns=3)
+    with (
+        open_sqlite_checkpointer(workspace.checkpoint_database) as checkpointer,
+        open_raw_run_store(workspace.raw_store_database) as raw_store,
+    ):
+        runner = AgentRunner(create_inspection_models(), checkpointer=checkpointer)
+        service = DashboardQueryService(
+            runner,
+            raw_run_store=raw_store,
+            trace_store=JsonlTraceStore(workspace.trace_directory),
+            repository_root=workspace.repository_path,
+        )
+        recent = service.get_conversation(DEMO_THREAD_ID, before_turn=3, limit=1)
+        older = service.get_conversation(
+            DEMO_THREAD_ID, before_turn=recent.next_before_turn, limit=1
+        )
+        assert [turn.turn_number for turn in recent.turns] == [2]
+        assert [turn.turn_number for turn in older.turns] == [1]
+        assert older.next_before_turn is None
+        assert all(turn.summary for turn in (*older.turns, *recent.turns))
+        assert str(workspace.repository_path) not in recent.model_dump_json()
+        assert (
+            len(raw_store.list_attempts(thread_id=DEMO_THREAD_ID, max_results=10)) == 3
+        )
+
+
 def test_demo_uses_production_stores_and_populates_every_observability_lens(
     tmp_path: Path,
 ) -> None:

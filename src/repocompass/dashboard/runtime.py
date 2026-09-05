@@ -105,6 +105,13 @@ def create_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--port", type=int, default=DEFAULT_DASHBOARD_PORT)
     parser.add_argument(
+        "--demo-turns",
+        type=int,
+        choices=(1, 2, 3),
+        default=1,
+        help="number of scripted production-graph turns in the ephemeral demo",
+    )
+    parser.add_argument(
         "--checkpoint-db",
         type=Path,
         default=DEFAULT_DASHBOARD_CHECKPOINT_DATABASE,
@@ -160,6 +167,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser.parse_args(argument_vector)
     if not 1 <= arguments.port <= 65_535:
         parser.error("--port must be between 1 and 65535")
+    if arguments.demo_turns != 1 and not arguments.demo:
+        parser.error("--demo-turns requires --demo")
     if arguments.demo:
         conflicts = sorted(
             option
@@ -179,7 +188,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                         TemporaryDirectory(prefix="repocompass-dashboard-demo-")
                     )
                 )
-                demo = create_dashboard_demo(demo_root)
+                demo = (
+                    create_dashboard_demo(demo_root)
+                    if arguments.demo_turns == 1
+                    else create_dashboard_demo(demo_root, turns=arguments.demo_turns)
+                )
                 repository_path = demo.repository_path
                 checkpoint_database = demo.checkpoint_database
                 raw_store_database = demo.raw_store_database

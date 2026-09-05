@@ -26,7 +26,7 @@ from repocompass.agent.cost import (
     create_pricing_table,
 )
 from repocompass.agent.evaluation import SemanticAssessment
-from repocompass.agent.lifecycle import HumanReviewPolicy
+from repocompass.agent.lifecycle import ContinueRequest, HumanReviewPolicy
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.trace_sink import JsonlTraceSink
@@ -124,9 +124,13 @@ class DashboardDemoWorkspace:
     run_id: str = DEMO_RUN_ID
 
 
-def create_dashboard_demo(destination: Path) -> DashboardDemoWorkspace:
-    """Generate one complete production-format run without provider credentials."""
+def create_dashboard_demo(
+    destination: Path, *, turns: int = 1
+) -> DashboardDemoWorkspace:
+    """Generate bounded production-format turns without provider credentials."""
 
+    if type(turns) is not int or not 1 <= turns <= 3:
+        raise DashboardDemoError("demo turns must be between 1 and 3")
     root = _prepare_empty_destination(destination)
     repository = root / "proposal-gate-demo"
     state = root / "state"
@@ -183,6 +187,28 @@ def create_dashboard_demo(destination: Path) -> DashboardDemoWorkspace:
             outcome.trace,
             trace_directory / f"{DEMO_RUN_ID}.jsonl",
         )
+        for turn in range(2, turns + 1):
+            follow_run_id = f"demo-run-{turn:03d}"
+            follow_runner = AgentRunner(
+                _demo_models(),
+                checkpointer=checkpointer,
+                raw_run_store=raw_store,
+                pricing_table=pricing_table,
+                memory_store=memory_store,
+                episode_clock_factory=lambda: DEMO_CREATED_AT_MS + 2_000,
+                run_id_factory=lambda run_id=follow_run_id: run_id,
+            )
+            follow = follow_runner.continue_thread(
+                ContinueRequest(
+                    thread_id=DEMO_THREAD_ID,
+                    prompt="Review the proposal verification path again and retain earlier findings.",
+                )
+            )
+            if follow.final_result is None:
+                raise DashboardDemoError("demo continuation produced no final answer")
+            JsonlTraceSink().write(
+                follow.trace, trace_directory / f"{follow_run_id}.jsonl"
+            )
 
     return DashboardDemoWorkspace(
         root=root,

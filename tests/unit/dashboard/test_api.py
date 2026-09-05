@@ -5,6 +5,10 @@ from __future__ import annotations
 import re
 
 import pytest
+from repocompass.agent.conversation import (
+    PublicConversationPage,
+    PublicConversationTurn,
+)
 from fastapi.testclient import TestClient
 
 from repocompass.agent.thread_view import ThreadExecutionState
@@ -52,6 +56,25 @@ from repocompass.storage.raw_store import (
 )
 
 SOURCE_ENTITY_ID = "d" * 64
+
+
+def test_public_conversation_http_is_read_only_bounded_and_repository_scoped():
+    client = TestClient(create_dashboard_app(_FakeDashboardService()))
+    result = client.get("/api/v1/threads/thread-1/conversation?before_turn=2&limit=1")
+    assert result.status_code == 200
+    assert result.json()["turns"][0]["termination_status"] == "exhausted"
+    assert "messages" not in result.text
+    assert client.get("/api/v1/threads/other/conversation").status_code == 404
+    assert (
+        client.get("/api/v1/threads/thread-1/conversation?limit=21").status_code == 422
+    )
+    assert (
+        client.get("/api/v1/threads/thread-1/conversation?before_turn=0").status_code
+        == 422
+    )
+    assert (
+        client.post("/api/v1/threads/thread-1/conversation", json={}).status_code == 405
+    )
 
 
 def _attempt(
@@ -151,6 +174,22 @@ class _FakeDashboardService:
 
     def get_thread(self, thread_id: str):
         raise DashboardNotFoundError(f"missing thread {thread_id}")
+
+    def get_conversation(self, thread_id: str, *, before_turn=None, limit=10):
+        if thread_id != "thread-1":
+            raise DashboardNotFoundError("missing thread")
+        return PublicConversationPage(
+            thread_id=thread_id,
+            latest_turn_number=2,
+            turns=(
+                PublicConversationTurn(
+                    turn_number=1,
+                    objective="Public goal",
+                    summary="Public final summary",
+                    termination_status="exhausted",
+                ),
+            ),
+        )
 
     def get_source(self, thread_id: str, entity_id: str) -> DashboardSourceSnippet:
         if self.source_changed:

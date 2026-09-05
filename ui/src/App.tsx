@@ -16,7 +16,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DashboardApiError, dashboardQueries } from "./api";
 import {
@@ -26,7 +26,6 @@ import {
 import { HumanReviewPanel } from "./HumanReviewPanel";
 import { LifecycleRecoveryCenter } from "./lifecycle-recovery";
 import { ObservabilityPanel } from "./ObservabilityPanel";
-import { TaskGraph } from "./TaskGraph";
 import { ThreadList } from "./ThreadList";
 import type { DashboardThreadDetail } from "./types";
 import {
@@ -47,6 +46,8 @@ const LENSES: { id: DashboardLens; label: string; icon: typeof Network }[] = [
   { id: "memory", label: "Memory", icon: BrainCircuit },
   { id: "cost", label: "Cost", icon: CircleDollarSign },
 ];
+
+const TaskGraph = lazy(() => import("./TaskGraph").then((module) => ({ default: module.TaskGraph })));
 
 export function App() {
   const queryClient = useQueryClient();
@@ -349,7 +350,9 @@ function InvestigationStage({
 
       {lens === "topology" ? (
         thread.structure ? (
-          <TaskGraph threadId={thread.thread_id} structure={thread.structure} />
+          <Suspense fallback={<LoadingState compact />}>
+            <TaskGraph threadId={thread.thread_id} structure={thread.structure} />
+          </Suspense>
         ) : <StructureEmpty />
       ) : (
         <ObservabilityPanel

@@ -15,9 +15,17 @@ import type {
   DashboardThreadCatalog,
   DashboardThreadDetail,
   InvestigationOperationResult,
+  PublicConversationPage,
 } from "./types";
 
 const API_ROOT = "/api/v1";
+
+export function getConversation(threadId: string, beforeTurn: number, signal?: AbortSignal) {
+  return getJson<PublicConversationPage>(
+    "/threads/" + encodeURIComponent(threadId) + "/conversation?before_turn=" + beforeTurn + "&limit=10",
+    signal,
+  );
+}
 
 export class DashboardApiError extends Error {
   readonly status: number;

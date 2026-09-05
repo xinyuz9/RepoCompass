@@ -658,3 +658,17 @@ export interface DashboardMemoryDeleteResult {
   tombstone: MemoryTombstone;
   idempotent_replay: boolean;
 }
+export interface PublicConversationPage {
+  schema_version: 1;
+  thread_id: string;
+  latest_turn_number: number;
+  turns: {
+    turn_number: number;
+    objective: string;
+    summary: string | null;
+    termination_status: "accepted" | "exhausted" | "cancelled" | null;
+    text_truncated: boolean;
+  }[];
+  next_before_turn: number | null;
+  provenance: "checkpoint_public_turns";
+}

@@ -13,6 +13,7 @@ from typing import Protocol
 from pydantic import JsonValue, ValidationError
 
 from repocompass.agent.cost import PricingTable
+from repocompass.agent.conversation import PublicConversationPage
 from repocompass.agent.evaluation import EvaluationReport
 from repocompass.agent.planning import InvestigationPlan
 from repocompass.agent.runner import ResumeRequest
@@ -262,6 +263,31 @@ class DashboardQueryService:
             plan_timeline=tuple(plans),
             evaluator_timeline=tuple(evaluations),
         )
+
+    def get_conversation(
+        self, thread_id: str, *, before_turn: int | None = None, limit: int = 10
+    ) -> PublicConversationPage:
+        """Authorize the repository before reading any checkpoint history."""
+        normalized = _validate_identifier(thread_id, name="thread_id")
+        _validate_limit(limit, maximum=20)
+        attempts = self._raw_run_store.list_attempts(
+            thread_id=normalized, max_results=1
+        )
+        if not attempts or attempts[0].repository_id != self._context.repository_id:
+            raise DashboardNotFoundError("thread was not found")
+        reader = getattr(self._runner, "inspect_conversation", None)
+        if not callable(reader):
+            raise DashboardServiceError("public conversation reader is unavailable")
+        try:
+            return reader(
+                ResumeRequest(thread_id=normalized),
+                before_turn=before_turn,
+                limit=limit,
+            )
+        except (ValueError, TypeError):
+            raise DashboardServiceError(
+                "public conversation failed integrity validation"
+            ) from None
 
     def get_run(self, run_id: str) -> DashboardRunDetail:
         """Return one attempt's safe trace, context lineage, calls, and cost."""

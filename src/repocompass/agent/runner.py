@@ -772,6 +772,28 @@ class AgentRunner:
             snapshot=snapshot,
         )
 
+    def inspect_conversation(
+        self, request: ResumeRequest, *, before_turn: int | None = None, limit: int = 10
+    ):
+        """Read public archived turns without executing models or tools."""
+        from repocompass.agent.conversation import build_public_conversation
+
+        thread_id = _normalize_identifier(request.thread_id, name="thread_id")
+        graph = create_agent_graph(
+            self._models,
+            architecture_profile=self._architecture_profile,
+            checkpointer=self._checkpointer,
+            raw_run_recorder=self._raw_run_recorder,
+            memory_store=self._memory_store,
+            memory_clock=self._episode_clock_factory,
+        )
+        return build_public_conversation(
+            thread_id=thread_id,
+            snapshot=graph.get_state(_thread_config(thread_id)),
+            before_turn=before_turn,
+            limit=limit,
+        )
+
     def run(self, request: RunRequest) -> RunOutcome:
         """Start one new repository investigation.
 

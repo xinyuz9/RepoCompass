@@ -24,7 +24,7 @@ export default defineConfig({
     { name: "mobile", use: { viewport: { width: 390, height: 844 } } },
   ],
   webServer: externalUrl ? undefined : {
-    command: "uv run --project .. repocompass-dashboard --demo --port 8878 --log-level warning",
+    command: "uv run --project .. repocompass-dashboard --demo --demo-turns 2 --port 8878 --log-level warning",
     url: baseURL + "/api/v1/system",
     reuseExistingServer: false,
     timeout: 60_000,

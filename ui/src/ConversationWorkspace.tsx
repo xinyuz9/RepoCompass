@@ -24,6 +24,7 @@ import {
   startInvestigation,
 } from "./api";
 import { HumanReviewPanel } from "./HumanReviewPanel";
+import { ConversationHistory } from "./ConversationHistory";
 import {
   forgetLifecycleRequest,
   rememberLifecycleRequest,
@@ -317,6 +318,8 @@ function ThreadConversation({
       </header>
 
       <div className="conversation-feed" aria-label="Investigation conversation">
+        <ConversationHistory key={thread.thread_id} threadId={thread.thread_id}
+          turnNumber={thread.turn_number} repositoryId={system.repository_id} commitSha={system.commit_sha} />
         <article className="chat-message chat-message--user">
           <span className="chat-avatar"><UserRound size={16} /></span>
           <div>

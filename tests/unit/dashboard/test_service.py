@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from repocompass.agent.evaluation import EvaluationReport, SemanticAssessment
+from repocompass.agent.conversation import PublicConversationPage
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.runner import ResumeRequest
 from repocompass.agent.thread_view import (
@@ -55,6 +56,41 @@ def _view(thread_id: str = "thread-1") -> ThreadInvestigationView:
         max_plan_revisions=2,
         next_nodes=("plan_investigation",),
     )
+
+
+def test_public_conversation_checks_repository_before_checkpoint_access(tmp_path):
+    context = ToolExecutionContext(tmp_path)
+    calls = []
+    runner = _FakeRunner({"thread-1": _view()})
+
+    def inspect(request, **kwargs):
+        calls.append((request.thread_id, kwargs))
+        return PublicConversationPage(
+            thread_id=request.thread_id, latest_turn_number=1, turns=()
+        )
+
+    runner.inspect_conversation = inspect
+    with open_raw_run_store(tmp_path / "raw.sqlite") as store:
+        store.record_attempt(_attempt(context))
+        store.record_attempt(
+            _attempt(
+                context,
+                run_id="foreign-run",
+                thread_id="foreign-thread",
+                repository_id="f" * 64,
+            )
+        )
+        service = DashboardQueryService(
+            runner,
+            raw_run_store=store,
+            trace_store=JsonlTraceStore(tmp_path / "traces"),
+            repository_root=tmp_path,
+        )
+        with pytest.raises(DashboardNotFoundError):
+            service.get_conversation("foreign-thread")
+        assert calls == []
+        assert service.get_conversation("thread-1", before_turn=1, limit=1).turns == ()
+        assert calls == [("thread-1", {"before_turn": 1, "limit": 1})]
 
 
 def _attempt(

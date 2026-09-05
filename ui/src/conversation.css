@@ -418,3 +418,15 @@ select:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
   .lens-rail nav button { gap: 3px; }
   .inspector-shortcuts button { min-height: 40px; }
 }
+.conversation-history { min-width: 0; margin-bottom: 24px; }
+.history-toggle, .history-content button {
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px;
+  color: var(--text-soft); background: var(--panel); border: 1px solid var(--line-strong);
+  border-radius: 9px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.history-toggle:hover, .history-content button:hover { border-color: var(--teal); }
+.history-content { padding-top: 14px; }
+.history-boundary { color: var(--text-soft); font-size: 12px; line-height: 1.65; }
+.history-turn { border-bottom: 1px solid var(--line); margin: 16px 0; padding: 8px 0; }
+.history-turn p { overflow-wrap: anywhere; white-space: pre-wrap; }
+.history-turn .chat-message { margin: 12px 0; }

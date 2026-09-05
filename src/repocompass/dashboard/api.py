@@ -40,6 +40,7 @@ from repocompass.dashboard.contracts import (
     DashboardThreadCatalog,
     DashboardThreadDetail,
 )
+from repocompass.agent.conversation import PublicConversationPage
 from repocompass.dashboard.commands import (
     DashboardCommandConflictError,
     DashboardCommandUnavailableError,
@@ -84,6 +85,10 @@ class DashboardReadService(Protocol):
     def list_threads(self, *, max_results: int = 50) -> DashboardThreadCatalog: ...
 
     def get_thread(self, thread_id: str) -> DashboardThreadDetail: ...
+
+    def get_conversation(
+        self, thread_id: str, *, before_turn: int | None = None, limit: int = 10
+    ) -> PublicConversationPage: ...
 
     def get_source(
         self,
@@ -390,6 +395,22 @@ def create_dashboard_app(
     )
     def get_thread(thread_id: str) -> DashboardThreadDetail:
         return service.get_thread(thread_id)
+
+    @app.get(
+        f"{DASHBOARD_API_PREFIX}/threads/{{thread_id}}/conversation",
+        response_model=PublicConversationPage,
+    )
+    def get_conversation(
+        thread_id: str,
+        before_turn: Annotated[
+            int | None, Query(ge=1, le=MAX_SAFE_JSON_INTEGER)
+        ] = None,
+        limit: Annotated[int, Query(ge=1, le=20)] = 10,
+    ) -> PublicConversationPage:
+        reader = getattr(service, "get_conversation", None)
+        if not callable(reader):
+            raise DashboardServiceError("public conversation reader is unavailable")
+        return reader(thread_id, before_turn=before_turn, limit=limit)
 
     @app.get(
         f"{DASHBOARD_API_PREFIX}/threads/{{thread_id}}/source/{{entity_id}}",

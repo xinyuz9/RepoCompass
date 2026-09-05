@@ -68,6 +68,12 @@ def test_runner_returns_result_and_minimal_lifecycle_trace(
     outcome = runner.run(request)
     events = outcome.trace.events
     thread_view = runner.inspect_thread(ResumeRequest(thread_id=outcome.thread_id))
+    public_page = runner.inspect_conversation(
+        ResumeRequest(thread_id=outcome.thread_id)
+    )
+    assert public_page.turns[0].objective == "Inspect the repository."
+    assert public_page.turns[0].summary == outcome.final_result.summary
+    assert public_page.next_before_turn is None
 
     assert outcome.final_result is not None
     assert (
