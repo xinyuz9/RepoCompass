@@ -41,7 +41,8 @@ from repocompass.memory.revalidation import (
 from repocompass.tools.contracts import IDENTIFIER_PATTERN, SHA256_PATTERN
 from repocompass.tools.gateway import ToolExecutionContext
 
-MEMORY_STORE_SCHEMA_VERSION = 3
+MEMORY_STORE_SCHEMA_VERSION = 4
+MAX_GENERATED_FACTS_PER_WRITE = 16
 _SQLITE_TIMEOUT_SECONDS = 10.0
 _FTS_TOKENIZER = "unicode61 remove_diacritics 2"
 _MAX_MEMORY_QUERY_CHARACTERS = 512
@@ -244,7 +245,19 @@ _SCHEMA_V3_STATEMENTS = (
     "UPDATE memory_schema SET value = '3' WHERE key = 'schema_version'",
 )
 
+_SCHEMA_V4_STATEMENTS = (
+    """
+    CREATE TABLE memory_fact_keys (
+        fact_key TEXT NOT NULL PRIMARY KEY CHECK(length(fact_key) = 64),
+        memory_id TEXT NOT NULL UNIQUE CHECK(length(memory_id) = 64),
+        repository_key TEXT NOT NULL CHECK(length(repository_key) = 64)
+    )
+    """,
+    "UPDATE memory_schema SET value = '4' WHERE key = 'schema_version'",
+)
+
 _REQUIRED_COLUMNS = {
+    "memory_fact_keys": ("fact_key", "memory_id", "repository_key"),
     "memory_schema": ("key", "value"),
     "memory_entries": (
         "memory_id",
@@ -299,6 +312,7 @@ _REQUIRED_COLUMNS = {
     ),
 }
 _REQUIRED_NOT_NULL = {
+    "memory_fact_keys": frozenset(_REQUIRED_COLUMNS["memory_fact_keys"]),
     "memory_schema": frozenset(_REQUIRED_COLUMNS["memory_schema"]),
     "memory_entries": frozenset(
         {
@@ -342,6 +356,8 @@ _EXPECTED_V3_INDEX_SQL = {
 }
 _ForeignKeyEdge = tuple[str, str, str, str]
 _EXPECTED_FOREIGN_KEYS: dict[str, Counter[_ForeignKeyEdge]] = {
+    # Its digest identity survives deletion; the target is live OR tombstoned.
+    "memory_fact_keys": Counter(),
     "memory_schema": Counter(),
     "memory_entries": Counter(),
     "memory_sources": Counter(
@@ -373,6 +389,15 @@ class RepositoryMemorySearchResult:
 
     memory: RepositoryMemory
     hit: MemoryRetrievalHit
+
+
+@dataclass(frozen=True, slots=True)
+class GeneratedFactWriteResult:
+    """Payload-free outcome of one atomic automatic fact batch."""
+
+    created_ids: tuple[str, ...]
+    existing_ids: tuple[str, ...]
+    tombstoned_ids: tuple[str, ...]
 
 
 class MemoryStore:
@@ -705,6 +730,85 @@ class MemoryStore:
                     )
             self._insert_audit_event(event)
         return inserted
+
+    def put_generated_repository_memories(
+        self,
+        memories: tuple[RepositoryMemory, ...],
+        *,
+        context: ToolExecutionContext,
+        run_id: str | None = None,
+    ) -> GeneratedFactWriteResult:
+        """Atomically deduplicate facts across turns and honor prior deletion."""
+        if (
+            not isinstance(memories, tuple)
+            or not 1 <= len(memories) <= MAX_GENERATED_FACTS_PER_WRITE
+        ):
+            raise ValueError("generated fact batch is outside its bound")
+        if not isinstance(context, ToolExecutionContext):
+            raise TypeError("context must be a ToolExecutionContext")
+        _validate_optional_identifier(run_id, name="run_id")
+        identity = resolve_memory_repository_identity(context)
+        normalized = tuple(
+            _revalidate_repository_memory_contract(item) for item in memories
+        )
+        keyed = tuple((_generated_fact_key(item), item) for item in normalized)
+        if len({key for key, _ in keyed}) != len(keyed):
+            raise ValueError("generated fact batch contains duplicate identities")
+        created, existing, deleted = [], [], []
+        with self._transaction():
+            for key, memory in keyed:
+                if (
+                    memory.repository_key != identity.repository_key
+                    or memory.source_repository_id != context.repository_id
+                    or memory.commit_sha != context.commit_sha
+                ):
+                    raise MemoryStoreIntegrityError(
+                        "generated fact snapshot does not match"
+                    )
+                row = self._connection.execute(
+                    "SELECT memory_id,repository_key FROM memory_fact_keys WHERE fact_key=?",
+                    (key,),
+                ).fetchone()
+                if row is not None:
+                    if row["repository_key"] != identity.repository_key:
+                        raise MemoryStoreCorruptionError(
+                            "generated fact scope is corrupt"
+                        )
+                    old = self.get_repository_memory(str(row["memory_id"]))
+                    if old is not None:
+                        if _generated_fact_key(old) != key:
+                            raise MemoryStoreCorruptionError(
+                                "generated fact identity is corrupt"
+                            )
+                        freshness, _ = classify_repository_memory_freshness(
+                            old, context
+                        )
+                        if freshness is not MemoryFreshnessStatus.CURRENT:
+                            raise MemoryStoreIntegrityError(
+                                "existing generated fact source changed"
+                            )
+                        existing.append(old.memory_id)
+                    elif (
+                        self.get_memory_tombstone(
+                            str(row["memory_id"]), context=context
+                        )
+                        is not None
+                    ):
+                        deleted.append(str(row["memory_id"]))
+                    else:
+                        raise MemoryStoreCorruptionError(
+                            "generated fact identity is orphaned"
+                        )
+                    continue
+                inserted = self.put_repository_memory(
+                    memory, context=context, run_id=run_id
+                )
+                self._connection.execute(
+                    "INSERT INTO memory_fact_keys VALUES (?,?,?)",
+                    (key, memory.memory_id, memory.repository_key),
+                )
+                (created if inserted else existing).append(memory.memory_id)
+        return GeneratedFactWriteResult(tuple(created), tuple(existing), tuple(deleted))
 
     def get_repository_memory(self, memory_id: str) -> RepositoryMemory | None:
         """Strictly load one repository fact and every source row."""
@@ -1241,12 +1345,22 @@ class MemoryStore:
     @contextmanager
     def _transaction(self) -> Iterator[None]:
         with self._lock:
+            nested = self._connection.in_transaction
             try:
-                self._connection.execute("BEGIN IMMEDIATE")
+                self._connection.execute(
+                    "SAVEPOINT memory_nested_write" if nested else "BEGIN IMMEDIATE"
+                )
                 yield
-                self._connection.commit()
+                if nested:
+                    self._connection.execute("RELEASE memory_nested_write")
+                else:
+                    self._connection.commit()
             except BaseException:
-                self._connection.rollback()
+                if nested:
+                    self._connection.execute("ROLLBACK TO memory_nested_write")
+                    self._connection.execute("RELEASE memory_nested_write")
+                else:
+                    self._connection.rollback()
                 raise
 
 
@@ -1312,6 +1426,12 @@ def _migrate_and_validate(connection: sqlite3.Connection) -> None:
                 connection.execute(statement)
             connection.execute("PRAGMA user_version = 3")
             version = 3
+        if version == 3:
+            _validate_schema(connection, schema_version=3)
+            for statement in _SCHEMA_V4_STATEMENTS:
+                connection.execute(statement)
+            connection.execute("PRAGMA user_version = 4")
+            version = 4
         if version != MEMORY_STORE_SCHEMA_VERSION:
             raise MemoryStoreMigrationError(
                 f"Unsupported Memory Store schema version: {version}"
@@ -1333,21 +1453,24 @@ def _validate_schema(
     *,
     schema_version: int,
 ) -> None:
-    if schema_version not in {1, 2, MEMORY_STORE_SCHEMA_VERSION}:
+    if schema_version not in {1, 2, 3, MEMORY_STORE_SCHEMA_VERSION}:
         raise MemoryStoreMigrationError("Memory Store validation version is invalid")
     has_episodes = schema_version >= 2
     has_tombstones = schema_version >= 3
+    has_fact_keys = schema_version >= 4
     required_columns = {
         table: columns
         for table, columns in _REQUIRED_COLUMNS.items()
         if (has_episodes or table != "memory_episodes")
         and (has_tombstones or table != "memory_tombstones")
+        and (has_fact_keys or table != "memory_fact_keys")
     }
     expected_foreign_keys = {
         table: edges
         for table, edges in _EXPECTED_FOREIGN_KEYS.items()
         if (has_episodes or table != "memory_episodes")
         and (has_tombstones or table != "memory_tombstones")
+        and (has_fact_keys or table != "memory_fact_keys")
     }
     tables = _schema_object_names(connection, "table")
     if not {*required_columns, "memory_fts"}.issubset(tables):
@@ -1446,6 +1569,58 @@ def _validate_schema(
         _validate_episode_index_integrity(connection)
     if has_tombstones:
         _validate_tombstone_integrity(connection)
+    if has_fact_keys:
+        _validate_fact_key_integrity(connection)
+
+
+def _generated_fact_key(memory: RepositoryMemory) -> str:
+    """Same snapshot/claim/source means the same fact, independent of turn time."""
+    payload = memory.model_dump(
+        mode="json", exclude={"memory_id", "created_at_ms", "verified_at_ms"}
+    )
+    return hashlib.sha256(
+        b"repocompass:generated-fact:v1\0"
+        + json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("ascii")
+    ).hexdigest()
+
+
+def _validate_fact_key_integrity(connection: sqlite3.Connection) -> None:
+    schema = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='memory_fact_keys'"
+    ).fetchone()
+    if schema is None or _normalize_schema_sql(str(schema[0])) != _normalize_schema_sql(
+        _SCHEMA_V4_STATEMENTS[0]
+    ):
+        raise MemoryStoreMigrationError("generated fact key schema is incompatible")
+    try:
+        for row in connection.execute("SELECT * FROM memory_fact_keys"):
+            _validate_digest(str(row["fact_key"]), name="fact_key")
+            live = connection.execute(
+                "SELECT * FROM memory_entries WHERE memory_id=?", (row["memory_id"],)
+            ).fetchone()
+            deleted = connection.execute(
+                "SELECT * FROM memory_tombstones WHERE memory_id=?", (row["memory_id"],)
+            ).fetchone()
+            if (live is None) == (deleted is None):
+                raise ValueError("fact identity must have exactly one target")
+            if live is not None:
+                memory = _decode_repository_memory(connection, live)
+                if (
+                    memory.repository_key != row["repository_key"]
+                    or _generated_fact_key(memory) != row["fact_key"]
+                ):
+                    raise ValueError("fact identity differs from its live record")
+            elif (
+                deleted["repository_key"] != row["repository_key"]
+                or deleted["memory_scope"] != "repository"
+            ):
+                raise ValueError("fact identity differs from its tombstone")
+    except (ValueError, MemoryStoreCorruptionError) as error:
+        raise MemoryStoreMigrationError(
+            "generated fact key integrity check failed"
+        ) from error
 
 
 def _validate_episode_index_integrity(connection: sqlite3.Connection) -> None:

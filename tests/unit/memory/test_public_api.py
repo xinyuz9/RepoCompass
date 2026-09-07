@@ -28,5 +28,5 @@ def test_memory_package_exports_stable_m5_public_boundaries() -> None:
     assert expected.issubset(memory.__all__)
     assert all(hasattr(memory, name) for name in memory.__all__)
     assert memory.MEMORY_CONTRACT_SCHEMA_VERSION == 1
-    assert memory.MEMORY_STORE_SCHEMA_VERSION == 3
+    assert memory.MEMORY_STORE_SCHEMA_VERSION == 4
     assert memory.EPISODE_CONSOLIDATION_SCHEMA_VERSION == 1

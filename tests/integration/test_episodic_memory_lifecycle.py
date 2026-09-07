@@ -121,6 +121,7 @@ def test_runner_consolidates_only_terminal_turns_across_process_boundaries(
             thread_id_factory=lambda: "memory-thread",
         ).run(request)
         assert interrupted.episode_consolidation is not None
+        assert interrupted.repository_consolidation.reason == "not_accepted"
         assert (
             interrupted.episode_consolidation.disposition
             is EpisodeConsolidationDisposition.SKIPPED
@@ -150,6 +151,10 @@ def test_runner_consolidates_only_terminal_turns_across_process_boundaries(
             is EpisodeConsolidationDisposition.CREATED
         )
         first_episode = first_terminal.episode_consolidation.episode
+        assert first_terminal.repository_consolidation.reason == "validated_structure"
+        assert first_terminal.repository_consolidation.created_ids
+        terminal_payload = first_terminal.trace.events[-1].payload
+        assert terminal_payload["repository_consolidation"]["created_ids"]
         assert first_episode is not None
         assert first_episode.turn_number == 1
         assert first_episode.run_id == "respond-attempt"
@@ -171,6 +176,10 @@ def test_runner_consolidates_only_terminal_turns_across_process_boundaries(
             is EpisodeConsolidationDisposition.ALREADY_CONSOLIDATED
         )
         assert resumed.episode_consolidation.episode == first_episode
+        assert resumed.repository_consolidation.created_ids == ()
+        assert set(resumed.repository_consolidation.existing_ids) == set(
+            first_terminal.repository_consolidation.created_ids
+        )
 
     with (
         open_sqlite_checkpointer(checkpoint_path) as checkpointer,

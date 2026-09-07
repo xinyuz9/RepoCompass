@@ -72,6 +72,7 @@ from repocompass.tools.gateway import ToolExecutionContext
 
 if TYPE_CHECKING:
     from repocompass.memory.consolidation import EpisodeConsolidationResult
+    from repocompass.memory.fact_consolidation import RepositoryConsolidationResult
     from repocompass.memory.store import MemoryStore
 
 RunIdFactory = Callable[[], str]
@@ -474,10 +475,27 @@ class RunOutcome:
     consecutive_no_progress_rounds: int = 0
     usage_cost_report: AttemptUsageCostReport | None = None
     episode_consolidation: EpisodeConsolidationResult | None = None
+    repository_consolidation: RepositoryConsolidationResult | None = None
 
     def __post_init__(self) -> None:
         """Reject ambiguous combinations of terminal and interrupt fields."""
 
+        if self.repository_consolidation is not None:
+            from repocompass.memory.fact_consolidation import (
+                RepositoryConsolidationResult,
+            )
+
+            if not isinstance(
+                self.repository_consolidation, RepositoryConsolidationResult
+            ):
+                raise TypeError("repository_consolidation has an invalid type")
+            if (
+                self.execution_status is ExecutionStatus.INTERRUPTED
+                and self.repository_consolidation.reason != "not_accepted"
+            ):
+                raise ValueError(
+                    "Interrupted outcome cannot consolidate repository facts"
+                )
         if self.episode_consolidation is not None:
             from repocompass.memory.consolidation import EpisodeConsolidationResult
 
@@ -591,6 +609,7 @@ def _record_terminal_trace_event(
     execution_mode: ExecutionMode,
     usage_cost_report: AttemptUsageCostReport | None,
     episode_consolidation: EpisodeConsolidationResult | None,
+    repository_consolidation: RepositoryConsolidationResult | None = None,
 ) -> None:
     """Append the lifecycle terminal only after optional ledger finalization."""
 
@@ -629,6 +648,10 @@ def _record_terminal_trace_event(
                 else episode_consolidation.episode.episode_id
             ),
         }
+    if repository_consolidation is not None:
+        payload["repository_consolidation"] = repository_consolidation.model_dump(
+            mode="json"
+        )
     outcome.trace.record(kind, payload=payload)
 
 
@@ -1153,6 +1176,7 @@ class AgentRunner:
                 config=config,
             )
             episode_consolidation = None
+            repository_consolidation = None
             if self._memory_store is not None:
                 from repocompass.memory.consolidation import (
                     consolidate_terminal_episode,
@@ -1164,13 +1188,24 @@ class AgentRunner:
                     raise TypeError("Graph repo_path is not a Path")
                 if not isinstance(objective, str):
                     raise TypeError("Graph objective is not a string")
+                consolidation_time = self._episode_clock_factory()
                 episode_consolidation = consolidate_terminal_episode(
                     self._memory_store,
                     context=ToolExecutionContext(repo_path),
                     outcome=outcome,
                     objective=objective,
                     turn_number=turn_number,
-                    created_at_ms=self._episode_clock_factory(),
+                    created_at_ms=consolidation_time,
+                )
+                from repocompass.memory.fact_consolidation import (
+                    consolidate_repository_facts,
+                )
+
+                repository_consolidation = consolidate_repository_facts(
+                    self._memory_store,
+                    context=ToolExecutionContext(repo_path),
+                    outcome=outcome,
+                    created_at_ms=consolidation_time,
                 )
         except BaseException:
             if recorder is not None:
@@ -1194,11 +1229,13 @@ class AgentRunner:
             execution_mode=execution_mode,
             usage_cost_report=usage_cost_report,
             episode_consolidation=episode_consolidation,
+            repository_consolidation=repository_consolidation,
         )
         return replace(
             outcome,
             usage_cost_report=usage_cost_report,
             episode_consolidation=episode_consolidation,
+            repository_consolidation=repository_consolidation,
         )
 
     @staticmethod

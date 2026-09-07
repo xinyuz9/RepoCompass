@@ -345,6 +345,7 @@ def test_v2_database_migrates_without_losing_live_memory(tmp_path: Path) -> None
 
     with sqlite3.connect(database_path) as connection:
         connection.execute("DROP TABLE memory_tombstones")
+        connection.execute("DROP TABLE memory_fact_keys")
         connection.execute(
             "UPDATE memory_schema SET value = '2' WHERE key = 'schema_version'"
         )

@@ -258,3 +258,85 @@ def test_recall_runs_once_per_new_turn_not_resume_or_human_response(
     )
     assert rendered_inputs.count(memory.content) == 2
     assert "observed_strategy_history_only_never_code_evidence" in rendered_inputs
+
+
+def test_generated_facts_reach_next_turn_explorer_after_reopening_stores(
+    tmp_path: Path,
+) -> None:
+    repository, _ = _repository(tmp_path)
+    checkpoint_path = tmp_path / "state" / "checkpoints.sqlite"
+    memory_path = tmp_path / "state" / "memory.sqlite"
+    captured_inputs: list[list[object]] = []
+    with (
+        open_sqlite_checkpointer(checkpoint_path) as checkpointer,
+        open_memory_store(memory_path) as store,
+    ):
+        first = AgentRunner(
+            _models(captured_inputs),
+            checkpointer=checkpointer,
+            memory_store=store,
+            episode_clock_factory=lambda: 1_000,
+            thread_id_factory=lambda: "generated-fact-thread",
+        ).run(
+            RunRequest(
+                repo_path=repository,
+                objective="Inspect auth.py and authenticate.",
+                max_tool_calls_per_step=3,
+                max_explorer_calls_per_step=2,
+                human_review_policy=HumanReviewPolicy.NEVER,
+                memory_retrieval_enabled=True,
+                max_repository_memory_results=3,
+                max_episodic_memory_results=3,
+            )
+        )
+        assert first.termination_status == "accepted"
+        created = set(first.repository_consolidation.created_ids)
+        assert created
+
+    captured_inputs.clear()
+    with (
+        open_sqlite_checkpointer(checkpoint_path) as checkpointer,
+        open_memory_store(memory_path) as store,
+    ):
+        second = AgentRunner(
+            _models(captured_inputs),
+            checkpointer=checkpointer,
+            memory_store=store,
+            episode_clock_factory=lambda: 2_000,
+        ).continue_thread(
+            ContinueRequest(
+                thread_id="generated-fact-thread",
+                prompt="Recheck the auth.py authenticate definition.",
+            )
+        )
+        assert second.termination_status == "accepted"
+        assert second.repository_consolidation.created_ids == ()
+        graph = create_agent_graph(
+            _models([]), checkpointer=checkpointer, memory_store=store
+        )
+        snapshot = graph.get_state(
+            {"configurable": {"thread_id": "generated-fact-thread"}}
+        )
+        report = snapshot.values["memory_recall_report"]
+        assert report.repository_result_count > 0
+        recalled = {
+            item.source.memory.memory_id
+            for item in snapshot.values["memory_context_items"]
+            if item.source.memory is not None
+        }
+        assert created & recalled
+        for memory_id in created & recalled:
+            actions = [
+                event.action for event in store.list_memory_audit_events(memory_id)
+            ]
+            assert actions == [MemoryAuditAction.CREATED, MemoryAuditAction.RETRIEVED]
+        facts = [store.get_repository_memory(key) for key in created & recalled]
+
+    rendered_inputs = "\n".join(
+        str(message.content)
+        for invocation in captured_inputs
+        for message in invocation
+        if hasattr(message, "content")
+    )
+    assert any(fact.content in rendered_inputs for fact in facts)
+    assert "lead_only_revalidate_with_repository_tools" in rendered_inputs

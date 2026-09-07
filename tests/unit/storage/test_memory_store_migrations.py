@@ -175,6 +175,7 @@ def test_reopening_current_memory_schema_is_idempotent(tmp_path: Path) -> None:
 def _downgrade_empty_current_store_to_v1(database_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
         connection.execute("DROP TABLE memory_tombstones")
+        connection.execute("DROP TABLE memory_fact_keys")
         connection.execute("DROP TABLE memory_episodes")
         connection.execute(
             "UPDATE memory_schema SET value = '1' WHERE key = 'schema_version'"
