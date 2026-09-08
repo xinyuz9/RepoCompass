@@ -53,7 +53,7 @@ from repocompass.evaluation.localization_harness import (
     render_localization_summary,
 )
 from repocompass.evaluation.localization_metrics import evaluate_localization_dataset
-from repocompass.memory.store import open_memory_store
+from repocompass.memory.store import MEMORY_STORE_SCHEMA_VERSION, open_memory_store
 from repocompass.models.config import (
     DeepSeekModelSettings,
     OpenAIModelSettings,
@@ -414,8 +414,14 @@ def _cell(
     price = prices.lookup(settings.provider.value, settings.model)
     if price is None:
         raise ValueError("provider/model has no reviewed price")
-    warmup = {"requested": args.warm_memory, "state": "not_applicable", "ready": False}
+    warmup = {
+        "requested": args.warm_memory,
+        "state": "not_applicable",
+        "ready": False,
+        "repository_consolidation": None,
+    }
     target_started = False
+    target_repository_consolidation = None
     with (
         open_sqlite_checkpointer(directory / "checkpoints.sqlite") as checkpointer,
         open_raw_run_store(directory / "raw.sqlite") as raw,
@@ -466,6 +472,10 @@ def _cell(
                 warmup.update(state=warm.termination_status, run_id=warm.trace.run_id)
                 warmup.update(prewarm_readiness(warm, memory, checkout))
                 warmup["stop_reason"] = warm.step_stop_reason
+                if warm.repository_consolidation is not None:
+                    warmup["repository_consolidation"] = (
+                        warm.repository_consolidation.model_dump(mode="json")
+                    )
             except Exception as error:
                 warmup.update(state="failed", **public_error_metadata(error))
             warmup.update(
@@ -507,6 +517,10 @@ def _cell(
             )
             target_started = True
             outcome = runner.run(request)
+            if outcome.repository_consolidation is not None:
+                target_repository_consolidation = (
+                    outcome.repository_consolidation.model_dump(mode="json")
+                )
             error_info["stop_reason"] = outcome.step_stop_reason
             observation = adapt_localization_run_outcome(
                 dataset_manifest_id=manifest.manifest_id,
@@ -543,6 +557,7 @@ def _cell(
                 **error_info,
                 "run_id": run_id,
                 "target_started": target_started,
+                "target_repository_consolidation": target_repository_consolidation,
                 "attempt_budget": ledger.attempt_summary(run_id)
                 if target_started
                 else None,
@@ -639,7 +654,7 @@ def execute(args) -> dict:
     )
     variants = tuple(v for v in LocalizationVariant if v.value in args.variants)
     config = {
-        "schema_version": 3,
+        "schema_version": 4,
         "provenance": "live_provider",
         "manifest_id": manifest.manifest_id,
         "budget_profile": budget.model_dump(mode="json"),
@@ -651,6 +666,8 @@ def execute(args) -> dict:
         "limit_usd": args.limit_usd,
         "warmup_objective": WARMUP_OBJECTIVE if args.warm_memory else None,
         "memory_isolation": "fresh-per-case-variant-repeat; no target-answer reuse",
+        "repository_memory_policy": "accepted_static_python_v1",
+        "memory_store_schema_version": MEMORY_STORE_SCHEMA_VERSION,
         "provider_retries": 0,
         "price_basis": "peak_ceiling_not_invoice",
         "admission_policy": "atomic_batch_and_attempt_v1",
@@ -660,7 +677,6 @@ def execute(args) -> dict:
     }
     if args.provider == "openai" or args.budget_db is not None:
         config.update(
-            schema_version=3,
             provider=args.provider,
             endpoint=provider_endpoint(settings),
             budget_db=str(ledger_path),

@@ -15,6 +15,7 @@ from repocompass.evaluation.localization_contracts import (
     create_localization_budget_profile,
 )
 from repocompass.models.config import OpenAIModelSettings
+from repocompass.memory.fact_consolidation import RepositoryConsolidationResult
 from repocompass.pricing import load_pricing_table_file
 
 
@@ -109,6 +110,9 @@ def test_failed_prewarm_never_starts_target_and_retains_receipt(tmp_path, monkey
                 trace=SimpleNamespace(run_id=self.run_id),
                 final_result=None,
                 step_stop_reason="attempt_cost_reservation_denied",
+                repository_consolidation=RepositoryConsolidationResult(
+                    reason="not_accepted"
+                ),
             )
 
     monkeypatch.setattr(live_cli, "AgentRunner", FakeRunner)
@@ -155,6 +159,16 @@ def test_failed_prewarm_never_starts_target_and_retains_receipt(tmp_path, monkey
     assert receipt["target_started"] is False
     assert receipt["attempt_budget"] is None
     assert receipt["target_usage_cost_report"] is None
+    assert receipt["target_repository_consolidation"] is None
     assert receipt["warmup"]["ready"] is False
     assert receipt["warmup"]["state"] == "exhausted"
     assert receipt["warmup"]["attempt_budget"]["limit_usd"] == "0.1"
+    assert receipt["warmup"]["repository_consolidation"] == {
+        "schema_version": 1,
+        "policy": "accepted_static_python_v1",
+        "reason": "not_accepted",
+        "created_ids": [],
+        "existing_ids": [],
+        "tombstoned_ids": [],
+        "truncated": False,
+    }

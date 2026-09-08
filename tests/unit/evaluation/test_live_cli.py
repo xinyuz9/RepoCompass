@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
 from repocompass.agent.cost import ModelPrice
+from repocompass.evaluation import live_cli
 from repocompass.evaluation.live_budget import (
     BudgetAdmissionError,
     BudgetCallback,
@@ -172,6 +173,69 @@ def test_immutable_artifacts_cannot_be_relabelled(tmp_path):
     persist(path, {"model": "first"})
     with pytest.raises(ValueError, match="identity differs"):
         persist(path, {"model": "second"})
+
+
+@pytest.mark.parametrize("provider", ["deepseek", "openai"])
+def test_memory_policy_changes_protocol_before_any_network_or_spend(
+    tmp_path, monkeypatch, provider
+):
+    args = parser().parse_args(
+        [
+            "run",
+            "--provider",
+            provider,
+            "--cache-root",
+            str(tmp_path / "cache"),
+            "--output",
+            str(tmp_path / "out"),
+            "--case-count",
+            "1",
+            "--allow-paid-api",
+        ]
+    )
+    settings = (
+        OpenAIModelSettings(model="gpt-5.4-mini", api_key="test-only")
+        if provider == "openai"
+        else DeepSeekModelSettings(
+            model="deepseek-v4-flash",
+            api_key="test-only",
+            base_url="https://api.deepseek.com",
+        )
+    )
+    monkeypatch.setattr(live_cli, "pilot_settings", lambda *args: settings)
+    monkeypatch.setattr(
+        live_cli, "prepare_snapshot", lambda *args, **kwargs: tmp_path / "checkout"
+    )
+    probes = []
+
+    class OfflineStop(Exception):
+        pass
+
+    def no_network(*args, **kwargs):
+        probes.append(True)
+        raise OfflineStop()
+
+    monkeypatch.setattr(live_cli, "check_provider_connectivity", no_network)
+    with pytest.raises(OfflineStop):
+        live_cli.execute(args)
+    path = args.output / "config.json"
+    config = json.loads(path.read_text())
+    assert config["schema_version"] == 4
+    assert config["repository_memory_policy"] == "accepted_static_python_v1"
+    assert config["memory_store_schema_version"] == 4
+    assert config["prewarm_validation"] == "accepted_nonempty_episode_v1"
+    assert not (args.output / "budget.sqlite").exists()
+
+    # Simulate a previous experiment, not permission to rewrite real artifacts.
+    config["schema_version"] = 3
+    config.pop("repository_memory_policy")
+    config.pop("memory_store_schema_version")
+    path.write_text(json.dumps(config))
+    with pytest.raises(ValueError, match="identity differs"):
+        live_cli.execute(args)
+    assert probes == [True]
+    assert json.loads(path.read_text()) == config
+    assert not (args.output / "budget.sqlite").exists()
 
 
 @pytest.mark.parametrize("limit,expected_calls", [("1", 1), ("0.000001", 0)])
