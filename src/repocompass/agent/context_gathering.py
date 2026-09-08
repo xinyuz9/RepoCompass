@@ -54,6 +54,7 @@ from repocompass.structure.contracts import (
     PythonSymbolRecord,
 )
 from repocompass.structure.python_index import build_python_file_index
+from repocompass.tools.contracts import ToolAuditRecord, ToolDecisionOutcome
 from repocompass.tools.gateway import ToolExecutionContext
 from repocompass.tools.repository_tools import (
     ReadCodeArguments,
@@ -190,12 +191,13 @@ def gather_explorer_context(
     messages: tuple[AnyMessage, ...],
     evaluation_report: EvaluationReport | None,
     budget_tokens: int,
+    last_tool_batch_audits: tuple[ToolAuditRecord, ...] = (),
     memory_items: tuple[ContextItem, ...] = (),
     selection_strategy: ContextSelectionStrategy = (
         ContextSelectionStrategy.PRIORITIZED
     ),
 ) -> GatheredContext:
-    """Gather active-step instructions, successful tool evidence, and feedback."""
+    """Gather source evidence and separate, body-free gateway feedback."""
 
     _validate_memory_items(memory_items)
     repository = ToolExecutionContext(repo_path)
@@ -223,6 +225,7 @@ def gather_explorer_context(
     )
     items = [objective_item, *memory_items, *tool_items]
     artifacts = [objective_artifact, *tool_artifacts]
+    _append_gateway_feedback(items, artifacts, last_tool_batch_audits)
     if evaluation_report is not None and not evaluation_report.passed:
         report_content = evaluation_report.model_dump_json(indent=2)
         feedback_content = INVESTIGATION_FEEDBACK_TEMPLATE.format(
@@ -447,6 +450,7 @@ def gather_replanner_context(
     max_tool_calls_per_step: int,
     max_explorer_calls_per_step: int,
     budget_tokens: int,
+    last_tool_batch_audits: tuple[ToolAuditRecord, ...] = (),
     memory_items: tuple[ContextItem, ...] = (),
     selection_strategy: ContextSelectionStrategy = (
         ContextSelectionStrategy.PRIORITIZED
@@ -541,6 +545,7 @@ def gather_replanner_context(
         )
         items.append(feedback_item)
         artifacts.append(feedback_artifact)
+    _append_gateway_feedback(items, artifacts, last_tool_batch_audits)
     items.extend(memory_items)
     return _build_gathered_context(
         candidates=tuple(items),
@@ -551,6 +556,62 @@ def gather_replanner_context(
         reserve_memory=bool(memory_items),
         selection_strategy=selection_strategy,
     )
+
+
+def _append_gateway_feedback(
+    items: list[ContextItem],
+    artifacts: list[RawArtifactPayload],
+    records: tuple[ToolAuditRecord, ...],
+) -> None:
+    """Expose bounded policy outcomes, never exception bodies or code evidence.
+
+    The caller supplies the last gateway batch from trusted graph state, not
+    error ToolMessages or model prose. Pin the bounded note so compaction cannot
+    silently remove the reason a source request was refused.
+    """
+
+    failures = [
+        record
+        for record in records
+        if record.decision.outcome
+        not in (ToolDecisionOutcome.ALLOWED, ToolDecisionOutcome.CACHED)
+    ]
+    if not failures:
+        return
+    selected = failures[-8:]
+    content = json.dumps(
+        {
+            "kind": "gateway_feedback_not_repository_evidence",
+            "omitted_earlier_decisions": len(failures) - len(selected),
+            "decisions": [
+                {
+                    "run_id": record.run_id,
+                    "sequence": record.sequence,
+                    "call_id": record.call_id,
+                    "tool": record.tool_name,
+                    "reason": record.decision.reason.value,
+                }
+                for record in selected
+            ],
+        },
+        sort_keys=True,
+    )
+    item, artifact = _make_item(
+        content=content,
+        raw_content=content,
+        raw_kind=RawArtifactKind.TOOL_OUTPUT,
+        source_kind=ContextSourceKind.TOOL_RESULT,
+        section=ContextSection.FEEDBACK,
+        verification_status=VerificationStatus.UNVERIFIED,
+        priority=100,
+        pinned=True,
+        provenance=tuple(
+            ProvenanceLink(kind=ProvenanceKind.TOOL_CALL, id=record.call_id)
+            for record in selected
+        ),
+    )
+    items.append(item)
+    artifacts.append(artifact)
 
 
 def _gather_tool_results(

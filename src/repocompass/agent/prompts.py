@@ -50,6 +50,12 @@ the step's cumulative candidate.
 
 Stop when the evidence is sufficient or a tool-call or iteration budget is
 exhausted. Avoid repeating searches that make no investigative progress.
+Each requested tool call counts separately, including calls in a parallel batch.
+Never request more calls in one response than the remaining tool-call budget:
+the gateway refuses the entire over-limit batch, not just its excess calls.
+Prioritize the smallest source reads that can answer the active step. Gateway
+feedback describes operational refusals, not repository evidence. Use its reason
+to change the next request; do not blindly repeat the same rejected batch.
 """
 
 INVESTIGATION_CONTEXT_TEMPLATE = """\
@@ -198,6 +204,10 @@ Preserve every completed step exactly, including its ID, objective, expected
 evidence, and completed status. Replace or refine only the active and pending
 steps. Use only facts present in the candidate and evaluation report; do not
 invent repository paths, symbols, APIs, or behavior.
+Do not mark active, pending, or new steps completed. Only the graph controller
+can complete a step after evaluation; a revision cannot manufacture progress.
+Use gateway feedback to avoid repeating refused requests. Each tool call in a
+parallel batch counts separately; an over-limit batch is refused in full.
 
 Return between 1 and {MAX_PLAN_STEPS} total steps with exactly one active step.
 Keep the revision achievable within the supplied per-step budgets.

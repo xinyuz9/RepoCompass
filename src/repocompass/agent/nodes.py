@@ -462,6 +462,7 @@ class AgentNodeInput(MessagesState):
     context_build_count: int
     max_attempt_cost_usd: str | None
     memory_context_items: list[ContextItem]
+    last_tool_batch_audits: list[ToolAuditPayload]
 
 
 class AgentNodeUpdate(TypedDict):
@@ -498,6 +499,10 @@ def build_agent_messages(
             state["max_explorer_calls_per_step"] - state["step_explorer_call_count"],
         ),
         messages=tuple(state["messages"]),
+        last_tool_batch_audits=tuple(
+            decode_tool_audit_record(item)
+            for item in state.get("last_tool_batch_audits", [])
+        ),
         evaluation_report=state["evaluation_report"],
         budget_tokens=_context_budget(state),
         memory_items=tuple(state.get("memory_context_items", [])),
@@ -545,6 +550,10 @@ def create_agent_node(
                 - state["step_explorer_call_count"],
             ),
             messages=tuple(state["messages"]),
+            last_tool_batch_audits=tuple(
+                decode_tool_audit_record(item)
+                for item in state.get("last_tool_batch_audits", [])
+            ),
             evaluation_report=state["evaluation_report"],
             budget_tokens=_context_budget(state),
             memory_items=tuple(state.get("memory_context_items", [])),
@@ -1236,6 +1245,7 @@ class ReplannerInput(TypedDict):
     context_build_count: int
     max_attempt_cost_usd: str | None
     memory_context_items: list[ContextItem]
+    last_tool_batch_audits: list[ToolAuditPayload]
 
 
 class ReplannerNodeUpdate(TypedDict):
@@ -1286,6 +1296,10 @@ def build_replanner_messages(
         evaluation_report=evaluation_report,
         human_feedback=state["human_feedback"],
         plan_revision_count=state["plan_revision_count"],
+        last_tool_batch_audits=tuple(
+            decode_tool_audit_record(item)
+            for item in state.get("last_tool_batch_audits", [])
+        ),
         max_tool_calls_per_step=state["max_tool_calls_per_step"],
         max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
         budget_tokens=_context_budget(state),
@@ -1339,6 +1353,10 @@ def create_revise_plan_node(
             evaluation_report=evaluation_report,
             human_feedback=state["human_feedback"],
             plan_revision_count=state["plan_revision_count"],
+            last_tool_batch_audits=tuple(
+                decode_tool_audit_record(item)
+                for item in state.get("last_tool_batch_audits", [])
+            ),
             max_tool_calls_per_step=state["max_tool_calls_per_step"],
             max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
             budget_tokens=_context_budget(state),
@@ -1357,24 +1375,13 @@ def create_revise_plan_node(
             messages=messages,
             plan_step_id=current_plan.active_step.id,
             invoke=structured_model.invoke,
-            parse=lambda value: _parse_structured_response(
-                value,
-                expected_type=InvestigationPlan,
-                error_message="Replanner model did not return InvestigationPlan",
-            ),
+            parse=lambda value: _parse_plan_revision(value, current_plan),
         )
         if isinstance(response, _ModelCostBudgetDenied):
             return _cost_budget_denied_update(
                 response.budget, stop_reason=response.stop_reason
             )  # type: ignore[return-value]
         assert isinstance(response, InvestigationPlan)
-
-        revised_by_id = {step.id: step for step in response.steps}
-        for completed_step in (
-            step for step in current_plan.steps if step.status == "completed"
-        ):
-            if revised_by_id.get(completed_step.id) != completed_step:
-                raise ValueError("Replanner modified a completed plan step")
 
         return {
             "investigation_plan": response,
@@ -1398,6 +1405,23 @@ def create_revise_plan_node(
         }
 
     return revise_plan_node
+
+
+def _parse_plan_revision(
+    value: object, current: InvestigationPlan
+) -> InvestigationPlan:
+    """Validate completion provenance inside recorded response parsing."""
+
+    revised = _parse_structured_response(
+        value,
+        expected_type=InvestigationPlan,
+        error_message="Replanner model did not return InvestigationPlan",
+    )
+    completed = [step for step in current.steps if step.status == "completed"]
+    revised_completed = [step for step in revised.steps if step.status == "completed"]
+    if revised_completed != completed:
+        raise ValueError("Replanner added or modified a completed plan step")
+    return revised
 
 
 class CostBudgetFinalizerInput(TypedDict):
