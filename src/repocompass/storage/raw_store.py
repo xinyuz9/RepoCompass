@@ -603,7 +603,11 @@ class RawRunStore:
         sequence: int,
         pack: ContextPack,
     ) -> bool:
-        """Persist one context pack after validating all raw source links."""
+        """Persist a unique context snapshot, ordered by first-seen sequence.
+
+        Identical snapshots can be used by later model invocations. Their
+        per-call sequence, I/O, usage and cost remain in model_invocations.
+        """
 
         if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0:
             raise ValueError("context build sequence must be a non-negative integer")
@@ -633,12 +637,20 @@ class RawRunStore:
                     pack.pack_id,
                     sequence,
                 ),
+            ).fetchall()
+            occupied = self._connection.execute(
+                "SELECT context_pack_id FROM model_invocations "
+                "WHERE run_id = ? AND sequence = ?",
+                (run_id, sequence),
             ).fetchone()
-            if existing is not None:
-                if (
-                    existing["sequence"] == sequence
-                    and existing["pack_json"] == pack_json
-                ):
+            if occupied is not None and occupied["context_pack_id"] != pack.pack_id:
+                raise RawStoreConflictError(
+                    "context sequence belongs to a different model invocation"
+                )
+            if existing:
+                # Check every matching row: an identical pack must not mask a
+                # different pack occupying the requested first-seen sequence.
+                if all(row["pack_json"] == pack_json for row in existing):
                     return False
                 raise RawStoreConflictError(
                     "context build identity or sequence already exists"
@@ -683,7 +695,7 @@ class RawRunStore:
         return None if row is None else _decode_context_row(row)
 
     def list_context_packs(self, run_id: str) -> tuple[ContextPack, ...]:
-        """List context packs in invocation-ready build order."""
+        """List unique context snapshots in first-seen invocation order."""
 
         with self._lock:
             rows = self._connection.execute(

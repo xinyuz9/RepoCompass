@@ -176,7 +176,7 @@ def test_immutable_artifacts_cannot_be_relabelled(tmp_path):
 
 
 @pytest.mark.parametrize("provider", ["deepseek", "openai"])
-@pytest.mark.parametrize("legacy_version", [3, 4])
+@pytest.mark.parametrize("legacy_version", [3, 4, 5])
 def test_memory_policy_changes_protocol_before_any_network_or_spend(
     tmp_path, monkeypatch, provider, legacy_version
 ):
@@ -221,7 +221,7 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         live_cli.execute(args)
     path = args.output / "config.json"
     config = json.loads(path.read_text())
-    assert config["schema_version"] == 5
+    assert config["schema_version"] == 6
     assert config["repository_memory_policy"] == "accepted_static_python_v1"
     assert config["memory_store_schema_version"] == 4
     assert config["prewarm_validation"] == "accepted_nonempty_episode_v1"
@@ -230,13 +230,16 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
     )
     assert config["candidate_evidence_policy"] == "source_occurrence_zero_based_v1"
     assert config["workflow_prompt_policy"] == "source_backed_steps_v2"
+    assert config["context_snapshot_policy"] == "content_dedup_per_invocation_usage_v2"
     assert not (args.output / "budget.sqlite").exists()
 
     # Simulate a previous experiment, not permission to rewrite real artifacts.
     config["schema_version"] = legacy_version
-    config.pop("structure_resolution_policy")
-    config.pop("candidate_evidence_policy")
-    config.pop("workflow_prompt_policy")
+    config.pop("context_snapshot_policy")
+    if legacy_version < 5:
+        config.pop("structure_resolution_policy")
+        config.pop("candidate_evidence_policy")
+        config.pop("workflow_prompt_policy")
     if legacy_version == 3:
         config.pop("repository_memory_policy")
         config.pop("memory_store_schema_version")

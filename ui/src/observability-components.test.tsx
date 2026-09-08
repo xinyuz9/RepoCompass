@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ContextLens } from "./ContextLens";
@@ -99,5 +99,29 @@ describe("investigation observability lenses", () => {
     expect(screen.getAllByText("$0.000018705").length).toBeGreaterThan(0);
     expect(screen.getByText(/estimate, not invoice/)).toBeVisible();
     expect(screen.getByText("plan_investigation")).toBeVisible();
+  });
+
+  it("follows the latest invocation when it reuses an older snapshot", () => {
+    const pack = (id: string) => ({
+      pack_id: id, estimated_tokens: 0, items: [],
+      build_report: { budget_tokens: 400, candidate_count: 1, selected_count: 0, excluded_count: 1, decisions: [] },
+    });
+    const run = {
+      attempt, context_packs: [pack("pack-a"), pack("pack-b")],
+      model_invocations: [
+        { sequence: 7, context_pack_id: "pack-a", node_name: "build_candidate", role: "candidate_builder" },
+        { sequence: 6, context_pack_id: "pack-b", node_name: "agent", role: "explorer" },
+        { sequence: 4, context_pack_id: "pack-a", node_name: "build_candidate", role: "candidate_builder" },
+      ],
+    } as unknown as DashboardRunDetail;
+    render(<ContextLens run={run} />);
+    const selector = screen.getByRole("combobox", { name: "Context snapshot" });
+    expect(selector).toHaveValue("pack-a");
+    expect(screen.getByText("#7")).toBeVisible();
+    expect(screen.getByText("used by 2 invocations · latest consumer")).toBeVisible();
+    fireEvent.change(selector, { target: { value: "pack-b" } });
+    expect(selector).toHaveValue("pack-b");
+    expect(screen.getByText("#6")).toBeVisible();
+    expect(screen.getByText("used by 1 invocation · latest consumer")).toBeVisible();
   });
 });

@@ -320,6 +320,28 @@ def test_context_pack_sequence_or_identity_conflicts_are_rejected(
         with pytest.raises(RawStoreConflictError, match="context"):
             store.record_context_pack("run-1", sequence=0, pack=second_pack)
 
+        store.record_context_pack("run-1", sequence=1, pack=second_pack)
+        # The matching content row must not hide another row owning sequence 1.
+        with pytest.raises(RawStoreConflictError, match="context"):
+            store.record_context_pack("run-1", sequence=1, pack=first_pack)
+
+
+def test_repeated_context_snapshot_is_deduplicated_across_sequences_and_reopen(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "raw.sqlite"
+    metadata, content = _artifact()
+    pack = _context_pack(metadata.artifact_id)
+    with open_raw_run_store(path) as store:
+        store.record_attempt(_attempt())
+        store.put_artifact("run-1", metadata, content)
+        assert store.record_context_pack("run-1", sequence=4, pack=pack)
+        assert not store.record_context_pack("run-1", sequence=7, pack=pack)
+        assert store.list_context_packs("run-1") == (pack,)
+    with open_raw_run_store(path) as store:
+        assert not store.record_context_pack("run-1", sequence=8, pack=pack)
+        assert store.list_context_packs("run-1") == (pack,)
+
 
 def test_model_invocation_round_trip_requires_full_provenance_chain(
     tmp_path: Path,

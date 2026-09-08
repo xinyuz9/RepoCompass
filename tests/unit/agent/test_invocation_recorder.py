@@ -33,6 +33,7 @@ from repocompass.agent.usage import (
 from repocompass.storage.raw_store import (
     AttemptExecutionMode,
     AttemptStatus,
+    RawStoreConflictError,
     open_raw_run_store,
 )
 
@@ -161,6 +162,85 @@ def test_successful_invocation_persists_context_and_exact_io(
         assert stored_output is not None
         assert b"role=planner" in stored_input.content
         assert b"Model output retained verbatim." in stored_output.content
+
+
+def test_identical_context_reuse_records_and_charges_each_invocation(tmp_path: Path):
+    database = tmp_path / "raw.sqlite"
+    gathered = _gathered()
+    calls = []
+
+    def invoke(_):
+        calls.append(True)
+        return AIMessage(
+            content="Same context, new observed response.",
+            usage_metadata={
+                "input_tokens": 100,
+                "output_tokens": 25,
+                "total_tokens": 125,
+            },
+        )
+
+    with open_raw_run_store(database) as store:
+        recorder = RawRunRecorder(store)
+        recorder.start_attempt(
+            run_id="run-1",
+            thread_id="thread-1",
+            execution_mode=AttemptExecutionMode.START,
+            state=_state(tmp_path),
+        )
+        for sequence in (0, 1):
+            recorder.invoke_model(
+                state=_state(tmp_path, count=sequence),
+                config=_config(),
+                node_name="build_candidate",
+                role=ModelRole.CANDIDATE_BUILDER,
+                identity=ModelIdentity(provider="openai", model="gpt-test"),
+                gathered_context=gathered,
+                messages=_messages(),
+                plan_step_id=None,
+                invoke=invoke,
+                parse=lambda raw: raw,
+            )
+        assert len(calls) == 2
+        assert store.list_context_packs("run-1") == (gathered.pack,)
+        records = store.list_model_invocations("run-1")
+        assert [record.sequence for record in records] == [0, 1]
+        assert len({record.invocation_id for record in records}) == 2
+        assert {record.context_pack_id for record in records} == {gathered.pack.pack_id}
+        assert sum(record.usage.input_tokens for record in records) == 200
+        assert sum(record.usage.output_tokens for record in records) == 50
+        prices = create_pricing_table(
+            version="repeat-context-test",
+            effective_from="2026-09-08",
+            entries=(
+                ModelPrice(
+                    provider="openai",
+                    model="gpt-test",
+                    input_usd_per_million_tokens="1",
+                    output_usd_per_million_tokens="2",
+                ),
+            ),
+        )
+        report = store.get_attempt_usage_cost_report("run-1", prices)
+        assert report is not None
+        assert report.breakdowns[0].cost.estimated_cost_usd == "0.0003"
+        assert report.breakdowns[0].invocation_count == 2
+
+        other = gather_planner_context(
+            objective="Different content.",
+            max_tool_calls_per_step=6,
+            max_explorer_calls_per_step=3,
+            budget_tokens=4096,
+        )
+        for artifact in other.raw_artifacts:
+            store.put_artifact("run-1", artifact.metadata, artifact.content)
+        # Sequence 1 reused a snapshot first stored at sequence 0; it is still
+        # owned by the recorded invocation and cannot be replaced by another pack.
+        with pytest.raises(RawStoreConflictError, match="context sequence"):
+            store.record_context_pack("run-1", sequence=1, pack=other.pack)
+    with open_raw_run_store(database) as store:
+        assert len(store.list_model_invocations("run-1")) == 2
+        assert store.list_context_packs("run-1") == (gathered.pack,)
 
 
 def test_provider_failure_is_recorded_without_exception_text(

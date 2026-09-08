@@ -4,11 +4,21 @@ import { useMemo, useState } from "react";
 import { compactId, formatTokens, humanize } from "./format";
 import { contextSectionTotals } from "./observability-model";
 import { PanelEmpty, PanelHeading } from "./PlanLens";
-import type { ContextPack, DashboardRunDetail } from "./types";
+import type { ContextPack, DashboardRunDetail, ModelInvocationRecord } from "./types";
+
+function latestInvocation(invocations: ModelInvocationRecord[]) {
+  return invocations.reduce<ModelInvocationRecord | null>(
+    (latest, item) => latest === null || item.sequence > latest.sequence ? item : latest,
+    null,
+  );
+}
 
 export function ContextLens({ run }: { run: DashboardRunDetail }) {
   const [requestedPack, setRequestedPack] = useState<string | null>(null);
-  const pack = run.context_packs.find((item) => item.pack_id === requestedPack) ?? run.context_packs.at(-1) ?? null;
+  const latest = latestInvocation(run.model_invocations);
+  const pack = run.context_packs.find((item) => item.pack_id === requestedPack)
+    ?? run.context_packs.find((item) => item.pack_id === latest?.context_pack_id)
+    ?? run.context_packs.at(-1) ?? null;
 
   if (!pack) {
     return <section className="panel panel--standalone"><PanelEmpty icon={<Layers3 size={20} />} title="No ContextPack persisted" detail="The attempt has no active-context build artifact. Raw model inputs remain intentionally unavailable here." /></section>;
@@ -25,16 +35,17 @@ function ContextPackView({ run, pack, onPackChange }: { run: DashboardRunDetail;
   const utilization = pack.build_report.budget_tokens
     ? Math.min(100, (pack.estimated_tokens / pack.build_report.budget_tokens) * 100)
     : 0;
-  const invocation = run.model_invocations.find((item) => item.context_pack_id === pack.pack_id);
+  const consumers = run.model_invocations.filter((item) => item.context_pack_id === pack.pack_id);
+  const invocation = latestInvocation(consumers);
   const memoryItems = pack.items.filter((item) => item.source.memory !== null);
 
   return (
     <section className="observability-grid observability-grid--context">
       <div className="panel panel--context-summary">
         <PanelHeading eyebrow="hard-budget assembly" title="Context inspector" detail={`${pack.items.length} selected · ${pack.build_report.excluded_count} excluded`} />
-        <label className="select-label">Context build
+        <label className="select-label">Context snapshot
           <select value={pack.pack_id} onChange={(event) => onPackChange(event.target.value)}>
-            {run.context_packs.map((item, index) => <option key={item.pack_id} value={item.pack_id}>build {index + 1} · {compactId(item.pack_id)}</option>)}
+            {run.context_packs.map((item, index) => <option key={item.pack_id} value={item.pack_id}>snapshot {index + 1} · {compactId(item.pack_id)}</option>)}
           </select>
         </label>
         <div className="budget-card">
@@ -42,13 +53,13 @@ function ContextPackView({ run, pack, onPackChange }: { run: DashboardRunDetail;
           <div className="budget-track" role="meter" aria-valuemin={0} aria-valuemax={pack.build_report.budget_tokens} aria-valuenow={pack.estimated_tokens}><i style={{ width: `${utilization}%` }} /></div>
           <footer><span>{utilization.toFixed(1)}% occupied</span><span>{pack.build_report.candidate_count} candidates audited</span></footer>
         </div>
-        {invocation ? <div className="context-consumer"><Box size={16} /><div><span>consumed by</span><strong>{invocation.node_name} · {invocation.role}</strong></div><code>#{invocation.sequence}</code></div> : null}
+        {invocation ? <div className="context-consumer"><Box size={16} /><div><span>used by {consumers.length} invocation{consumers.length === 1 ? "" : "s"} · latest consumer</span><strong>{invocation.node_name} · {invocation.role}</strong></div><code>#{invocation.sequence}</code></div> : null}
         <div className="section-ledger">
           {sectionTotals.map((section) => (
             <div key={section.section}><span>{humanize(section.section)}</span><strong>{formatTokens(section.tokens)}</strong><small>{section.itemCount} item{section.itemCount === 1 ? "" : "s"}</small></div>
           ))}
         </div>
-        <div className="context-boundary"><ShieldCheck size={16} /><p><strong>Raw / active separation</strong>Only bounded selected content is visible. Artifact bodies and model messages are not exposed.</p></div>
+        <div className="context-boundary"><ShieldCheck size={16} /><p><strong>Raw / active separation</strong>Only bounded selected content is visible. Artifact bodies and model messages are not exposed. Snapshots may be shared; each invocation is counted separately.</p></div>
       </div>
 
       <div className="panel panel--decision-ledger">
