@@ -41,6 +41,7 @@ from repocompass.memory.contracts import MemoryScope
 from repocompass.memory.store import MemoryStore
 from repocompass.service.contracts import InvestigationOperationKind
 from repocompass.storage.raw_store import (
+    RawStoreError,
     AttemptExecutionMode,
     RawRunAttempt,
     RawRunStore,
@@ -487,8 +488,9 @@ class DashboardQueryService:
 
     def _load_trace(self, run_id: str) -> tuple[TraceEvent, ...] | None:
         try:
-            return self._trace_store.load(run_id)
-        except TraceStoreError as error:
+            events = self._raw_run_store.list_trace_events(run_id)
+            return events if events is not None else self._trace_store.load(run_id)
+        except (TraceStoreError, RawStoreError) as error:
             raise DashboardServiceError("run trace could not be decoded") from error
 
     def _run_summary(

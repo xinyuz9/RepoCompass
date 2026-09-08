@@ -673,6 +673,8 @@ def execute(args) -> dict:
         "workflow_prompt_policy": "source_backed_gateway_feedback_v3",
         "gateway_feedback_policy": "last_batch_body_free_pinned_v1",
         "plan_revision_policy": "controller_owned_completion_v1",
+        "trace_persistence_policy": "transactional_node_events_v1",
+        "raw_store_schema_version": 2,
         "context_snapshot_policy": "content_dedup_per_invocation_usage_v2",
         "provider_retries": 0,
         "price_basis": "peak_ceiling_not_invoice",

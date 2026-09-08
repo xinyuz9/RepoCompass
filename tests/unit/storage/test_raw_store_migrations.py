@@ -12,6 +12,7 @@ from repocompass.storage.raw_store import (
 )
 
 EXPECTED_TABLES = {
+    "trace_events",
     "attempts",
     "raw_artifacts",
     "attempt_artifacts",
@@ -53,7 +54,7 @@ def _column_is_not_null(database_path: Path, table: str, column: str) -> bool:
     return any(str(row[1]) == column and int(row[3]) == 1 for row in rows)
 
 
-def test_fresh_store_creates_parent_and_exact_v1_schema(tmp_path: Path) -> None:
+def test_fresh_store_creates_parent_and_exact_current_schema(tmp_path: Path) -> None:
     database_path = tmp_path / "nested" / "raw.sqlite"
 
     with open_raw_run_store(database_path) as store:

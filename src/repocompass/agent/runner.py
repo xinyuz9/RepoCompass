@@ -55,7 +55,7 @@ from repocompass.agent.state import (
     create_continuation_update,
     create_initial_state,
 )
-from repocompass.agent.trace import RunTrace, TraceEventKind
+from repocompass.agent.trace import RunTrace, TraceEvent, TraceEventKind
 from repocompass.models import WorkflowModels
 from repocompass.storage.raw_store import (
     AttemptExecutionMode,
@@ -603,15 +603,15 @@ def _usage_cost_trace_metadata(
     }
 
 
-def _record_terminal_trace_event(
+def _build_terminal_trace_event(
     outcome: RunOutcome,
     *,
     execution_mode: ExecutionMode,
     usage_cost_report: AttemptUsageCostReport | None,
     episode_consolidation: EpisodeConsolidationResult | None,
     repository_consolidation: RepositoryConsolidationResult | None = None,
-) -> None:
-    """Append the lifecycle terminal only after optional ledger finalization."""
+) -> TraceEvent:
+    """Prepare the terminal for atomic persistence with attempt finalization."""
 
     if outcome.execution_status is ExecutionStatus.INTERRUPTED:
         review_request = outcome.human_review_request
@@ -652,7 +652,12 @@ def _record_terminal_trace_event(
         payload["repository_consolidation"] = repository_consolidation.model_dump(
             mode="json"
         )
-    outcome.trace.record(kind, payload=payload)
+    return TraceEvent(
+        run_id=outcome.trace.run_id,
+        sequence=len(outcome.trace),
+        kind=kind,
+        payload=payload,
+    )
 
 
 def _build_interrupted_outcome(
@@ -1165,7 +1170,10 @@ class AgentRunner:
                 execution_mode=AttemptExecutionMode(execution_mode),
                 state=metadata_state,
             )
+        phase = "graph_execution"
         try:
+            if self._raw_run_store is not None:
+                self._raw_run_store.append_trace_event(trace.events[0])
             outcome = self._stream_graph_attempt(
                 graph,
                 graph_input,
@@ -1174,7 +1182,13 @@ class AgentRunner:
                 existing_snapshot=existing_snapshot,
                 trace=trace,
                 config=config,
+                event_sink=(
+                    None
+                    if self._raw_run_store is None
+                    else self._raw_run_store.append_trace_event
+                ),
             )
+            phase = "memory_consolidation"
             episode_consolidation = None
             repository_consolidation = None
             if self._memory_store is not None:
@@ -1207,30 +1221,66 @@ class AgentRunner:
                     outcome=outcome,
                     created_at_ms=consolidation_time,
                 )
-        except BaseException:
+            phase = "attempt_finalization"
+            usage_cost_report = None
             if recorder is not None:
-                recorder.finish_attempt(trace.run_id, status=AttemptStatus.FAILED)
+                usage_cost_report = recorder.get_usage_cost_report(
+                    state=metadata_state,
+                    config=config,
+                )
+            terminal = _build_terminal_trace_event(
+                outcome,
+                execution_mode=execution_mode,
+                usage_cost_report=usage_cost_report,
+                episode_consolidation=episode_consolidation,
+                repository_consolidation=repository_consolidation,
+            )
+            if recorder is not None:
+                status = (
+                    AttemptStatus.INTERRUPTED
+                    if outcome.execution_status is ExecutionStatus.INTERRUPTED
+                    else AttemptStatus.COMPLETED
+                )
+                recorder.finish_attempt(
+                    trace.run_id, status=status, terminal_event=terminal
+                )
+            trace.record(terminal.kind, payload=terminal.payload)
+        except BaseException as error:
+            # Deliberately exclude arbitrary exception text/tracebacks/provider bodies.
+            failure = TraceEvent(
+                run_id=trace.run_id,
+                sequence=len(trace),
+                kind=TraceEventKind.RUN_FAILED,
+                payload={
+                    "thread_id": thread_id,
+                    "execution_mode": execution_mode,
+                    "phase": phase,
+                    "error_code": "execution_failed",
+                    "last_completed_node": next(
+                        (e.node for e in reversed(trace.events) if e.node), None
+                    ),
+                },
+            )
+            if recorder is not None:
+                try:
+                    recorder.finish_attempt(
+                        trace.run_id,
+                        status=AttemptStatus.FAILED,
+                        terminal_event=failure,
+                    )
+                except BaseException:
+                    # A persistence fault must stop execution but never replace the
+                    # original error. Previously committed events remain available.
+                    error.add_note(
+                        "Failed to persist terminal trace; inspect committed events and raw attempt."
+                    )
+                    try:
+                        recorder.finish_attempt(
+                            trace.run_id, status=AttemptStatus.FAILED
+                        )
+                    except BaseException:
+                        error.add_note("Failed to finalize raw attempt status.")
             raise
-
-        usage_cost_report = None
-        if recorder is not None:
-            status = (
-                AttemptStatus.INTERRUPTED
-                if outcome.execution_status is ExecutionStatus.INTERRUPTED
-                else AttemptStatus.COMPLETED
-            )
-            recorder.finish_attempt(trace.run_id, status=status)
-            usage_cost_report = recorder.get_usage_cost_report(
-                state=metadata_state,
-                config=config,
-            )
-        _record_terminal_trace_event(
-            outcome,
-            execution_mode=execution_mode,
-            usage_cost_report=usage_cost_report,
-            episode_consolidation=episode_consolidation,
-            repository_consolidation=repository_consolidation,
-        )
         return replace(
             outcome,
             usage_cost_report=usage_cost_report,
@@ -1248,6 +1298,7 @@ class AgentRunner:
         existing_snapshot: StateSnapshot | None,
         trace: RunTrace,
         config: RunnableConfig,
+        event_sink: Callable[[TraceEvent], object] | None = None,
     ) -> RunOutcome:
         """Execute a started attempt without owning its persistence lifecycle."""
 
@@ -1279,11 +1330,13 @@ class AgentRunner:
                 if not isinstance(update, Mapping):
                     raise TypeError(f"Node {node_name!r} returned a non-mapping update")
 
-                trace.record(
+                event = trace.record(
                     TraceEventKind.NODE_COMPLETED,
                     node=node_name,
                     payload=_normalize_update(update),
                 )
+                if event_sink is not None:
+                    event_sink(event)
 
         snapshot = graph.get_state(config)
         final_state = snapshot.values

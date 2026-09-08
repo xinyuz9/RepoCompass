@@ -78,6 +78,22 @@ describe("investigation observability lenses", () => {
     expect(screen.getByText("current")).toBeVisible();
   });
 
+  it("filters persisted failures without depicting them as finished runs", () => {
+    const run = {
+      attempt: { ...attempt, status: "failed" },
+      trace_availability: "available",
+      trace_events: [
+        { run_id: "run-1", sequence: 0, kind: "run_started", node: null, payload: {} },
+        { run_id: "run-1", sequence: 1, kind: "run_failed", node: null, payload: { phase: "graph_execution", error_code: "execution_failed" } },
+      ],
+    } as unknown as DashboardRunDetail;
+    render(<TraceLens run={run} />);
+    fireEvent.click(screen.getByRole("button", { name: "run failed" }));
+    expect(screen.getByText(/execution_failed/)).toBeVisible();
+    expect(screen.getByText(/graph_execution/)).toBeVisible();
+    expect(screen.queryByText("#0")).not.toBeInTheDocument();
+  });
+
   it("renders exact priced usage without presenting it as an invoice", () => {
     const metric = { coverage: "complete", value: 36, contributing_invocations: 1, total_invocations: 1 };
     const invocationId = "4".repeat(64);

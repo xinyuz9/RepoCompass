@@ -18,6 +18,7 @@ class TraceEventKind(StrEnum):
     NODE_COMPLETED = "node_completed"
     RUN_INTERRUPTED = "run_interrupted"
     RUN_FINISHED = "run_finished"
+    RUN_FAILED = "run_failed"
 
 
 class TraceEvent(BaseModel):

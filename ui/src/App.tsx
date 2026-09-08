@@ -19,6 +19,7 @@ import {
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DashboardApiError, dashboardQueries } from "./api";
+import { activeRefreshInterval } from "./active-refresh";
 import {
   ConversationWorkspace,
   type InspectorLens,
@@ -86,6 +87,12 @@ export function App() {
     ...dashboardQueries.thread(activeThreadId ?? ""),
     enabled: activeThreadId !== null,
     staleTime: 15_000,
+    retry: false,
+    refetchInterval: (query) => activeRefreshInterval(
+      query.state.data?.attempts[0]?.attempt.status,
+      query.state.status === "error",
+      query.state.dataUpdateCount,
+    ),
   });
   const visibleThreads = useMemo(() => {
     const normalized = filter.trim().toLocaleLowerCase();

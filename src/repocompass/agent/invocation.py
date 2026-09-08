@@ -34,6 +34,7 @@ from repocompass.agent.usage import (
     create_model_invocation_record,
     extract_usage_record,
 )
+from repocompass.agent.trace import TraceEvent
 from repocompass.storage.raw_store import (
     AttemptExecutionMode,
     AttemptStatus,
@@ -176,6 +177,7 @@ class RawRunRecorder:
         run_id: str,
         *,
         status: AttemptStatus,
+        terminal_event: TraceEvent | None = None,
     ) -> RawRunAttempt:
         """Finish one attempt using a bounded wall-clock timestamp."""
 
@@ -188,6 +190,7 @@ class RawRunRecorder:
             run_id,
             status=status,
             finished_at_ms=finished_at_ms,
+            terminal_event=terminal_event,
         )
 
     def get_usage_cost_report(

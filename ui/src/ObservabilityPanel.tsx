@@ -3,6 +3,7 @@ import { Activity, AlertTriangle, Clock3 } from "lucide-react";
 import { useEffect } from "react";
 
 import { dashboardQueries } from "./api";
+import { activeRefreshInterval } from "./active-refresh";
 import { ContextLens } from "./ContextLens";
 import { CostLens } from "./CostLens";
 import { compactId, formatDuration, humanize } from "./format";
@@ -58,6 +59,12 @@ function RunObservability({
     ...dashboardQueries.run(activeRunId ?? ""),
     enabled: activeRunId !== null,
     staleTime: 30_000,
+    retry: false,
+    refetchInterval: (query) => activeRefreshInterval(
+      query.state.data?.attempt.status,
+      query.state.status === "error",
+      query.state.dataUpdateCount,
+    ),
   });
 
   useEffect(() => {
@@ -99,6 +106,7 @@ function RunObservability({
         </section>
       ) : null}
       {run.data && lens === "trace" ? <TraceLens run={run.data} /> : null}
+      {run.data?.attempt.status === "running" ? <p className="muted">Read-only updates every 1.5s, up to 120 snapshots. Updates pause in the background or on error. Refresh manually if the attempt remains unfinished.</p> : null}
       {run.data && lens === "context" ? <ContextLens run={run.data} /> : null}
       {run.data && lens === "memory" ? (
         <MemoryLens run={run.data} mutationsEnabled={memoryMutationsEnabled} />

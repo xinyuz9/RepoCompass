@@ -1,4 +1,4 @@
-import { Activity, Braces, CheckCircle2, PauseCircle, PlayCircle } from "lucide-react";
+import { Activity, Braces, CheckCircle2, PauseCircle, PlayCircle, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { compactId, humanize } from "./format";
@@ -18,7 +18,7 @@ export function TraceLens({ run }: { run: DashboardRunDetail }) {
     visible.find((event) => event.sequence === requestedSequence) ?? visible.at(-1) ?? null;
 
   if (run.trace_availability !== "available") {
-    return <PanelSurface><PanelEmpty icon={<Activity size={20} />} title="Trace not persisted" detail="This attempt has explicit metadata but no replayable JSONL trace." /></PanelSurface>;
+    return <PanelSurface><PanelEmpty icon={<Activity size={20} />} title="Trace not persisted" detail="This attempt has metadata but no committed event journal or JSONL export." /></PanelSurface>;
   }
 
   return (
@@ -26,7 +26,7 @@ export function TraceLens({ run }: { run: DashboardRunDetail }) {
       <div className="panel panel--trace-list">
         <PanelHeading eyebrow="append-only flight recorder" title="Run trace" detail={`${run.trace_events.length} events · ${compactId(run.attempt.run_id)}`} />
         <div className="segmented-control" aria-label="Trace event filter">
-          {(["all", "run_started", "node_completed", "run_interrupted", "run_finished"] as const).map((kind) => (
+          {(["all", "run_started", "node_completed", "run_interrupted", "run_finished", "run_failed"] as const).map((kind) => (
             <button key={kind} type="button" className={filter === kind ? "is-active" : ""} onClick={() => setFilter(kind)}>{kind === "all" ? "all" : humanize(kind)}</button>
           ))}
         </div>
@@ -76,6 +76,7 @@ function PanelSurface({ children }: { children: React.ReactNode }) {
 }
 
 function traceIcon(kind: PublicTraceEvent["kind"]) {
+  if (kind === "run_failed") return <XCircle size={17} />;
   if (kind === "run_started") return <PlayCircle size={17} />;
   if (kind === "run_interrupted") return <PauseCircle size={17} />;
   if (kind === "run_finished") return <CheckCircle2 size={17} />;

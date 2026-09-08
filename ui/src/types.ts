@@ -407,7 +407,7 @@ export interface PublicTraceEvent {
   schema_version: 1;
   run_id: string;
   sequence: number;
-  kind: "run_started" | "node_completed" | "run_interrupted" | "run_finished";
+  kind: "run_started" | "node_completed" | "run_interrupted" | "run_finished" | "run_failed";
   node: string | null;
   payload: Record<string, JsonValue>;
 }

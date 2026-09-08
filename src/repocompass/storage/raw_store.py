@@ -27,6 +27,7 @@ from repocompass.agent.cost import (
 )
 from repocompass.agent.domain_model import CheckpointSafeModel
 from repocompass.agent.usage import ModelInvocationRecord
+from repocompass.agent.trace import TraceEvent, TraceEventKind
 from repocompass.tools.contracts import (
     IDENTIFIER_PATTERN,
     MAX_SAFE_JSON_INTEGER,
@@ -34,9 +35,12 @@ from repocompass.tools.contracts import (
     Sha256Digest,
 )
 
-RAW_STORE_SCHEMA_VERSION = 1
+RAW_STORE_SCHEMA_VERSION = 2
 RAW_STORE_CONTRACT_SCHEMA_VERSION = 1
 MAX_RAW_ARTIFACT_BYTES = 4 * 1024 * 1024
+MAX_TRACE_EVENTS = 10_000
+MAX_TRACE_EVENT_BYTES = 1024 * 1024
+MAX_TRACE_BYTES = 16 * 1024 * 1024
 _SQLITE_TIMEOUT_SECONDS = 10.0
 _IDENTIFIER_RE = re.compile(IDENTIFIER_PATTERN)
 
@@ -242,7 +246,24 @@ _SCHEMA_STATEMENTS = (
     "ON model_invocations(run_id, sequence)",
 )
 
+_TRACE_SCHEMA = """
+    CREATE TABLE trace_events (
+        run_id TEXT NOT NULL,
+        sequence INTEGER NOT NULL CHECK(sequence >= 0),
+        event_json TEXT NOT NULL,
+        PRIMARY KEY(run_id, sequence),
+        FOREIGN KEY(run_id) REFERENCES attempts(run_id) ON DELETE CASCADE
+    )
+"""
+_SCHEMA_STATEMENTS = (*_SCHEMA_STATEMENTS, _TRACE_SCHEMA)
+_TRACE_TERMINALS = {
+    AttemptStatus.COMPLETED: TraceEventKind.RUN_FINISHED,
+    AttemptStatus.INTERRUPTED: TraceEventKind.RUN_INTERRUPTED,
+    AttemptStatus.FAILED: TraceEventKind.RUN_FAILED,
+}
+
 _REQUIRED_COLUMNS = {
+    "trace_events": ("run_id", "sequence", "event_json"),
     "attempts": (
         "run_id",
         "thread_id",
@@ -306,6 +327,7 @@ _REQUIRED_COLUMNS = {
 }
 _ForeignKeyEdge = tuple[str, str, str, str]
 _EXPECTED_FOREIGN_KEYS: dict[str, Counter[_ForeignKeyEdge]] = {
+    "trace_events": Counter([("attempts", "run_id", "run_id", "CASCADE")]),
     "attempts": Counter(),
     "raw_artifacts": Counter(),
     "attempt_artifacts": Counter(
@@ -340,6 +362,7 @@ _EXPECTED_FOREIGN_KEYS: dict[str, Counter[_ForeignKeyEdge]] = {
     ),
 }
 _REQUIRED_NOT_NULL_COLUMNS = {
+    "trace_events": frozenset({"run_id", "sequence", "event_json"}),
     "model_invocations": frozenset({"context_pack_id"}),
 }
 
@@ -448,11 +471,17 @@ class RawRunStore:
         *,
         status: AttemptStatus,
         finished_at_ms: int,
+        terminal_event: TraceEvent | None = None,
     ) -> RawRunAttempt:
         """Transition a running attempt once to a terminal status."""
 
         if status not in _TERMINAL_ATTEMPT_STATUSES:
             raise ValueError("finish_attempt requires a terminal status")
+        if terminal_event is not None and (
+            terminal_event.run_id != run_id
+            or terminal_event.kind is not _TRACE_TERMINALS[status]
+        ):
+            raise RawStoreIntegrityError("terminal trace does not match attempt status")
         with self._transaction():
             row = self._connection.execute(
                 "SELECT * FROM attempts WHERE run_id = ?",
@@ -466,6 +495,8 @@ class RawRunStore:
                     current.status is status
                     and current.finished_at_ms == finished_at_ms
                 ):
+                    if terminal_event is not None:
+                        self._append_trace_event(terminal_event)
                     return current
                 raise RawStoreConflictError("attempt is already terminal")
             updated = RawRunAttempt.model_validate(
@@ -475,6 +506,8 @@ class RawRunStore:
                     "finished_at_ms": finished_at_ms,
                 }
             )
+            if terminal_event is not None:
+                self._append_trace_event(terminal_event)
             self._connection.execute(
                 """
                 UPDATE attempts
@@ -489,6 +522,91 @@ class RawRunStore:
                 ),
             )
             return updated
+
+    def append_trace_event(self, event: TraceEvent) -> bool:
+        """Commit one nonterminal node event before further graph execution."""
+
+        if event.kind in _TRACE_TERMINALS.values():
+            raise RawStoreIntegrityError("terminal trace requires finish_attempt")
+        with self._transaction():
+            return self._append_trace_event(event)
+
+    def _append_trace_event(self, event: TraceEvent) -> bool:
+        event = TraceEvent.model_validate_json(event.model_dump_json())
+        encoded = event.model_dump_json()
+        byte_count = len(encoded.encode("utf-8"))
+        if byte_count > MAX_TRACE_EVENT_BYTES or event.sequence >= MAX_TRACE_EVENTS:
+            raise RawStoreIntegrityError("trace exceeds storage limits")
+        attempt = self.get_attempt(event.run_id)
+        if attempt is None:
+            raise RawStoreIntegrityError("trace attempt does not exist")
+        existing = self._connection.execute(
+            "SELECT event_json FROM trace_events WHERE run_id = ? AND sequence = ?",
+            (event.run_id, event.sequence),
+        ).fetchone()
+        if existing is not None:
+            if existing[0] == encoded:
+                return False
+            raise RawStoreConflictError("trace sequence already has a different event")
+        if attempt.status is not AttemptStatus.RUNNING:
+            raise RawStoreConflictError("trace attempt is already terminal")
+        count, size, last_sequence = self._connection.execute(
+            "SELECT COUNT(*), COALESCE(SUM(length(CAST(event_json AS BLOB))), 0), COALESCE(MAX(sequence), -1) "
+            "FROM trace_events WHERE run_id = ?",
+            (event.run_id,),
+        ).fetchone()
+        if count != event.sequence or last_sequence != count - 1:
+            raise RawStoreIntegrityError("trace sequence is not contiguous")
+        if (event.sequence == 0) != (event.kind is TraceEventKind.RUN_STARTED):
+            raise RawStoreIntegrityError("trace must start exactly once")
+        if size + byte_count > MAX_TRACE_BYTES:
+            raise RawStoreIntegrityError("trace exceeds storage limits")
+        self._connection.execute(
+            "INSERT INTO trace_events VALUES (?, ?, ?)",
+            (event.run_id, event.sequence, encoded),
+        )
+        return True
+
+    def list_trace_events(self, run_id: str) -> tuple[TraceEvent, ...] | None:
+        """Read a bounded committed prefix; no journal means legacy JSONL fallback."""
+
+        with self._lock:
+            # A single query gives a consistent snapshot across other connections.
+            rows = self._connection.execute(
+                "SELECT sequence, CASE WHEN length(CAST(event_json AS BLOB)) <= ? "
+                "AND SUM(length(CAST(event_json AS BLOB))) OVER () <= ? "
+                "THEN event_json ELSE NULL END AS event_json "
+                "FROM trace_events WHERE run_id = ? ORDER BY sequence LIMIT ?",
+                (MAX_TRACE_EVENT_BYTES, MAX_TRACE_BYTES, run_id, MAX_TRACE_EVENTS + 1),
+            ).fetchall()
+        if not rows:
+            return None
+        if len(rows) > MAX_TRACE_EVENTS:
+            raise RawStoreCorruptionError("trace exceeds event limit")
+        events = []
+        total = 0
+        try:
+            for row in rows:
+                size = len(row["event_json"].encode("utf-8"))
+                total += size
+                if size > MAX_TRACE_EVENT_BYTES or total > MAX_TRACE_BYTES:
+                    raise ValueError("trace size")
+                json.loads(row["event_json"], object_pairs_hook=_unique_trace_keys)
+                event = TraceEvent.model_validate_json(row["event_json"])
+                if (
+                    event.run_id != run_id
+                    or event.sequence != row["sequence"]
+                    or event.sequence != len(events)
+                ):
+                    raise ValueError("trace identity")
+                if (event.sequence == 0) != (event.kind is TraceEventKind.RUN_STARTED):
+                    raise ValueError("trace start")
+                if events and events[-1].kind in _TRACE_TERMINALS.values():
+                    raise ValueError("trace after terminal")
+                events.append(event)
+        except (ValueError, TypeError, AttributeError) as error:
+            raise RawStoreCorruptionError("trace failed strict validation") from error
+        return tuple(events)
 
     def put_artifact(
         self,
@@ -995,28 +1113,48 @@ def _migrate_and_validate(connection: sqlite3.Connection) -> None:
             for statement in _SCHEMA_STATEMENTS:
                 connection.execute(statement)
             connection.execute(f"PRAGMA user_version = {RAW_STORE_SCHEMA_VERSION}")
+        elif version == 1:
+            _validate_schema(connection, legacy=True)
+            if "trace_events" in _user_tables(connection):
+                raise RawStoreMigrationError(
+                    "legacy database already has a trace table"
+                )
+            connection.execute(_TRACE_SCHEMA)
+            connection.execute(f"PRAGMA user_version = {RAW_STORE_SCHEMA_VERSION}")
         elif version != RAW_STORE_SCHEMA_VERSION:
             raise RawStoreMigrationError(
                 f"Unsupported Raw Run Store schema version: {version}"
             )
+        _validate_schema(connection)
         connection.commit()
     except BaseException:
         connection.rollback()
         raise
-    _validate_schema(connection)
 
 
-def _validate_schema(connection: sqlite3.Connection) -> None:
+def _validate_schema(connection: sqlite3.Connection, *, legacy: bool = False) -> None:
     tables = _user_tables(connection)
     required_tables = set(_REQUIRED_COLUMNS)
+    if legacy:
+        required_tables.remove("trace_events")
     if not required_tables.issubset(tables):
         raise RawStoreMigrationError("Raw Run Store schema is missing required tables")
     for table, expected_columns in _REQUIRED_COLUMNS.items():
+        if legacy and table == "trace_events":
+            continue
         column_rows = tuple(connection.execute(f"PRAGMA table_info({table})"))
         actual_columns = tuple(str(row["name"]) for row in column_rows)
         if actual_columns != expected_columns:
             raise RawStoreMigrationError(
                 f"Raw Run Store schema for {table} is incompatible"
+            )
+        if table == "trace_events" and tuple(int(row["pk"]) for row in column_rows) != (
+            1,
+            2,
+            0,
+        ):
+            raise RawStoreMigrationError(
+                "Raw Run Store trace primary key is incompatible"
             )
         required_not_null = _REQUIRED_NOT_NULL_COLUMNS.get(table, frozenset())
         not_null_columns = {
@@ -1030,6 +1168,8 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
     if foreign_keys != 1:
         raise RawStoreMigrationError("Raw Run Store foreign keys are disabled")
     for table, expected_foreign_keys in _EXPECTED_FOREIGN_KEYS.items():
+        if legacy and table == "trace_events":
+            continue
         actual_foreign_keys = Counter(
             (
                 str(row["table"]),
@@ -1053,6 +1193,15 @@ def _user_tables(connection: sqlite3.Connection) -> set[str]:
             "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
         )
     }
+
+
+def _unique_trace_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate trace field")
+        result[key] = value
+    return result
 
 
 def _canonical_model_json(model: CheckpointSafeModel) -> str:
