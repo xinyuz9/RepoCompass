@@ -75,7 +75,10 @@ class CandidateRelation(CheckpointSafeModel):
     source: str = Field(
         min_length=1,
         max_length=2_048,
-        description="Exact graph entity ID or canonical source symbol name.",
+        description=(
+            "Exact graph entity ID, canonical source symbol name, repository-relative "
+            "Python file path, or path:symbol scoped to that indexed file."
+        ),
     )
     relation: EvidenceRelationKind = Field(
         description="Closed structural relation proposed by the candidate."
@@ -83,7 +86,10 @@ class CandidateRelation(CheckpointSafeModel):
     target: str = Field(
         min_length=1,
         max_length=2_048,
-        description="Exact graph entity ID or canonical target symbol name.",
+        description=(
+            "Exact graph entity ID, canonical target symbol name, repository-relative "
+            "Python file path, or path:symbol scoped to that indexed file."
+        ),
     )
     verification_status: Literal[StructuralVerificationStatus.INFERRED] = Field(
         default=StructuralVerificationStatus.INFERRED,
@@ -95,7 +101,12 @@ class CandidateRelation(CheckpointSafeModel):
     supporting_evidence_indices: tuple[int, ...] = Field(
         min_length=1,
         max_length=64,
-        description="Canonical candidate evidence indices supporting the proposal.",
+        description=(
+            "Sorted unique zero-based indices into this CandidateResult.evidence "
+            "array, not tool-result indices or source line numbers. The first "
+            "evidence item is 0; each index must be less than len(evidence). Cite "
+            "the source range containing the relation occurrence."
+        ),
     )
     explanation: str = Field(
         min_length=1,

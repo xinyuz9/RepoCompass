@@ -490,6 +490,33 @@ def build_investigation_structure(
                 continue
             edge = proposed
         else:
+            # A real AST edge elsewhere in the candidate's indexed files must
+            # not launder an unrelated but valid evidence index into its lineage.
+            if not any(
+                candidate.evidence[index].path == item.location.path
+                and candidate.evidence[index].line_start is not None
+                and candidate.evidence[index].line_start <= item.location.line_end
+                and (
+                    candidate.evidence[index].line_end
+                    or candidate.evidence[index].line_start
+                )
+                >= item.location.line_start
+                for index in relation.supporting_evidence_indices
+                for item in existing.evidence
+            ):
+                issues.append(
+                    StructureBuildIssue(
+                        code="relation_evidence_mismatch",
+                        message=(
+                            "Relation evidence must cite a source range containing "
+                            "the corresponding AST occurrence, not an unrelated "
+                            "candidate item. Evidence indices are zero-based."
+                        ),
+                        evidence_index=relation.supporting_evidence_indices[0],
+                        relation_index=relation_index,
+                    )
+                )
+                continue
             edge = existing
         relation_assertions.add(edge.assertion_id)
         seed_ids.update((source.entity_id, target.entity_id))
@@ -583,6 +610,21 @@ def _resolve_graph_selector(
     by_id = tuple(node for node in graph.nodes if node.entity_id == selector)
     if by_id:
         return by_id
+    # Resolve only exact paths already in the validated graph. Never normalize
+    # user paths or read another file while interpreting a model selector.
+    path, separator, symbol = selector.partition(":")
+    if separator:
+        if not symbol:
+            return ()
+        scoped = [node for node in graph.nodes if node.path == path]
+        return _resolve_symbol_on_path(scoped, symbol)
+    by_path = tuple(
+        node
+        for node in graph.nodes
+        if node.kind is EvidenceNodeKind.FILE and node.path == selector
+    )
+    if by_path:
+        return by_path
     exact = tuple(node for node in graph.nodes if node.canonical_name == selector)
     if exact:
         return exact

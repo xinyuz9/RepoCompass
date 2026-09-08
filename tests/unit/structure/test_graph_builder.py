@@ -178,3 +178,95 @@ def test_builder_rejects_empty_duplicate_or_mixed_snapshot_indexes(
     )
     with pytest.raises(ValueError, match="snapshot"):
         build_evidence_graph((indexes[0], other))
+
+
+@pytest.mark.parametrize(
+    "path,source,include_child,expected_name,expected_kind",
+    [
+        (
+            "pkg/__init__.py",
+            "from . import child\n",
+            True,
+            "pkg.child",
+            EvidenceNodeKind.FILE,
+        ),
+        (
+            "pkg/__init__.py",
+            "from . import child\n",
+            False,
+            "pkg",
+            EvidenceNodeKind.EXTERNAL_MODULE,
+        ),
+        (
+            "pkg/__init__.py",
+            "from pkg import child as alias\n",
+            True,
+            "pkg.child",
+            EvidenceNodeKind.FILE,
+        ),
+        (
+            "pkg/__init__.py",
+            "from . import *\n",
+            False,
+            "pkg",
+            EvidenceNodeKind.EXTERNAL_MODULE,
+        ),
+        (
+            "pkg/__init__.py",
+            "import pkg\n",
+            False,
+            "pkg",
+            EvidenceNodeKind.EXTERNAL_MODULE,
+        ),
+        ("mod.py", "import mod\n", False, "mod", EvidenceNodeKind.EXTERNAL_MODULE),
+        (
+            "pkg/__init__.py",
+            "def load():\n    from . import child\n",
+            True,
+            "pkg.child",
+            EvidenceNodeKind.FILE,
+        ),
+        (
+            "pkg/__init__.py",
+            "from .child import VALUE\n",
+            True,
+            "pkg.child",
+            EvidenceNodeKind.FILE,
+        ),
+    ],
+)
+def test_self_package_imports_preserve_graph_without_inventing_resolved_targets(
+    tmp_path, path, source, include_child, expected_name, expected_kind
+):
+    sources = {path: source}
+    if include_child:
+        sources["pkg/child.py"] = "VALUE = 1\n"
+    indexes = []
+    for relative, content in sources.items():
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+        indexes.append(
+            build_python_file_index(
+                tmp_path,
+                Path(relative),
+                repository_id=REPOSITORY_ID,
+                commit_sha=COMMIT_SHA,
+            )
+        )
+    graph = build_evidence_graph(tuple(indexes))
+    assert graph == build_evidence_graph(tuple(reversed(indexes)))
+    edges = [
+        edge for edge in graph.edges if edge.relation is EvidenceRelationKind.IMPORTS
+    ]
+    assert len(edges) == 1
+    edge = edges[0]
+    assert edge.source_entity_id != edge.target_entity_id
+    target = graph.node_by_entity_id(edge.target_entity_id)
+    assert (target.canonical_name, target.kind) == (expected_name, expected_kind)
+    assert edge.verification_status is StructuralVerificationStatus.VERIFIED
+    assert edge.evidence[0].record == indexes[0].imports[0]
+    if expected_kind is EvidenceNodeKind.EXTERNAL_MODULE:
+        assert target.path is None and target.evidence == ()
+    else:
+        assert target.path == "pkg/child.py" and target.evidence

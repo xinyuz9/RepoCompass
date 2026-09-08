@@ -198,7 +198,12 @@ def _import_target_node(
         candidates.append(f"{resolved_module}.{record.imported_name}")
     for candidate in candidates:
         internal = files_by_module.get(candidate)
-        if internal is not None:
+        # A package initializer can import from its own package. Treating its
+        # enclosing package as the destination creates a forbidden file self-edge
+        # and loses every other fact in an otherwise valid investigation.
+        # Prefer a separately indexed submodule when available; otherwise retain
+        # the lexical import as a dependency placeholder, not a resolved file.
+        if internal is not None and internal.path != index.path:
             return internal
 
     display_name = resolved_module or (

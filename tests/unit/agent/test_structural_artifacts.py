@@ -12,7 +12,10 @@ from repocompass.agent.candidate import (
 )
 from repocompass.agent.checkpoint import RepoCompassCheckpointSerializer
 from repocompass.agent.evaluation import validate_candidate
-from repocompass.agent.structural_artifacts import build_investigation_structure
+from repocompass.agent.structural_artifacts import (
+    _resolve_graph_selector,
+    build_investigation_structure,
+)
 from repocompass.structure import (
     EvidenceRelationKind,
     StructuralVerificationStatus,
@@ -244,6 +247,116 @@ def test_relation_must_reference_deterministically_valid_evidence(
     assert result.artifact is not None
     assert [issue.code for issue in result.issues] == ["relation_evidence_invalid"]
     assert result.artifact.candidate_relation_assertion_ids == ()
+
+
+@pytest.mark.parametrize("citation", ["target_only", "unrelated_source_range"])
+def test_valid_but_unrelated_evidence_cannot_promote_an_existing_relation(
+    tmp_path: Path, citation: str
+) -> None:
+    _write_fixture(tmp_path)
+    candidate = _candidate()
+    if citation == "target_only":
+        relation = candidate.relations[0].model_copy(
+            update={"supporting_evidence_indices": (1,)}
+        )
+        candidate = candidate.model_copy(update={"relations": [relation]})
+    else:
+        evidence = candidate.evidence[0].model_copy(
+            update={"line_start": 4, "line_end": 4}
+        )
+        candidate = candidate.model_copy(
+            update={"evidence": [evidence, candidate.evidence[1]]}
+        )
+    result = _build(tmp_path, candidate)
+    assert result.artifact is not None
+    assert [issue.code for issue in result.issues] == ["relation_evidence_mismatch"]
+    assert result.artifact.candidate_relation_assertion_ids == ()
+    assert result.artifact.reading_path.claim_lineages == ()
+    # The underlying static edge still exists, but is not evidence for this
+    # incorrectly cited candidate proposal.
+    assert any(
+        edge.relation is EvidenceRelationKind.IMPORTS
+        and edge.verification_status is StructuralVerificationStatus.VERIFIED
+        for edge in result.artifact.graph.edges
+    )
+
+
+def test_relation_single_line_source_occurrence_is_sufficient(tmp_path: Path) -> None:
+    _write_fixture(tmp_path)
+    candidate = _candidate()
+    candidate = candidate.model_copy(
+        update={
+            "evidence": [
+                candidate.evidence[0].model_copy(
+                    update={"line_start": 1, "line_end": None}
+                ),
+                candidate.evidence[1],
+            ],
+            "relations": [
+                candidate.relations[0].model_copy(
+                    update={"supporting_evidence_indices": (0,)}
+                )
+            ],
+        }
+    )
+    result = _build(tmp_path, candidate)
+    assert result.issues == ()
+    assert len(result.artifact.candidate_relation_assertion_ids) == 1
+
+
+def test_package_self_import_reaches_structure_and_reading_path(tmp_path: Path) -> None:
+    _write_fixture(tmp_path)
+    (tmp_path / "pkg/__init__.py").write_text("from . import core\n")
+    candidate = CandidateResult(
+        evidence=[
+            EvidenceItem(path="pkg/__init__.py", line_start=1, claim="Imports core."),
+            EvidenceItem(path="pkg/core.py", line_start=1, claim="Defines helper."),
+        ],
+        relations=[
+            CandidateRelation(
+                source="pkg/__init__.py",
+                target="pkg.core",
+                relation=EvidenceRelationKind.IMPORTS,
+                supporting_evidence_indices=(0,),
+                explanation="Initializer imports the independently indexed core module.",
+            )
+        ],
+        summary="The package imports core.",
+        unresolved_questions=[],
+    )
+    result = _build(tmp_path, candidate)
+    assert result.issues == ()
+    assert result.artifact is not None
+    assert len(result.artifact.candidate_relation_assertion_ids) == 1
+    assert result.artifact.reading_path.claim_lineages[0].provenance_complete
+
+
+@pytest.mark.parametrize(
+    "selector,expected",
+    [
+        ("pkg/core.py", "pkg.core"),
+        ("pkg/core.py:Service", "pkg.core.Service"),
+        ("pkg/core.py:pkg.core.Service", "pkg.core.Service"),
+        ("pkg/core.py:Service.run", None),
+        ("pkg/core.py:pkg.core.Service.run", "pkg.core.Service.run"),
+        ("pkg/core.py:run", "pkg.core.Service.run"),
+        ("pkg/api.py:Service", None),
+        ("pkg/missing.py:Service", None),
+        ("../pkg/core.py:Service", None),
+        ("/pkg/core.py:Service", None),
+        ("pkg/./core.py:Service", None),
+        ("pkg/core.py:", None),
+    ],
+)
+def test_path_selectors_are_exact_and_confined_to_validated_nodes(
+    tmp_path, selector, expected
+):
+    _write_fixture(tmp_path)
+    graph = _build(tmp_path, _candidate()).artifact.graph
+    nodes = _resolve_graph_selector(graph, selector)
+    assert [node.canonical_name for node in nodes] == (
+        [] if expected is None else [expected]
+    )
 
 
 def test_structure_artifact_round_trips_through_strict_checkpoint_serializer(
