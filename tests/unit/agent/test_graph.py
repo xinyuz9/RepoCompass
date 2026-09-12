@@ -240,8 +240,13 @@ def test_graph_rejects_batch_exceeding_budget_then_exhausts_revisions(
     assert final_state["plan_revision_count"] == 2
     assert final_state["next_action"] == "exhausted"
     assert final_state["step_tool_call_count"] == 0
-    assert final_state["step_explorer_call_count"] == 1
-    assert len(messages) == 6
+    # Empty evidence no longer becomes completed solely on scripted model
+    # approval: each revision remains active until its retry budget is spent.
+    assert final_state["step_explorer_call_count"] == 3
+    assert len(messages) == 10  # initial refusal + two bounded three-call revisions
+    assert not any(
+        step.status == "completed" for step in final_state["investigation_plan"].steps
+    )
     assert isinstance(messages[0], HumanMessage)
     assert messages[0].content == user_message.content
     assert messages[1] == oversized_request

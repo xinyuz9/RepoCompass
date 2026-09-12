@@ -846,6 +846,7 @@ class CandidateBuilderInput(MessagesState):
     context_budget_tokens: int
     context_build_count: int
     max_attempt_cost_usd: str | None
+    evaluation_report: EvaluationReport | None
 
 
 class CandidateBuilderUpdate(TypedDict):
@@ -876,6 +877,7 @@ def build_candidate_messages(
         step_stop_reason=state["step_stop_reason"] or "none",
         messages=tuple(state["messages"]),
         budget_tokens=_context_budget(state),
+        evaluation_report=state.get("evaluation_report"),
     )
     return [
         SystemMessage(content=CANDIDATE_BUILDING_SYSTEM_PROMPT),
@@ -916,6 +918,7 @@ def create_build_candidate_node(
             step_stop_reason=state["step_stop_reason"] or "none",
             messages=tuple(state["messages"]),
             budget_tokens=_context_budget(state),
+            evaluation_report=state.get("evaluation_report"),
             selection_strategy=context_selection_strategy,
         )
         messages = build_candidate_messages(state, gathered_context=gathered)
@@ -1154,7 +1157,10 @@ def decide_next_action(state: ControllerInput) -> ControllerNodeUpdate:
 
     has_revision_budget = state["plan_revision_count"] < state["max_plan_revisions"]
 
-    if semantic_assessment.active_step_completed:
+    # Model approval cannot override invalid source/structure evidence. There
+    # is no reliable per-step issue attribution in the cumulative candidate,
+    # so any deterministic defect keeps the active step uncompleted.
+    if semantic_assessment.active_step_completed and not report.deterministic_issues:
         if plan.next_pending_step() is not None:
             return {"next_action": "advance_step"}
 

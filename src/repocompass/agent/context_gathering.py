@@ -226,6 +226,7 @@ def gather_explorer_context(
     items = [objective_item, *memory_items, *tool_items]
     artifacts = [objective_artifact, *tool_artifacts]
     _append_gateway_feedback(items, artifacts, last_tool_batch_audits)
+    _append_validation_feedback(items, artifacts, evaluation_report)
     if evaluation_report is not None and not evaluation_report.passed:
         report_content = evaluation_report.model_dump_json(indent=2)
         feedback_content = INVESTIGATION_FEEDBACK_TEMPLATE.format(
@@ -277,6 +278,7 @@ def gather_candidate_context(
     step_stop_reason: str,
     messages: tuple[AnyMessage, ...],
     budget_tokens: int,
+    evaluation_report: EvaluationReport | None = None,
     selection_strategy: ContextSelectionStrategy = (
         ContextSelectionStrategy.PRIORITIZED
     ),
@@ -308,9 +310,12 @@ def gather_candidate_context(
         repository=repository,
         messages=messages,
     )
+    items = [objective_item, *tool_items]
+    artifacts = [objective_artifact, *tool_artifacts]
+    _append_validation_feedback(items, artifacts, evaluation_report)
     return _build_gathered_context(
-        candidates=(objective_item, *tool_items),
-        raw_artifacts=(objective_artifact, *tool_artifacts),
+        candidates=tuple(items),
+        raw_artifacts=tuple(artifacts),
         budget_tokens=budget_tokens,
         reserve_evidence=True,
         reserve_feedback=False,
@@ -556,6 +561,58 @@ def gather_replanner_context(
         reserve_memory=bool(memory_items),
         selection_strategy=selection_strategy,
     )
+
+
+def _append_validation_feedback(
+    items: list[ContextItem],
+    artifacts: list[RawArtifactPayload],
+    report: EvaluationReport | None,
+) -> None:
+    """Keep bounded code-produced defects visible even if the model approves.
+
+    Paths are rejected candidate labels, not newly verified repository facts.
+    Do not echo free-form messages or the previous candidate's narrative.
+    """
+
+    if report is None or not report.deterministic_issues:
+        return
+    selected = report.deterministic_issues[:16]
+    content = json.dumps(
+        {
+            "kind": "validation_feedback_not_repository_evidence",
+            "scope": "previous_candidate_rejected_labels_not_source_facts",
+            "omitted_issues": len(report.deterministic_issues) - len(selected),
+            "issues": [
+                {
+                    "code": issue.code[:128],
+                    "path": None if issue.path is None else issue.path[:256],
+                    "evidence_index": issue.evidence_index,
+                    "relation_index": issue.relation_index,
+                }
+                for issue in selected
+            ],
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    item, artifact = _make_item(
+        content=content,
+        raw_content=content,
+        raw_kind=RawArtifactKind.TOOL_OUTPUT,
+        source_kind=ContextSourceKind.EVALUATOR_REQUEST,
+        section=ContextSection.FEEDBACK,
+        verification_status=VerificationStatus.UNVERIFIED,
+        priority=100,
+        pinned=True,
+        provenance=(
+            ProvenanceLink(
+                kind=ProvenanceKind.EVALUATION,
+                id=_stable_id("evaluation", report.model_dump_json(indent=2)),
+            ),
+        ),
+    )
+    items.append(item)
+    artifacts.append(artifact)
 
 
 def _append_gateway_feedback(

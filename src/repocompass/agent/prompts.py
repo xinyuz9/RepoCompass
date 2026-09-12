@@ -16,6 +16,9 @@ For source-backed conclusions, a file listing is discovery, not sufficient
 evidence. Include reading the relevant line-numbered source/configuration in the
 same step when needed to substantiate the claim. Do not create a separate model
 round only to report discovered filenames.
+Avoid overlapping steps that reread the same declarations merely to summarize
+them again. Scope the plan to the requested objective, not an exhaustive audit
+of all possible public APIs unless explicitly requested.
 """
 
 PLANNING_REQUEST_TEMPLATE = """\
@@ -103,6 +106,14 @@ appears in the collected evidence. State each claim as a concise observation.
 Do not turn a filename-only listing into a verified source claim. If supporting
 lines are unavailable, report the limitation in unresolved_questions, never
 invent a line range to satisfy validation.
+Directory listings are discovery only: never cite a directory, ./, __tree__,
+or a tool name as an evidence path. A successful line-numbered file read already
+establishes that file's presence; no separate tree evidence is required for it.
+Configuration declarations may be cited as file/line observations, but are not
+Python AST relations. Return relations=[] when there are no matching collected
+Python structural records. Put unverified runtime targets in unresolved_questions.
+Validation feedback contains rejected labels from the previous candidate, not
+source facts. Correct or omit invalid claims instead of repeating them.
 Build the best cumulative answer supported so far, while ensuring the active
 plan step is addressed. Summarize progress toward the original objective without
 claiming that uninvestigated work is complete. Put unsupported, uncertain, or

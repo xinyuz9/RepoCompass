@@ -654,7 +654,7 @@ def execute(args) -> dict:
     )
     variants = tuple(v for v in LocalizationVariant if v.value in args.variants)
     config = {
-        "schema_version": 7,
+        "schema_version": 8,
         "provenance": "live_provider",
         "manifest_id": manifest.manifest_id,
         "budget_profile": budget.model_dump(mode="json"),
@@ -669,10 +669,12 @@ def execute(args) -> dict:
         "repository_memory_policy": "accepted_static_python_v1",
         "memory_store_schema_version": MEMORY_STORE_SCHEMA_VERSION,
         "structure_resolution_policy": "self_import_placeholder_exact_path_v2",
-        "candidate_evidence_policy": "source_occurrence_zero_based_v1",
-        "workflow_prompt_policy": "source_backed_gateway_feedback_v3",
+        "candidate_evidence_policy": "source_occurrence_discovery_separation_v2",
+        "workflow_prompt_policy": "source_backed_validation_feedback_v4",
         "gateway_feedback_policy": "last_batch_body_free_pinned_v1",
         "plan_revision_policy": "controller_owned_completion_v1",
+        "step_completion_policy": "deterministic_and_semantic_gate_v2",
+        "validation_feedback_policy": "bounded_pinned_defects_v1",
         "trace_persistence_policy": "transactional_node_events_v1",
         "raw_store_schema_version": 2,
         "context_snapshot_policy": "content_dedup_per_invocation_usage_v2",

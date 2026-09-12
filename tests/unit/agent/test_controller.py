@@ -12,6 +12,7 @@ from repocompass.agent.context import ContextPack
 from repocompass.agent.evaluation import (
     EvaluationReport,
     SemanticAssessment,
+    ValidationIssue,
 )
 from repocompass.agent.nodes import (
     ControllerInput,
@@ -157,6 +158,39 @@ def test_controller_decision_table(
     update = decide_next_action(state)
 
     assert update == {"next_action": expected_action}
+
+
+@pytest.mark.parametrize("pending", [False, True])
+@pytest.mark.parametrize(
+    "code", ["path_not_found", "path_not_file", "relation_structure_unavailable"]
+)
+@pytest.mark.parametrize("budget", ["available", "revise", "exhausted"])
+def test_deterministic_defects_override_semantic_step_approval(pending, code, budget):
+    report = _report(step_completed=True, passed=True).model_copy(
+        update={
+            "deterministic_issues": [
+                ValidationIssue(code=code, message="Invalid source.")
+            ]
+        }
+    )
+    plan = _plan(include_pending=pending)
+    before = plan.model_dump_json()
+    state = _controller_state(
+        report=report,
+        plan=plan,
+        step_stop_reason=None
+        if budget == "available"
+        else "step_tool_call_budget_exhausted",
+        revisions=2 if budget == "exhausted" else 0,
+    )
+    expected = {
+        "available": "continue_step",
+        "revise": "revise_plan",
+        "exhausted": "exhausted",
+    }[budget]
+    assert decide_next_action(state) == {"next_action": expected}
+    assert not report.passed
+    assert plan.model_dump_json() == before
 
 
 def test_controller_requires_plan_and_evaluation() -> None:

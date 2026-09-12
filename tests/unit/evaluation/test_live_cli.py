@@ -221,15 +221,20 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         live_cli.execute(args)
     path = args.output / "config.json"
     config = json.loads(path.read_text())
-    assert config["schema_version"] == 7
+    assert config["schema_version"] == 8
     assert config["repository_memory_policy"] == "accepted_static_python_v1"
     assert config["memory_store_schema_version"] == 4
     assert config["prewarm_validation"] == "accepted_nonempty_episode_v1"
     assert (
         config["structure_resolution_policy"] == "self_import_placeholder_exact_path_v2"
     )
-    assert config["candidate_evidence_policy"] == "source_occurrence_zero_based_v1"
-    assert config["workflow_prompt_policy"] == "source_backed_gateway_feedback_v3"
+    assert (
+        config["candidate_evidence_policy"]
+        == "source_occurrence_discovery_separation_v2"
+    )
+    assert config["workflow_prompt_policy"] == "source_backed_validation_feedback_v4"
+    assert config["step_completion_policy"] == "deterministic_and_semantic_gate_v2"
+    assert config["validation_feedback_policy"] == "bounded_pinned_defects_v1"
     assert config["gateway_feedback_policy"] == "last_batch_body_free_pinned_v1"
     assert config["plan_revision_policy"] == "controller_owned_completion_v1"
     assert config["trace_persistence_policy"] == "transactional_node_events_v1"

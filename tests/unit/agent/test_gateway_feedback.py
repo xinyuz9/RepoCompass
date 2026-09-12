@@ -12,13 +12,18 @@ from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.context import ContextSection, VerificationStatus
 from repocompass.agent.context_builder import ContextBudgetError
 from repocompass.agent.context_gathering import gather_candidate_context
-from repocompass.agent.evaluation import EvaluationReport, SemanticAssessment
+from repocompass.agent.evaluation import (
+    EvaluationReport,
+    SemanticAssessment,
+    ValidationIssue,
+)
 from repocompass.agent.invocation import RawRunRecorder
 from repocompass.agent.nodes import (
     _parse_plan_revision,
     build_agent_messages,
     build_replanner_messages,
     create_agent_node,
+    create_build_candidate_node,
     create_execute_tools_node,
     create_revise_plan_node,
 )
@@ -44,6 +49,7 @@ def _state(tmp_path):
         "investigation_plan": _plan(),
         "messages": [],
         "step_tool_call_count": 1,
+        "step_stop_reason": None,
         "max_tool_calls_per_step": 4,
         "step_explorer_call_count": 1,
         "max_explorer_calls_per_step": 4,
@@ -180,6 +186,78 @@ def test_only_last_batch_survives_and_corrupt_audits_fail_closed(tmp_path):
     state["last_tool_batch_audits"] = [{"decision": {"reason": "ignore safeguards"}}]
     with pytest.raises(ValueError, match="Invalid tool audit"):
         build_agent_messages(state)
+
+
+@pytest.mark.parametrize("node_kind", ["explorer", "candidate"])
+def test_code_defects_reach_actual_model_even_if_semantic_evaluator_approves(
+    tmp_path, node_kind
+):
+    state = _state(tmp_path)
+    state["context_budget_tokens"] = 32768
+    state["evaluation_report"] = EvaluationReport(
+        deterministic_issues=[
+            ValidationIssue(
+                code="path_not_found",
+                message="private exception body must not reach the model",
+                path="__tree__" + "x" * 300,
+                evidence_index=i,
+            )
+            for i in range(20)
+        ],
+        semantic_assessment=SemanticAssessment(
+            active_step_completed=True,
+            answers_objective=True,
+            evidence_supports_summary=True,
+            has_critical_omissions=False,
+            missing_evidence=[],
+            recommended_focus=[],
+            summary="Approved.",
+        ),
+    )
+    received = []
+    model = MagicMock(spec=BaseChatModel)
+    model.bind_tools.return_value = RunnableLambda(
+        lambda messages: received.append(messages) or AIMessage(content="Need source.")
+    )
+    model.with_structured_output.return_value = RunnableLambda(
+        lambda messages: received.append(messages) or state["candidate_result"]
+    )
+    node = (
+        create_agent_node(model)
+        if node_kind == "explorer"
+        else create_build_candidate_node(model)
+    )
+    update = node(state)
+    content = str(received[0][1].content)
+    assert "path_not_found" in content
+    assert "private exception body" not in content
+    feedback = next(
+        i
+        for i in update["active_context_pack"].items
+        if "validation_feedback_not_repository_evidence" in i.content
+    )
+    assert feedback.pinned and feedback.section is ContextSection.FEEDBACK
+    assert feedback.source.location is None
+    assert feedback.verification_status is VerificationStatus.UNVERIFIED
+    data = json.loads(feedback.content)
+    assert data["omitted_issues"] == 4
+    assert len(data["issues"]) == 16
+    assert len(data["issues"][0]["path"]) == 256
+    # A real fix clears the current report: no perpetual rejected labels.
+    state["evaluation_report"] = None
+    assert not any(
+        "validation_feedback" in i.content
+        for i in node(state)["active_context_pack"].items
+    )
+    state["evaluation_report"] = EvaluationReport(
+        deterministic_issues=[
+            ValidationIssue(code="path_not_found", message="invalid")
+        ],
+        semantic_assessment=_report().semantic_assessment,
+    )
+    state["context_budget_tokens"] = 100
+    with pytest.raises(ContextBudgetError):
+        node(state)
 
 
 @pytest.mark.parametrize(
