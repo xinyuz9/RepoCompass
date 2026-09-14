@@ -176,6 +176,46 @@ test("replays real demo evidence, navigates inspectors, and keeps a readable wor
     await expect(nav.getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+    if (lens === "trace") {
+      const search = page.getByRole("searchbox", { name: "Find node, event kind or #sequence" });
+      const rows = page.getByRole("list", { name: "Trace events" }).getByRole("listitem");
+      expect(await rows.count()).toBeLessThanOrEqual(50);
+      if (viewport.width <= 930) {
+        // Chromium animation transforms can add a fractional CSS pixel.
+        expect((await page.getByRole("list", { name: "Trace events" }).boundingBox())!.height).toBeLessThanOrEqual(Math.min(viewport.height / 2, 420) + 0.5);
+      }
+      await search.fill("#0");
+      await expect(rows).toHaveCount(1);
+      await expect(rows.getByText("#0", { exact: true })).toBeVisible();
+      await search.fill("no-matching-node");
+      await expect(page.getByRole("heading", { name: "No matching events" })).toBeVisible();
+      await search.fill("");
+      await page.getByRole("button", { name: "Follow latest" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("button", { name: "Follow latest" })).toHaveAttribute("aria-pressed", "true");
+      const listBounds = (await page.getByRole("list", { name: "Trace events" }).boundingBox())!;
+      const selectedBounds = (await page.getByRole("list", { name: "Trace events" }).locator('button[aria-pressed="true"]').boundingBox())!;
+      expect(selectedBounds.y).toBeGreaterThanOrEqual(listBounds.y - 1);
+      expect(selectedBounds.y + selectedBounds.height).toBeLessThanOrEqual(listBounds.y + listBounds.height + 1);
+      const payload = page.getByRole("region", { name: "Public event payload" });
+      await payload.focus();
+      await expect(payload).toBeFocused();
+      await expect(page.getByRole("link", { name: "Skip to workspace" })).toHaveCSS("opacity", "0");
+      if (await payload.evaluate((element) => element.scrollHeight > element.clientHeight)) {
+        await payload.press("End");
+        await expect.poll(() => payload.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+        await payload.press("Home");
+      }
+      await page.evaluate(axe.source);
+      const traceScan = await page.evaluate(async () => {
+        const browserAxe = (window as unknown as { axe: typeof import("axe-core") }).axe;
+        return browserAxe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] } });
+      });
+      expect(traceScan.violations.map(({ id, nodes }) => ({ id, targets: nodes.map((node) => node.target) }))).toEqual([]);
+    }
+    if (lens === "trace" || lens === "plan") {
+      await page.screenshot({ path: testInfo.outputPath(`${lens}.png`), fullPage: true, animations: "disabled" });
+    }
   }
   await page.reload();
   await expect(page.getByRole("heading", { name: "Cost analysis", exact: true })).toBeVisible();

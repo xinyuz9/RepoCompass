@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ContextLens } from "./ContextLens";
@@ -52,6 +52,59 @@ describe("investigation observability lenses", () => {
     expect(screen.getAllByText("explore_repository").length).toBeGreaterThan(0);
     expect(screen.getByText(/tool_call_count/)).toBeVisible();
     expect(screen.getByText(/evidence_added/)).toBeVisible();
+    expect(screen.getByRole("region", { name: "Public event payload" })).toHaveAttribute("tabindex", "0");
+  });
+
+  it("separates model approval from deterministic validation without rewriting history", () => {
+    const detail = {
+      thread: { plan: null }, plan_timeline: [],
+      evaluator_timeline: [{ run_id: "run-1", turn_number: 1, sequence: 8, report: {
+        passed: false, deterministic_issues: [{ code: "path_not_found", message: "Rejected path." }],
+        semantic_assessment: { active_step_completed: true, answers_objective: true, evidence_supports_summary: true, has_critical_omissions: false, missing_evidence: [], recommended_focus: [], summary: "Model approved." },
+      } }],
+    } as unknown as DashboardThreadDetail;
+    render(<PlanLens detail={detail} />);
+    expect(screen.getByText("✓ model step approval")).toBeVisible();
+    expect(screen.getByText("× source validation")).toBeVisible();
+    expect(screen.getByText(/Model approval alone does not establish step completion/)).toBeVisible();
+    expect(screen.queryByText("✓ step done")).not.toBeInTheDocument();
+  });
+
+  it("bounds trace DOM to 50 rows and preserves history while new events arrive", () => {
+    const makeRun = (count: number, id = "run-1") => ({
+      attempt: { ...attempt, run_id: id }, trace_availability: "available",
+      trace_events: Array.from({ length: count }, (_, sequence) => ({
+        run_id: id, sequence, kind: "node_completed", node: sequence % 2 ? "agent" : "evaluate_candidate", payload: { private_search_marker: "not searched" },
+      })),
+    } as unknown as DashboardRunDetail);
+    const view = render(<TraceLens run={makeRun(10000)} />);
+    const events = () => within(screen.getByRole("list", { name: "Trace events" }));
+    expect(events().getAllByRole("listitem")).toHaveLength(50);
+    expect(events().getByText("#9999")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "First page" }));
+    expect(events().getByText("#0")).toBeVisible();
+    fireEvent.click(events().getByText("#12"));
+    view.rerender(<TraceLens run={makeRun(10001)} />);
+    expect(events().getByText("#0")).toBeVisible();
+    expect(events().getByText("#12").closest("button")).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(events().getByText("#50")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Previous page" }));
+    expect(events().getByText("#0")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Follow latest" }));
+    expect(events().getByText("#10000")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+    const search = screen.getByRole("searchbox", { name: "Find node, event kind or #sequence" });
+    fireEvent.change(search, { target: { value: "#9876" } });
+    expect(events().getAllByRole("listitem")).toHaveLength(1);
+    expect(events().getByText("#9876")).toBeVisible();
+    fireEvent.change(search, { target: { value: "private_search_marker" } });
+    expect(screen.getByRole("heading", { name: "No matching events" })).toBeVisible();
+    expect(screen.queryByRole("list", { name: "Trace events" })).not.toBeInTheDocument();
+    // Changing the selected run clears search, filter, page and event identity.
+    view.rerender(<TraceLens run={makeRun(1, "run-2")} />);
+    expect(screen.getByRole("searchbox")).toHaveValue("");
+    expect(events().getByText("#0")).toBeVisible();
   });
 
   it("explains ContextPack budget selection and memory freshness", () => {

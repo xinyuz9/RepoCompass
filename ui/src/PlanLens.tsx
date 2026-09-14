@@ -46,6 +46,7 @@ export function PlanLens({ detail }: { detail: DashboardThreadDetail }) {
           title={selected ? `Turn ${selected.turn_number} · revision ${selected.revision_count}` : "Current plan"}
           detail={selected ? `sequence ${selected.sequence} · ${selected.node}` : "checkpoint snapshot"}
         />
+        {selected ? <p className="plan-frame-note">Historical checkpoint: active marks the step in focus at this frame, not a currently running task.</p> : null}
         {plan ? (
           <ol className="plan-step-list">
             {plan.steps.map((step, index) => (
@@ -90,13 +91,17 @@ function EvaluatorTimeline({ frames }: { frames: EvaluatorReplayFrame[] }) {
                 <div className="evaluation-checks">
                   <Check label="objective" value={assessment.answers_objective} />
                   <Check label="supported" value={assessment.evidence_supports_summary} />
-                  <Check label="step done" value={assessment.active_step_completed} />
+                  <Check label="model step approval" value={assessment.active_step_completed} />
+                  <Check label="source validation" value={frame.report.deterministic_issues.length === 0} />
                   <Check label="no omissions" value={!assessment.has_critical_omissions} />
                 </div>
                 {frame.report.deterministic_issues.length ? (
-                  <ul className="evaluation-notes">
-                    {frame.report.deterministic_issues.map((issue, index) => <li key={`${issue.code}:${index}`}><strong>{issue.code}</strong>{issue.message}</li>)}
-                  </ul>
+                  <>
+                    <p className="validation-gate-note">Source validation failed. Model approval alone does not establish step completion. Historical plan frames are preserved as recorded.</p>
+                    <ul className="evaluation-notes">
+                      {frame.report.deterministic_issues.map((issue, index) => <li key={`${issue.code}:${index}`}><strong>{issue.code}</strong>{issue.message}</li>)}
+                    </ul>
+                  </>
                 ) : null}
                 {assessment.missing_evidence.length ? (
                   <div className="focus-box"><span>Missing evidence</span>{assessment.missing_evidence.map((item) => <p key={item}>{item}</p>)}</div>
