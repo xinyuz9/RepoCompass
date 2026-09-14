@@ -61,6 +61,12 @@ def _route_after_initial_plan(state: RepoCompassState) -> str:
     return route
 
 
+def _route_after_revision(state: RepoCompassState) -> str:
+    if state.get("step_stop_reason") == "invalid_plan_revision":
+        return "rejected_revision"
+    return route_after_model_invocation(state)
+
+
 def create_agent_graph(
     models: WorkflowModels,
     *,
@@ -225,10 +231,11 @@ def create_agent_graph(
     builder.add_edge("advance_plan_step", "agent")
     builder.add_conditional_edges(
         "revise_plan",
-        route_after_model_invocation,
+        _route_after_revision,
         {
             "continue": "agent",
             "cost_budget_exhausted": "finalize_cost_budget_exhausted",
+            "rejected_revision": END,
         },
     )
     builder.add_edge("prepare_human_review", "review_final_candidate")

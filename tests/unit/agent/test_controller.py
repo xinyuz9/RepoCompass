@@ -400,8 +400,11 @@ def test_replanner_rejects_a_revision_that_changes_completed_steps() -> None:
         "max_plan_revisions": 2,
     }
 
-    with pytest.raises(ValueError, match="modified a completed"):
-        create_revise_plan_node(model)(state)
+    update = create_revise_plan_node(model)(state)
+    assert update["termination_status"] == "exhausted"
+    assert update["step_stop_reason"] == "invalid_plan_revision"
+    assert "investigation_plan" not in update
+    assert state["investigation_plan"] == current_plan
 
 
 def test_replanner_rejects_exhausted_revision_budget_before_model_call() -> None:

@@ -1275,7 +1275,18 @@ class ReplannerNodeUpdate(TypedDict):
     context_build_count: int
 
 
-ReplannerNode = Callable[[ReplannerInput], ReplannerNodeUpdate]
+class RejectedRevisionUpdate(TypedDict):
+    """A consumed model response rejected without changing the existing plan."""
+
+    termination_status: TerminationStatus
+    step_stop_reason: str
+    plan_revision_count: int
+    final_result: FinalResult
+    active_context_pack: ContextPack
+    context_build_count: int
+
+
+ReplannerNode = Callable[[ReplannerInput], ReplannerNodeUpdate | RejectedRevisionUpdate]
 
 
 def build_replanner_messages(
@@ -1335,7 +1346,7 @@ def create_revise_plan_node(
     def revise_plan_node(
         state: ReplannerInput,
         config: RunnableConfig | None = None,
-    ) -> ReplannerNodeUpdate:
+    ) -> ReplannerNodeUpdate | RejectedRevisionUpdate:
         """Generate a bounded revision and reset step-local execution state."""
 
         current_plan = state["investigation_plan"]
@@ -1370,19 +1381,43 @@ def create_revise_plan_node(
             selection_strategy=context_selection_strategy,
         )
         messages = build_replanner_messages(state, gathered_context=gathered)
-        response = _invoke_model(
-            recorder=recorder,
-            state=state,
-            config=config,
-            node_name="revise_plan",
-            role=ModelRole.REPLANNER,
-            model=model,
-            gathered_context=gathered,
-            messages=messages,
-            plan_step_id=current_plan.active_step.id,
-            invoke=structured_model.invoke,
-            parse=lambda value: _parse_plan_revision(value, current_plan),
-        )
+        try:
+            response = _invoke_model(
+                recorder=recorder,
+                state=state,
+                config=config,
+                node_name="revise_plan",
+                role=ModelRole.REPLANNER,
+                model=model,
+                gathered_context=gathered,
+                messages=messages,
+                plan_step_id=current_plan.active_step.id,
+                invoke=structured_model.invoke,
+                parse=lambda value: _parse_plan_revision(value, current_plan),
+            )
+        except PlanRevisionIntegrityError:
+            # The recorder has already retained the failed response and usage.
+            # Never accept the altered history or retry the same checkpoint
+            # implicitly. Preserve candidate/plan diagnostics, but do not publish
+            # their unvalidated claims as a usable final answer.
+            message = (
+                "Investigation stopped because the proposed plan revision added "
+                "or changed completed steps. The existing plan was preserved; "
+                "the candidate was not accepted. No automatic retry was made."
+            )
+            return {
+                "termination_status": "exhausted",
+                "step_stop_reason": "invalid_plan_revision",
+                "plan_revision_count": state["plan_revision_count"] + 1,
+                "final_result": FinalResult(
+                    relevant_files=[],
+                    evidence=[],
+                    summary=message,
+                    unresolved_questions=[state["objective"]],
+                ),
+                "active_context_pack": gathered.pack,
+                "context_build_count": _next_context_build_count(state),
+            }
         if isinstance(response, _ModelCostBudgetDenied):
             return _cost_budget_denied_update(
                 response.budget, stop_reason=response.stop_reason
@@ -1413,6 +1448,10 @@ def create_revise_plan_node(
     return revise_plan_node
 
 
+class PlanRevisionIntegrityError(ValueError):
+    """A well-formed model plan violated controller-owned completion history."""
+
+
 def _parse_plan_revision(
     value: object, current: InvestigationPlan
 ) -> InvestigationPlan:
@@ -1426,7 +1465,9 @@ def _parse_plan_revision(
     completed = [step for step in current.steps if step.status == "completed"]
     revised_completed = [step for step in revised.steps if step.status == "completed"]
     if revised_completed != completed:
-        raise ValueError("Replanner added or modified a completed plan step")
+        raise PlanRevisionIntegrityError(
+            "Replanner added or modified a completed plan step"
+        )
     return revised
 
 

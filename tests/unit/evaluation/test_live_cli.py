@@ -221,7 +221,10 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         live_cli.execute(args)
     path = args.output / "config.json"
     config = json.loads(path.read_text())
-    assert config["schema_version"] == 8
+    assert config["schema_version"] == 9
+    assert (
+        config["revision_rejection_policy"] == "terminal_exhausted_preserve_history_v1"
+    )
     assert config["repository_memory_policy"] == "accepted_static_python_v1"
     assert config["memory_store_schema_version"] == 4
     assert config["prewarm_validation"] == "accepted_nonempty_episode_v1"

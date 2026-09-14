@@ -320,8 +320,13 @@ def test_invalid_revision_is_recorded_as_failed_without_losing_usage(tmp_path):
             execution_mode=AttemptExecutionMode.START,
             state=state,
         )
-        with pytest.raises(ValueError, match="completed plan step"):
-            create_revise_plan_node(model, recorder=recorder)(state, config)
+        update = create_revise_plan_node(model, recorder=recorder)(state, config)
+        assert update["step_stop_reason"] == "invalid_plan_revision"
+        assert update["termination_status"] == "exhausted"
+        assert update["plan_revision_count"] == 1
+        assert update["final_result"].relevant_files == []
+        assert update["final_result"].evidence == []
+        assert "investigation_plan" not in update
         (invocation,) = store.list_model_invocations("run-1")
         assert invocation.status is ModelInvocationStatus.FAILED
         assert invocation.error_code == "invalid_model_response"
