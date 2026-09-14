@@ -4,7 +4,7 @@ import pytest
 from langgraph.types import StateSnapshot
 
 from repocompass.agent.conversation import build_public_conversation
-from repocompass.agent.lifecycle import TurnRecord
+from repocompass.agent.lifecycle import HumanReviewHistory, TurnRecord
 from repocompass.agent.result import FinalResult
 
 
@@ -70,6 +70,18 @@ def test_pending_turn_has_no_fabricated_answer():
     )
     assert page.turns[0].summary is None
     assert page.turns[0].termination_status is None
+    assert page.turns[0].review_history is None
+
+
+def test_new_empty_history_is_distinct_from_unavailable_legacy_history():
+    state = snapshot()
+    state.values["review_history"] = HumanReviewHistory()
+    page = build_public_conversation(thread_id="thread-1", snapshot=state, limit=2)
+    assert page.turns[0].review_history is None
+    assert page.turns[1].review_history == HumanReviewHistory()
+    state.values["review_history"] = {"records": []}
+    with pytest.raises(ValueError, match="review history"):
+        build_public_conversation(thread_id="thread-1", snapshot=state)
 
 
 def test_long_public_text_is_bounded_and_explicitly_marked():

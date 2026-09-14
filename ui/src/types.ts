@@ -658,6 +658,22 @@ export interface DashboardMemoryDeleteResult {
   tombstone: MemoryTombstone;
   idempotent_replay: boolean;
 }
+export interface HumanReviewHistory {
+  records: {
+    review_number: number;
+    request_digest: string;
+    candidate_summary: string;
+    evaluation_passed: boolean;
+    deterministic_issue_count: number;
+    allowed_actions: ("approve" | "revise" | "cancel")[];
+    action: "approve" | "revise" | "cancel" | null;
+    feedback: string | null;
+    text_truncated: boolean;
+  }[];
+  omitted_count: number;
+  prior_history_unavailable: boolean;
+}
+
 export interface PublicConversationPage {
   schema_version: 1;
   thread_id: string;
@@ -668,6 +684,7 @@ export interface PublicConversationPage {
     summary: string | null;
     termination_status: "accepted" | "exhausted" | "cancelled" | null;
     text_truncated: boolean;
+    review_history?: HumanReviewHistory | null;
   }[];
   next_before_turn: number | null;
   provenance: "checkpoint_public_turns";

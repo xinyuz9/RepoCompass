@@ -181,6 +181,9 @@ export function HumanReviewPanel({
               </label>
             ) : null}
             {!commandLocked ? (
+              <p className="history-boundary">Review feedback is saved in local conversation history and sent to the agent for revision. Do not include credentials.</p>
+            ) : null}
+            {!commandLocked ? (
               <button
                 type="button"
                 className={`review-submit review-submit--${action}`}

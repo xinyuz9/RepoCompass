@@ -158,6 +158,63 @@ class HumanReviewRequest(_LifecycleModel):
         return self
 
 
+MAX_REVIEW_HISTORY = 32
+MAX_REVIEW_TEXT = 4_096
+
+
+class HumanReviewRecord(_LifecycleModel):
+    """Compact public exchange, not an interrupt token or model transcript."""
+
+    review_number: int = Field(ge=1)
+    request_digest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    candidate_summary: str = Field(max_length=MAX_REVIEW_TEXT)
+    evaluation_passed: bool
+    deterministic_issue_count: int = Field(ge=0)
+    allowed_actions: tuple[HumanDecisionAction, ...]
+    action: HumanDecisionAction | None = None
+    feedback: str | None = Field(default=None, max_length=MAX_REVIEW_TEXT)
+    text_truncated: bool = False
+
+    @model_validator(mode="after")
+    def validate_exchange(self):
+        actions = set(self.allowed_actions)
+        if not {
+            HumanDecisionAction.APPROVE,
+            HumanDecisionAction.CANCEL,
+        } <= actions or self.allowed_actions != tuple(
+            a for a in HumanDecisionAction if a in actions
+        ):
+            raise ValueError("invalid recorded review actions")
+        if self.action is None and self.feedback is not None:
+            raise ValueError("pending review cannot contain feedback")
+        if self.action is not None and self.action not in actions:
+            raise ValueError("recorded decision was not allowed")
+        if self.action is HumanDecisionAction.REVISE and not self.feedback:
+            raise ValueError("recorded revision requires feedback")
+        return self
+
+
+class HumanReviewHistory(_LifecycleModel):
+    """Bounded tail with explicit loss/legacy coverage, local to one turn."""
+
+    records: tuple[HumanReviewRecord, ...] = Field(
+        default=(), max_length=MAX_REVIEW_HISTORY
+    )
+    omitted_count: int = Field(default=0, ge=0)
+    prior_history_unavailable: bool = False
+
+    @model_validator(mode="after")
+    def validate_history(self):
+        if self.omitted_count and len(self.records) != MAX_REVIEW_HISTORY:
+            raise ValueError("truncated review history must retain its bounded tail")
+        for index, record in enumerate(self.records, self.omitted_count + 1):
+            if record.review_number != index:
+                raise ValueError("review history is not contiguous")
+        if any(record.action is None for record in self.records[:-1]):
+            raise ValueError("only the last review can await a decision")
+        return self
+
+
 class TurnRecord(_LifecycleModel):
     """Compact terminal record retained when a thread starts another turn."""
 
@@ -171,6 +228,7 @@ class TurnRecord(_LifecycleModel):
     )
     final_result: FinalResult
     termination_status: TerminationStatus
+    review_history: HumanReviewHistory | None = None
 
 
 def allowed_human_decision_actions(

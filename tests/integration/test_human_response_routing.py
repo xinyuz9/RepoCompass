@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi.testclient import TestClient
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
@@ -20,9 +21,13 @@ from repocompass.agent.lifecycle import (
 )
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.result import FinalResult
-from repocompass.agent.runner import AgentRunner, RunRequest
+from repocompass.agent.runner import AgentRunner, RunRequest, ResumeRequest
 from repocompass.agent.trace import TraceEventKind
+from repocompass.dashboard.api import create_dashboard_app
+from repocompass.dashboard.service import DashboardQueryService
+from repocompass.dashboard.trace_store import JsonlTraceStore
 from repocompass.models import WorkflowModels
+from repocompass.storage.raw_store import open_raw_run_store
 from tests.model_doubles import (
     assert_final_result_core,
     candidate_from_final_result,
@@ -128,6 +133,10 @@ def test_approve_finalizes_without_model_calls_and_rejects_replay(
 
         with pytest.raises(ValueError, match="not awaiting a Human response"):
             runner.respond(response)
+        public = runner.inspect_conversation(ResumeRequest(thread_id=outcome.thread_id))
+        records = public.turns[0].review_history.records
+        assert len(records) == 1
+        assert records[0].action is HumanDecisionAction.APPROVE
 
     assert outcome.execution_status is ExecutionStatus.COMPLETED
     assert outcome.termination_status == "accepted"
@@ -228,6 +237,11 @@ def test_cancel_publishes_best_effort_result_without_model_calls(
     )
     assert snapshot.values["turn_number"] == 2
     assert snapshot.values["turn_history"][0].termination_status == "cancelled"
+    archived = snapshot.values["turn_history"][0].review_history
+    assert archived.records[0].action is HumanDecisionAction.CANCEL
+    assert not archived.prior_history_unavailable
+    assert len(snapshot.values["review_history"].records) == 1
+    assert snapshot.values["review_history"].records[0].action is None
 
 
 def test_revise_passes_feedback_to_replanner_and_pauses_at_new_review(
@@ -331,3 +345,102 @@ def test_revise_passes_feedback_to_replanner_and_pauses_at_new_review(
         if event.node == "review_final_candidate"
     )
     assert review_event.payload["human_feedback_provided"] is True
+
+    with open_sqlite_checkpointer(database_path) as checkpointer:
+        reader = AgentRunner(
+            _models_that_must_not_run(second_result), checkpointer=checkpointer
+        )
+        request = ResumeRequest(thread_id=outcome.thread_id)
+        before = reader.inspect_conversation(request)
+        reader.resume(
+            request
+        )  # Pending resume must neither invoke models nor append a review.
+        assert reader.inspect_conversation(request) == before
+        records = before.turns[0].review_history.records
+        assert [r.action for r in records] == [HumanDecisionAction.REVISE, None]
+        assert records[0].feedback == response.decision.feedback
+        assert records[0].candidate_summary == first_result.summary
+        assert records[1].candidate_summary == second_result.summary
+        assert records[0].request_digest != records[1].request_digest
+        approved = reader.respond(
+            _response(
+                thread_id=outcome.thread_id,
+                interrupt_id=outcome.interrupt_id,
+                action=HumanDecisionAction.APPROVE,
+            )
+        )
+        assert approved.termination_status == "accepted"
+
+    with open_sqlite_checkpointer(database_path) as checkpointer:
+        runner = AgentRunner(_models_for(second_result), checkpointer=checkpointer)
+        runner.continue_thread(
+            ContinueRequest(thread_id=outcome.thread_id, prompt="Next question")
+        )
+        page = runner.inspect_conversation(request)
+        assert len(page.turns) == 2
+        assert [r.action for r in page.turns[0].review_history.records] == [
+            HumanDecisionAction.REVISE,
+            HumanDecisionAction.APPROVE,
+        ]
+        assert (
+            page.turns[0].review_history.records[0].feedback
+            == response.decision.feedback
+        )
+        assert len(page.turns[1].review_history.records) == 1
+        assert page.turns[1].review_history.records[0].review_number == 1
+        assert page.turns[1].review_history.records[0].action is None
+
+
+def test_public_review_http_query_survives_restart_without_model_calls(tmp_path: Path):
+    (tmp_path / "first.py").write_text("first = True\n", encoding="utf-8")
+    result = _result("first.py", "Public candidate summary")
+    database = tmp_path / "checkpoints.sqlite"
+    raw_database = tmp_path / "raw.sqlite"
+    feedback = "Check the boundary <script>not executable</script>"
+    with (
+        open_sqlite_checkpointer(database) as checkpointer,
+        open_raw_run_store(raw_database) as store,
+    ):
+        runner = AgentRunner(
+            _models_for(result), checkpointer=checkpointer, raw_run_store=store
+        )
+        pending = runner.run(_run_request(tmp_path))
+        runner.respond(
+            _response(
+                thread_id=pending.thread_id,
+                interrupt_id=pending.interrupt_id,
+                action=HumanDecisionAction.CANCEL,
+                feedback=feedback,
+            )
+        )
+    with (
+        open_sqlite_checkpointer(database) as checkpointer,
+        open_raw_run_store(raw_database) as store,
+    ):
+        reader = AgentRunner(
+            _models_that_must_not_run(result), checkpointer=checkpointer
+        )
+        service = DashboardQueryService(
+            reader,
+            raw_run_store=store,
+            trace_store=JsonlTraceStore(tmp_path / "traces"),
+            repository_root=tmp_path,
+        )
+        with TestClient(create_dashboard_app(service)) as client:
+            response = client.get(
+                f"/api/v1/threads/{pending.thread_id}/conversation?limit=1"
+            )
+            assert response.status_code == 200
+            turn = response.json()["turns"][0]
+            assert turn["termination_status"] == "cancelled"
+            assert turn["review_history"]["records"][0]["feedback"] == feedback
+            assert turn["review_history"]["records"][0]["action"] == "cancel"
+            assert turn["review_history"]["prior_history_unavailable"] is False
+            for excluded in [
+                "messages",
+                "human_review_payload",
+                "evaluation_report",
+                "Enough evidence",
+            ]:
+                assert excluded not in response.text
+            assert client.get("/api/v1/threads/missing/conversation").status_code == 404

@@ -52,6 +52,7 @@ from repocompass.agent.invocation import (
     describe_model,
 )
 from repocompass.agent.lifecycle import (
+    HumanReviewHistory,
     HumanReviewInterruptPayload,
     HumanReviewPolicy,
     HumanReviewRequest,
@@ -69,6 +70,10 @@ from repocompass.agent.prompts import (
     REPLANNING_SYSTEM_PROMPT,
 )
 from repocompass.agent.result import FinalResult
+from repocompass.agent.review_history import (
+    record_review_request,
+    record_review_decision,
+)
 from repocompass.agent.routing import (
     ATTEMPT_COST_BUDGET_STOP_REASON,
     ControllerAction,
@@ -1579,6 +1584,7 @@ class PrepareHumanReviewInput(TypedDict):
     """State required to materialize a checkpoint-safe review request."""
 
     human_review_policy: HumanReviewPolicy
+    review_history: NotRequired[HumanReviewHistory | None]
     turn_number: int
     candidate_result: CandidateResult | None
     evaluation_report: EvaluationReport | None
@@ -1587,6 +1593,7 @@ class PrepareHumanReviewInput(TypedDict):
 
 
 class PrepareHumanReviewUpdate(TypedDict):
+    review_history: NotRequired[HumanReviewHistory]
     human_review_payload: HumanReviewInterruptPayload | None
     human_decision_action: None
     human_feedback: None
@@ -1625,6 +1632,7 @@ def prepare_human_review(
     )
     return {
         "human_review_payload": encode_human_review_interrupt(request),
+        "review_history": record_review_request(state.get("review_history"), request),
         "human_decision_action": None,
         "human_feedback": None,
     }
@@ -1634,10 +1642,12 @@ class HumanReviewNodeInput(TypedDict):
     """State required by the optional final-candidate review gate."""
 
     human_review_policy: HumanReviewPolicy
+    review_history: NotRequired[HumanReviewHistory | None]
     human_review_payload: HumanReviewInterruptPayload | None
 
 
 class HumanReviewNodeUpdate(TypedDict):
+    review_history: NotRequired[HumanReviewHistory]
     human_review_policy: HumanReviewPolicy
     human_decision_action: HumanDecisionActionValue
     human_feedback: str | None
@@ -1672,6 +1682,11 @@ def review_final_candidate(
         "human_review_policy": policy,
         "human_decision_action": decision.action.value,
         "human_feedback": decision.feedback,
+        "review_history": record_review_decision(
+            state.get("review_history"),
+            review_request,
+            decision,
+        ),
     }
 
 

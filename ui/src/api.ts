@@ -20,9 +20,9 @@ import type {
 
 const API_ROOT = "/api/v1";
 
-export function getConversation(threadId: string, beforeTurn: number, signal?: AbortSignal) {
+export function getConversation(threadId: string, beforeTurn: number, signal?: AbortSignal, limit = 10) {
   return getJson<PublicConversationPage>(
-    "/threads/" + encodeURIComponent(threadId) + "/conversation?before_turn=" + beforeTurn + "&limit=10",
+    "/threads/" + encodeURIComponent(threadId) + "/conversation?before_turn=" + beforeTurn + "&limit=" + limit,
     signal,
   );
 }

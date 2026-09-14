@@ -322,6 +322,10 @@ def _normalize_update(update: Mapping[str, object]) -> dict[str, JsonValue]:
         if key == "human_feedback":
             normalized["human_feedback_provided"] = value is not None
             continue
+        if key == "review_history":
+            # Public conversation owns this text. Never duplicate human feedback
+            # into model/node trace payloads or infer it from model messages.
+            continue
         if key == "active_context_pack":
             if value is None:
                 normalized[key] = None

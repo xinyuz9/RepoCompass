@@ -87,6 +87,7 @@ def test_lifecycle_contract_fields_are_minimal() -> None:
         "objective",
         "final_result",
         "termination_status",
+        "review_history",
     }
 
 

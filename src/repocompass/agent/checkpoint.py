@@ -52,7 +52,13 @@ from repocompass.agent.evaluation import (
     SemanticAssessment,
     ValidationIssue,
 )
-from repocompass.agent.lifecycle import HumanReviewPolicy, TurnRecord
+from repocompass.agent.lifecycle import (
+    HumanDecisionAction,
+    HumanReviewHistory,
+    HumanReviewRecord,
+    HumanReviewPolicy,
+    TurnRecord,
+)
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.result import FinalResult
 from repocompass.agent.structural_artifacts import (
@@ -142,6 +148,8 @@ _CHECKPOINT_MODEL_TYPES: tuple[type[BaseModel], ...] = (
     PlanStep,
     FinalResult,
     TurnRecord,
+    HumanReviewRecord,
+    HumanReviewHistory,
     ToolDescriptor,
     ToolCallRequest,
     ToolCallFingerprint,
@@ -167,6 +175,7 @@ _CHECKPOINT_MODEL_TYPES: tuple[type[BaseModel], ...] = (
 _CHECKPOINT_ALLOWED_TYPES: tuple[type[object], ...] = (
     *_CHECKPOINT_MODEL_TYPES,
     HumanReviewPolicy,
+    HumanDecisionAction,
     ToolCapability,
     ToolSideEffect,
     ToolRiskLevel,

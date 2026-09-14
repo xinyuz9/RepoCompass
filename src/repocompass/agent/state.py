@@ -21,9 +21,11 @@ from repocompass.agent.cost import (
 from repocompass.agent.evaluation import EvaluationReport
 from repocompass.agent.lifecycle import (
     HumanReviewInterruptPayload,
+    HumanReviewHistory,
     HumanReviewPolicy,
     TurnRecord,
 )
+from repocompass.agent.review_history import validated_review_history
 from repocompass.agent.planning import InvestigationPlan
 from repocompass.agent.result import FinalResult, revalidate_final_result
 from repocompass.agent.routing import (
@@ -47,6 +49,7 @@ class RepoCompassState(MessagesState):
     objective: str
     turn_number: int
     turn_history: list[TurnRecord]
+    review_history: HumanReviewHistory | None
     human_review_policy: HumanReviewPolicy
     human_review_payload: HumanReviewInterruptPayload | None
     human_decision_action: HumanDecisionActionValue | None
@@ -95,6 +98,7 @@ class ContinuationStateUpdate(TypedDict):
     objective: str
     turn_number: int
     turn_history: list[TurnRecord]
+    review_history: HumanReviewHistory
     human_review_policy: HumanReviewPolicy
     human_review_payload: None
     human_decision_action: None
@@ -223,6 +227,7 @@ def create_initial_state(
         "objective": objective,
         "turn_number": 1,
         "turn_history": [],
+        "review_history": HumanReviewHistory(),
         "human_review_policy": human_review_policy,
         "human_review_payload": None,
         "human_decision_action": None,
@@ -343,6 +348,7 @@ def create_continuation_update(
         objective=previous_objective,
         final_result=final_result,
         termination_status=cast(TerminationStatus, termination_status),
+        review_history=validated_review_history(state.get("review_history")),
     )
     return {
         "messages": [HumanMessage(content=objective)],
@@ -350,6 +356,7 @@ def create_continuation_update(
         "objective": objective,
         "turn_number": turn_number + 1,
         "turn_history": [*turn_history, archived_turn],
+        "review_history": HumanReviewHistory(),
         "human_review_policy": human_review_policy,
         "human_review_payload": None,
         "human_decision_action": None,

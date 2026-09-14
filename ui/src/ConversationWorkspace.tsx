@@ -25,6 +25,7 @@ import {
 } from "./api";
 import { HumanReviewPanel } from "./HumanReviewPanel";
 import { ConversationHistory } from "./ConversationHistory";
+import { CurrentReviewHistory } from "./ReviewHistory";
 import {
   forgetLifecycleRequest,
   rememberLifecycleRequest,
@@ -327,6 +328,10 @@ function ThreadConversation({
             <p>{thread.objective}</p>
           </div>
         </article>
+
+        <CurrentReviewHistory threadId={thread.thread_id} turnNumber={thread.turn_number}
+          repositoryId={system.repository_id} commitSha={system.commit_sha}
+          checkpointKey={`${latestAttempt?.run_id}:${latestAttempt?.status}:${thread.interrupt_id}`} />
 
         <article className="chat-message chat-message--agent">
           <span className="chat-avatar"><Bot size={17} /></span>

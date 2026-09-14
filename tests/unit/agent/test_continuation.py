@@ -10,7 +10,7 @@ from langchain_core.runnables import RunnableLambda
 from langgraph.checkpoint.memory import InMemorySaver
 
 from repocompass.agent.graph import create_agent_graph
-from repocompass.agent.lifecycle import ContinueRequest, TurnRecord
+from repocompass.agent.lifecycle import ContinueRequest, HumanReviewHistory, TurnRecord
 from repocompass.agent.result import FinalResult, revalidate_final_result
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.state import (
@@ -106,6 +106,7 @@ def test_create_continuation_update_archives_and_resets_turn_state(
             objective="First objective",
             final_result=first_result,
             termination_status="accepted",
+            review_history=HumanReviewHistory(),
         )
     ]
     assert state["turn_history"] == []
@@ -147,6 +148,7 @@ def test_create_continuation_update_accepts_cancelled_turn(tmp_path: Path) -> No
             objective="Cancelled objective",
             final_result=result,
             termination_status="cancelled",
+            review_history=HumanReviewHistory(),
         )
     ]
 

@@ -2,6 +2,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Bot, History, UserRound } from "lucide-react";
 import { useState } from "react";
 import { getConversation } from "./api";
+import { ReviewHistory } from "./ReviewHistory";
 
 export function ConversationHistory({
   threadId, turnNumber, repositoryId, commitSha,
@@ -28,7 +29,7 @@ export function ConversationHistory({
       </button>
       {opened ? (
         <div className="history-content">
-          <p className="history-boundary">Saved goals and final summaries only. Inspectors below describe the current turn, not these earlier answers.</p>
+          <p className="history-boundary">Saved goals, human reviews and final summaries. Inspectors below describe the current turn, not these earlier answers.</p>
           {history.isPending ? <p role="status">Loading saved conversation…</p> : null}
           {history.isError ? (
             <div role="alert">
@@ -51,6 +52,7 @@ export function ConversationHistory({
                 <span className="chat-avatar"><UserRound size={16} /></span>
                 <div><header><strong>You</strong><small>turn {turn.turn_number}</small></header><p>{turn.objective}</p></div>
               </article>
+              <ReviewHistory history={turn.review_history} />
               {turn.summary !== null ? (
                 <article className="chat-message chat-message--agent">
                   <span className="chat-avatar"><Bot size={17} /></span>

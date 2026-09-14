@@ -9,7 +9,8 @@ from langgraph.types import StateSnapshot
 from pydantic import ConfigDict, Field, model_validator
 
 from repocompass.agent.domain_model import CheckpointSafeModel
-from repocompass.agent.lifecycle import TurnRecord
+from repocompass.agent.lifecycle import HumanReviewHistory, TurnRecord
+from repocompass.agent.review_history import validated_review_history
 from repocompass.agent.routing import TerminationStatus
 from repocompass.agent.thread_view import build_thread_investigation_view
 from repocompass.tools.contracts import IDENTIFIER_PATTERN
@@ -25,6 +26,7 @@ class PublicConversationTurn(CheckpointSafeModel):
     summary: str | None = Field(default=None, max_length=MAX_PUBLIC_TURN_TEXT)
     termination_status: TerminationStatus | None = None
     text_truncated: bool = False
+    review_history: HumanReviewHistory | None = None
 
     @model_validator(mode="after")
     def reconcile_terminal_answer(self):
@@ -88,17 +90,20 @@ def build_public_conversation(
             objective = view.objective
             summary = None if view.final_result is None else view.final_result.summary
             status = view.termination_status
+            review_history = validated_review_history(values.get("review_history"))
         else:
             record = history[number - 1]
             objective = record.objective
             summary = record.final_result.summary
             status = record.termination_status
+            review_history = validated_review_history(record.review_history)
         turns.append(
             PublicConversationTurn(
                 turn_number=number,
                 objective=objective[:MAX_PUBLIC_TURN_TEXT],
                 summary=None if summary is None else summary[:MAX_PUBLIC_TURN_TEXT],
                 termination_status=status,
+                review_history=review_history,
                 text_truncated=(
                     len(objective) > MAX_PUBLIC_TURN_TEXT
                     or (summary is not None and len(summary) > MAX_PUBLIC_TURN_TEXT)

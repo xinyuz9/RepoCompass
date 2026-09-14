@@ -430,3 +430,13 @@ select:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
 .history-turn { border-bottom: 1px solid var(--line); margin: 16px 0; padding: 8px 0; }
 .history-turn p { overflow-wrap: anywhere; white-space: pre-wrap; }
 .history-turn .chat-message { margin: 12px 0; }
+
+.review-history { min-width: 0; margin: 12px 0; }
+.review-exchange { border: 1px solid var(--line); border-radius: 12px; margin: 10px 0; overflow: hidden; }
+.review-exchange summary { cursor: pointer; padding: 14px 16px; color: var(--text); font-size: 13px; overflow-wrap: anywhere; }
+.review-exchange summary span { margin-right: 14px; color: var(--text-soft); }
+.review-exchange summary strong { font-weight: 600; }
+.review-exchange summary:focus-visible { outline: 2px solid var(--teal); outline-offset: -3px; }
+.review-exchange__body { border-top: 1px solid var(--line); padding: 10px 16px; }
+.review-exchange__body p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; font-size: 13px; }
+.review-exchange__feedback { border-left: 2px solid var(--teal); padding: 8px 14px; margin: 14px 0; font-size: 13px; }

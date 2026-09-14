@@ -1,6 +1,54 @@
 import { expect, test } from "@playwright/test";
 import axe from "axe-core";
 
+test("scripted review history is keyboard-readable, bounded and read-only", async ({ page }, testInfo) => {
+  // UI contract fixture only; actual SQLite/HTTP lifecycle is covered in Python integration tests.
+  const writes: string[] = [];
+  page.on("request", (request) => {
+    if (!["GET", "HEAD"].includes(request.method())) writes.push(request.url());
+  });
+  await page.route("**/conversation?*", async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    const turn = payload.turns.at(-1);
+    turn.review_history = {
+      omitted_count: 0, prior_history_unavailable: false,
+      records: ["revise", "approve"].map((action, index) => ({
+        review_number: index + 1, request_digest: "a".repeat(64),
+        candidate_summary: index === 0 ? "Verification precedes proposal application." : "Verification and regression evidence now support the result.",
+        evaluation_passed: true, deterministic_issue_count: 0,
+        allowed_actions: ["approve", "revise", "cancel"], action,
+        feedback: index === 0 ? "Please trace the rejected-proposal branch and include its regression test. <script>not executable</script>" : null,
+        text_truncated: false,
+      })),
+    };
+    await route.fulfill({ response, json: payload });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Review history", exact: true }).click();
+  const reviews = page.getByRole("region", { name: "Current turn review history" });
+  await expect(reviews.getByText("Revision requested", { exact: true })).toBeVisible();
+  const summary = reviews.locator("summary").first();
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(reviews.getByText(/Please trace the rejected-proposal branch/)).toBeVisible();
+  expect(await reviews.locator("script").count()).toBe(0);
+  await reviews.locator("summary").nth(1).click();
+  await expect(reviews.getByText("Verification and regression evidence now support the result.")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await page.evaluate(axe.source);
+  const scan = await page.evaluate(async () => {
+    const browserAxe = (window as unknown as { axe: typeof import("axe-core") }).axe;
+    return browserAxe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] } });
+  });
+  expect(scan.violations.map(({ id }) => id)).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("review-history.png"), fullPage: true, animations: "disabled" });
+  await page.reload();
+  await page.getByRole("button", { name: "Review history", exact: true }).click();
+  await expect(reviews.getByText("Approved", { exact: true })).toBeVisible();
+  expect(writes).toEqual([]);
+});
+
 test("reads public history from real continued checkpoints without mutations", async ({ page }, testInfo) => {
   const writes: string[] = [];
   page.on("request", (request) => {
@@ -24,6 +72,8 @@ test("reads public history from real continued checkpoints without mutations", a
   await page.getByRole("button", { name: "Earlier turns · 1" }).click();
   await expect(turn).toBeVisible();
   expect(writes).toEqual([]);
+  await page.getByRole("button", { name: "Review history", exact: true }).click();
+  await expect(page.getByText(/Automatic completion is not human approval/).last()).toBeVisible();
 });
 
 test("keeps persisted recovery inert in the real read-only demo", async ({ page, request }) => {
