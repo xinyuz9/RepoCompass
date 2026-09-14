@@ -186,6 +186,12 @@ class RawRunRecorder:
             self._wall_clock_ms(),
             name="wall clock",
         )
+        attempt = self._store.get_attempt(run_id)
+        if attempt is not None:
+            # Wall clocks can move backwards (for example after a WSL clock
+            # correction). Preserve ordering without changing monotonic latency
+            # measurements or relaxing the raw-store contract.
+            finished_at_ms = max(finished_at_ms, attempt.started_at_ms)
         return self._store.finish_attempt(
             run_id,
             status=status,

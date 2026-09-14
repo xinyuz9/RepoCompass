@@ -79,8 +79,10 @@ def _messages() -> list[AnyMessage]:
     ]
 
 
+@pytest.mark.parametrize("finish_clock", [1_200, 900])
 def test_successful_invocation_persists_context_and_exact_io(
     tmp_path: Path,
+    finish_clock: int,
 ) -> None:
     database = tmp_path / "raw.sqlite"
     gathered = _gathered()
@@ -99,7 +101,7 @@ def test_successful_invocation_persists_context_and_exact_io(
     with open_raw_run_store(database) as store:
         recorder = RawRunRecorder(
             store,
-            wall_clock_ms=_next([1_000, 1_200]),
+            wall_clock_ms=_next([1_000, finish_clock]),
             monotonic_ns=_next([10_000_000, 35_000_000]),
         )
         recorder.start_attempt(
@@ -128,7 +130,7 @@ def test_successful_invocation_persists_context_and_exact_io(
         assert attempt is not None
         assert attempt.status is AttemptStatus.COMPLETED
         assert attempt.started_at_ms == 1_000
-        assert attempt.finished_at_ms == 1_200
+        assert attempt.finished_at_ms == max(1_000, finish_clock)
         packs = store.list_context_packs("run-1")
         assert packs == (gathered.pack,)
         invocations = store.list_model_invocations("run-1")
