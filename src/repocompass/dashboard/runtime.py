@@ -19,6 +19,8 @@ from repocompass.agent.runner import AgentRunner
 from repocompass.agent.trace_sink import JsonlTraceSink
 from repocompass.dashboard.api import create_dashboard_app
 from repocompass.dashboard.commands import DashboardCommandService
+from repocompass.dashboard.cancellation import DashboardCancellationService
+from repocompass.storage.cancellation import CancellationError, open_cancellation_store
 from repocompass.dashboard.demo import DashboardDemoError, create_dashboard_demo
 from repocompass.dashboard.service import DashboardQueryService
 from repocompass.dashboard.trace_store import JsonlTraceStore
@@ -36,6 +38,7 @@ DEFAULT_DASHBOARD_CHECKPOINT_DATABASE = Path(".repocompass/checkpoints.sqlite")
 DEFAULT_DASHBOARD_RAW_STORE_DATABASE = Path(".repocompass/raw_runs.sqlite")
 DEFAULT_DASHBOARD_MEMORY_DATABASE = Path(".repocompass/memory.sqlite")
 DEFAULT_DASHBOARD_OPERATION_DATABASE = Path(".repocompass/service_operations.sqlite")
+DEFAULT_DASHBOARD_CANCELLATION_DATABASE = Path(".repocompass/cancellations.sqlite")
 DEFAULT_DASHBOARD_TRACE_DIRECTORY = Path(".repocompass/traces")
 DEFAULT_DASHBOARD_HOST = "127.0.0.1"
 DEFAULT_DASHBOARD_PORT = 8766
@@ -47,6 +50,7 @@ _DEMO_CONFLICT_OPTIONS = frozenset(
         "--raw-store-db",
         "--memory-db",
         "--operation-db",
+        "--cancellation-db",
         "--trace-dir",
         "--pricing-file",
         "--enable-lifecycle-mutations",
@@ -136,6 +140,12 @@ def create_parser() -> argparse.ArgumentParser:
         "--trace-dir",
         type=Path,
         default=DEFAULT_DASHBOARD_TRACE_DIRECTORY,
+    )
+    parser.add_argument(
+        "--cancellation-db",
+        type=Path,
+        default=DEFAULT_DASHBOARD_CANCELLATION_DATABASE,
+        help="independent durable control ledger for lifecycle worker cancellation",
     )
     parser.add_argument("--pricing-file", type=Path)
     parser.add_argument(
@@ -234,12 +244,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if arguments.enable_lifecycle_mutations
                 else create_inspection_models()
             )
+            cancellation_store = (
+                stack.enter_context(open_cancellation_store(arguments.cancellation_db))
+                if arguments.enable_lifecycle_mutations
+                else None
+            )
             runner = AgentRunner(
                 models,
                 checkpointer=checkpointer,
                 raw_run_store=raw_run_store,
                 memory_store=memory_store,
                 pricing_table=pricing_table,
+                cancellation_store=cancellation_store,
             )
             query_service = DashboardQueryService(
                 runner,
@@ -249,6 +265,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 memory_store=memory_store,
                 pricing_table=pricing_table,
                 lifecycle_mutations_enabled=arguments.enable_lifecycle_mutations,
+                cancellation_enabled=cancellation_store is not None,
                 memory_mutations_enabled=arguments.enable_memory_mutations,
                 demo_mode=arguments.demo,
             )
@@ -276,7 +293,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 else None
             )
-            app = create_dashboard_app(query_service, commands=command_service)
+            app = create_dashboard_app(
+                query_service,
+                commands=command_service,
+                cancellation=(
+                    None
+                    if cancellation_store is None
+                    else DashboardCancellationService(
+                        cancellation_store,
+                        raw_run_store,
+                        repository_path,
+                    )
+                ),
+            )
             uvicorn.run(
                 app,
                 host=arguments.host,
@@ -291,6 +320,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 timeout_keep_alive=5,
             )
     except (
+        CancellationError,
         DashboardDemoError,
         MemoryStoreError,
         OSError,

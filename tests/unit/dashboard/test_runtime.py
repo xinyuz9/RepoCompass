@@ -36,10 +36,12 @@ def test_runtime_serves_loopback_read_api_without_provider_credentials(
         assert response.status_code == 200
         assert response.json()["pricing_configured"] is False
         assert response.json()["lifecycle_mutations_enabled"] is False
+        assert response.json()["cancellation_enabled"] is False
         assert response.json()["memory_mutations_enabled"] is False
         assert threads.json()["threads"] == []
         assert "/api/v1/threads/{thread_id}/responses" not in document["paths"]
         assert "/api/v1/memory/{memory_id}" not in document["paths"]
+        assert "/api/v1/runs/{run_id}/cancellation" not in document["paths"]
 
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
@@ -76,6 +78,7 @@ def test_runtime_memory_mutation_is_independent_and_explicit(
     repository.mkdir()
     state = tmp_path / "state"
     operation_database = state / "operations.sqlite"
+    cancellation_database = state / "cancellations.sqlite"
 
     def forbid_workflow_models():
         raise AssertionError("memory-only runtime must not load provider models")
@@ -86,8 +89,10 @@ def test_runtime_memory_mutation_is_independent_and_explicit(
         system = client.get("/api/v1/system").json()
         document = client.get("/api/v1/openapi.json").json()
         assert system["lifecycle_mutations_enabled"] is False
+        assert system["cancellation_enabled"] is False
         assert system["memory_mutations_enabled"] is True
         assert "/api/v1/threads/{thread_id}/responses" not in document["paths"]
+        assert "/api/v1/runs/{run_id}/cancellation" not in document["paths"]
         assert set(document["paths"]["/api/v1/memory/{memory_id}"]) == {"delete"}
 
     monkeypatch.setattr(runtime, "create_workflow_models", forbid_workflow_models)
@@ -105,6 +110,8 @@ def test_runtime_memory_mutation_is_independent_and_explicit(
             str(state / "memory.sqlite"),
             "--operation-db",
             str(operation_database),
+            "--cancellation-db",
+            str(cancellation_database),
             "--trace-dir",
             str(state / "traces"),
             "--enable-memory-mutations",
@@ -113,6 +120,7 @@ def test_runtime_memory_mutation_is_independent_and_explicit(
 
     assert result == 0
     assert not operation_database.exists()
+    assert not cancellation_database.exists()
 
 
 def test_runtime_lifecycle_mutation_loads_models_and_durable_ledger(
@@ -123,6 +131,7 @@ def test_runtime_lifecycle_mutation_loads_models_and_durable_ledger(
     repository.mkdir()
     state = tmp_path / "state"
     operation_database = state / "operations.sqlite"
+    cancellation_database = state / "cancellations.sqlite"
     model_factory_calls = 0
 
     def fake_workflow_models():
@@ -136,6 +145,11 @@ def test_runtime_lifecycle_mutation_loads_models_and_durable_ledger(
         system = client.get("/api/v1/system").json()
         document = client.get("/api/v1/openapi.json").json()
         assert system["lifecycle_mutations_enabled"] is True
+        assert system["cancellation_enabled"] is True
+        assert set(document["paths"]["/api/v1/runs/{run_id}/cancellation"]) == {
+            "get",
+            "post",
+        }
         assert system["memory_mutations_enabled"] is False
         assert set(document["paths"]["/api/v1/threads/{thread_id}/responses"]) == {
             "post"
@@ -157,6 +171,8 @@ def test_runtime_lifecycle_mutation_loads_models_and_durable_ledger(
             str(state / "memory.sqlite"),
             "--operation-db",
             str(operation_database),
+            "--cancellation-db",
+            str(cancellation_database),
             "--trace-dir",
             str(state / "traces"),
             "--enable-lifecycle-mutations",
@@ -166,6 +182,7 @@ def test_runtime_lifecycle_mutation_loads_models_and_durable_ledger(
     assert result == 0
     assert model_factory_calls == 1
     assert operation_database.is_file()
+    assert cancellation_database.is_file()
 
 
 def test_runtime_parser_rejects_non_loopback_host_and_invalid_port(

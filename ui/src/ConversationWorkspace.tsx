@@ -26,6 +26,8 @@ import {
 import { HumanReviewPanel } from "./HumanReviewPanel";
 import { ConversationHistory } from "./ConversationHistory";
 import { CurrentReviewHistory } from "./ReviewHistory";
+import { RunCancellationControl } from "./RunCancellationControl";
+import { investigationStateLabel } from "./format";
 import {
   forgetLifecycleRequest,
   rememberLifecycleRequest,
@@ -319,6 +321,7 @@ function ThreadConversation({
       </header>
 
       <div className="conversation-feed" aria-label="Investigation conversation">
+        {latestAttempt ? <RunCancellationControl attempt={latestAttempt} enabled={system.cancellation_enabled === true} /> : null}
         <ConversationHistory key={thread.thread_id} threadId={thread.thread_id}
           turnNumber={thread.turn_number} repositoryId={system.repository_id} commitSha={system.commit_sha} />
         <article className="chat-message chat-message--user">
@@ -338,8 +341,8 @@ function ThreadConversation({
           <div>
             <header>
               <strong>RepoCompass</strong>
-              <span className={`state-chip state-chip--${thread.execution_state}`}>
-                {thread.execution_state}
+              <span className={`state-chip state-chip--${investigationStateLabel(thread)}`}>
+                {investigationStateLabel(thread)}
               </span>
             </header>
             <InvestigationResult thread={thread} onOpenLens={onOpenLens} />

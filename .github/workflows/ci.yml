@@ -94,9 +94,13 @@ jobs:
         run: npx playwright install --with-deps --only-shell chromium
       - name: Exercise real demo across four viewports
         run: npm run test:e2e
+      - name: Exercise real HTTP cancellation with a local scripted model
+        run: npm run test:e2e:cancellation
       - name: Retain browser screenshots and failure traces
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: dashboard-browser-evidence
-          path: ui/test-results/
+          path: |
+            ui/test-results/
+            ui/test-results-cancellation/

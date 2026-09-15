@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -19,6 +19,7 @@ import {
   startInvestigation,
 } from "./api";
 import { compactId } from "./format";
+import { RunCancellationControl } from "./RunCancellationControl";
 import {
   forgetLifecycleRequest,
   lifecycleRequestChangeEvent,
@@ -32,7 +33,7 @@ import type {
 } from "./types";
 
 type RecoveryWorkspace = Pick<DashboardSystemInfo,
-  "repository_id" | "commit_sha" | "lifecycle_mutations_enabled">;
+  "repository_id" | "commit_sha" | "lifecycle_mutations_enabled" | "cancellation_enabled">;
 
 export function LifecycleRecoveryCenter({
   system,
@@ -81,6 +82,13 @@ function LifecycleRecoveryItem({
   const queryClient = useQueryClient();
   const blockReason = recoveryBlockReason(request, system);
   const canObserve = blockReason === null;
+  const locallySubmitting = useIsMutating({
+    predicate: (mutation) => {
+      const variables = mutation.state.variables;
+      return typeof variables === "object" && variables !== null
+        && "request_id" in variables && variables.request_id === request.command.request_id;
+    },
+  }) > 0;
   const operationQuery = dashboardQueries.operation(request.command.request_id);
   const operation = useQuery({
     ...operationQuery,
@@ -89,11 +97,17 @@ function LifecycleRecoveryItem({
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchInterval: (query) =>
-      !canObserve || query.state.status === "error"
-        || query.state.data?.state === "completed"
-        || query.state.data?.latest_attempt?.status === "failed"
-        ? false : 1_500,
+    refetchInterval: (query) => {
+      if (!canObserve) return false;
+      if (query.state.status === "error") {
+        // A locally pending POST may lose the race to its first status GET.
+        // Recovery after reload has no local mutation: its 404 still stops.
+        return locallySubmitting && query.state.error instanceof DashboardApiError
+          && query.state.error.status === 404 && query.state.errorUpdateCount < 3 ? 500 : false;
+      }
+      return query.state.data?.state === "completed"
+        || query.state.data?.latest_attempt?.status === "failed" ? false : 1_500;
+    },
   });
   const completeRecovery = useCallback(
     (result: InvestigationOperationResult) => {
@@ -121,8 +135,9 @@ function LifecycleRecoveryItem({
   const notFound = operation.error instanceof DashboardApiError
     && operation.error.status === 404;
   const attemptFailed = operation.data?.latest_attempt?.status === "failed";
-  const canReplay = canObserve && (notFound || attemptFailed);
-  const phase = blockReason ?? operationPhase(operation.data, operation.error, operation.isPending);
+  const canReplay = canObserve && !locallySubmitting && (notFound || attemptFailed);
+  const phase = blockReason ?? (notFound && locallySubmitting ? "Waiting for request reservation"
+    : operationPhase(operation.data, operation.error, operation.isPending));
   const running = operation.data?.latest_attempt?.status === "running";
   const threadId = operation.data?.thread_id;
 
@@ -179,6 +194,8 @@ function LifecycleRecoveryItem({
       {replay.isError ? (
         <p role="alert">Exact replay was not confirmed. The same request remains recoverable.</p>
       ) : null}
+      {canObserve && operation.data?.latest_attempt ? <RunCancellationControl
+        attempt={operation.data.latest_attempt} enabled={system?.cancellation_enabled === true} /> : null}
     </article>
   );
 }

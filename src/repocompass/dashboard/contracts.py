@@ -86,6 +86,7 @@ class DashboardSystemInfo(_DashboardModel):
     pricing_configured: bool
     lifecycle_mutations_enabled: bool
     memory_mutations_enabled: bool
+    cancellation_enabled: bool = False
 
 
 class DashboardRunSummary(_DashboardModel):

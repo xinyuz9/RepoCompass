@@ -28,6 +28,7 @@ import { HumanReviewPanel } from "./HumanReviewPanel";
 import { LifecycleRecoveryCenter } from "./lifecycle-recovery";
 import { ObservabilityPanel } from "./ObservabilityPanel";
 import { ThreadList } from "./ThreadList";
+import { investigationStateLabel } from "./format";
 import type { DashboardThreadDetail } from "./types";
 import {
   isRunLens,
@@ -324,8 +325,8 @@ function InvestigationStage({
       <section className="investigation-hero">
         <div>
           <div className="hero-kicker">
-            <span className={`state-chip state-chip--${thread.execution_state}`}>
-              {thread.execution_state}
+            <span className={`state-chip state-chip--${investigationStateLabel(thread)}`}>
+              {investigationStateLabel(thread)}
             </span>
             <code>thread/{shortHash(thread.thread_id)}</code>
           </div>

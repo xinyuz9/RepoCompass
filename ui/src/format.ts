@@ -1,3 +1,16 @@
+import type { ExecutionState, ThreadInvestigationView } from "./types";
+
+export function investigationStateLabel(thread: {
+  execution_state: ExecutionState | null;
+  termination_status: ThreadInvestigationView["termination_status"];
+}) {
+  if (thread.execution_state === "completed"
+    && (thread.termination_status === "cancelled" || thread.termination_status === "exhausted")) {
+    return thread.termination_status;
+  }
+  return thread.execution_state ?? "unavailable";
+}
+
 export function compactId(value: string, width = 8): string {
   return value.length <= width ? value : value.slice(0, width);
 }

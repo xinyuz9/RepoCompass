@@ -41,6 +41,12 @@ from repocompass.dashboard.contracts import (
     DashboardThreadDetail,
 )
 from repocompass.agent.conversation import PublicConversationPage
+from repocompass.dashboard.cancellation import DashboardCancellationService
+from repocompass.storage.cancellation import (
+    CancellationError,
+    CancellationRecord,
+    CancellationRequest,
+)
 from repocompass.dashboard.commands import (
     DashboardCommandConflictError,
     DashboardCommandUnavailableError,
@@ -146,6 +152,7 @@ def create_dashboard_app(
     service: DashboardReadService,
     *,
     commands: DashboardMutationService | None = None,
+    cancellation: DashboardCancellationService | None = None,
     static_directory: Path | None = None,
 ) -> FastAPI:
     """Create a local API with optional, explicitly injected command routes."""
@@ -162,6 +169,12 @@ def create_dashboard_app(
     if not all(callable(getattr(service, method, None)) for method in required_methods):
         raise TypeError("service does not implement the dashboard read boundary")
     capabilities = service.system_info()
+    if capabilities.cancellation_enabled != (cancellation is not None):
+        raise ValueError("cancellation capability does not reconcile")
+    if cancellation is not None and (
+        commands is None or not commands.lifecycle_mutations_enabled
+    ):
+        raise ValueError("cancellation requires lifecycle commands")
     if commands is None:
         if (
             capabilities.lifecycle_mutations_enabled
@@ -279,6 +292,7 @@ def create_dashboard_app(
             instance=request.url.path,
         )
 
+    @app.exception_handler(CancellationError)
     @app.exception_handler(DashboardCommandUnavailableError)
     async def dashboard_command_unavailable(
         request: Request,
@@ -590,6 +604,40 @@ def create_dashboard_app(
         ) -> InvestigationOperationResult:
             _require_idempotency(command.request_id, idempotency_key)
             return commands.respond_to_review(thread_id, command)
+
+    if cancellation is not None:
+
+        @app.get(
+            f"{DASHBOARD_API_PREFIX}/runs/{{run_id}}/cancellation",
+            response_model=CancellationRecord,
+        )
+        def get_cancellation(
+            run_id: Annotated[str, PathParameter(pattern=REQUEST_ID_PATTERN)],
+        ) -> CancellationRecord:
+            return cancellation.get(run_id)
+
+        @app.post(
+            f"{DASHBOARD_API_PREFIX}/runs/{{run_id}}/cancellation",
+            response_model=CancellationRecord,
+        )
+        def request_cancellation(
+            run_id: Annotated[str, PathParameter(pattern=REQUEST_ID_PATTERN)],
+            command: CancellationRequest,
+            idempotency_key: Annotated[
+                str,
+                Header(
+                    alias="Idempotency-Key",
+                    pattern=REQUEST_ID_PATTERN,
+                    min_length=1,
+                    max_length=128,
+                ),
+            ],
+        ) -> CancellationRecord:
+            if idempotency_key != command.request_id:
+                raise DashboardCommandConflictError(
+                    "idempotency header does not match cancellation"
+                )
+            return cancellation.request(run_id, command)
 
     if commands is not None and commands.memory_mutations_enabled:
 

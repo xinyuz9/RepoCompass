@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
+from langchain_core.runnables import RunnableConfig, RunnableLambda
 
 from repocompass.agent.architecture import (
     DEFAULT_AGENT_ARCHITECTURE,
@@ -75,6 +76,7 @@ def create_agent_graph(
     raw_run_recorder: RawRunRecorder | None = None,
     memory_store: MemoryStore | None = None,
     memory_clock: Callable[[], int] = lambda: 0,
+    cancellation_check: Callable[[RunnableConfig], None] | None = None,
 ):
     """Compile the graph with optional checkpoint and Raw Run persistence."""
 
@@ -93,7 +95,17 @@ def create_agent_graph(
     context_strategy = architecture_profile.context_selection_strategy
     builder = StateGraph(RepoCompassState)
 
-    builder.add_node(
+    def add_node(name, action):
+        if cancellation_check is not None:
+
+            def before_node(state, config: RunnableConfig):
+                cancellation_check(config)
+                return state
+
+            action = RunnableLambda(before_node) | action
+        builder.add_node(name, action)
+
+    add_node(
         "plan_investigation",
         (
             create_plan_investigation_node(
@@ -105,11 +117,11 @@ def create_agent_graph(
             else seed_tool_wrapper_plan
         ),
     )
-    builder.add_node(
+    add_node(
         "recall_memory",
         create_recall_memory_node(memory_store, memory_clock),
     )
-    builder.add_node(
+    add_node(
         "agent",
         create_agent_node(
             models.explorer,
@@ -118,13 +130,13 @@ def create_agent_graph(
             context_strategy,
         ),
     )
-    builder.add_node("tools", create_execute_tools_node(gateway))
-    builder.add_node("assess_progress", assess_tool_progress)
-    builder.add_node(
+    add_node("tools", create_execute_tools_node(gateway))
+    add_node("assess_progress", assess_tool_progress)
+    add_node(
         "step_explorer_budget_exhausted",
         mark_step_explorer_budget_exhausted,
     )
-    builder.add_node(
+    add_node(
         "build_candidate",
         create_build_candidate_node(
             models.explorer,
@@ -132,7 +144,7 @@ def create_agent_graph(
             context_strategy,
         ),
     )
-    builder.add_node(
+    add_node(
         "evaluate_candidate",
         create_evaluate_candidate_node(
             models.evaluator,
@@ -140,9 +152,9 @@ def create_agent_graph(
             context_strategy,
         ),
     )
-    builder.add_node("decide_next_action", decide_next_action)
-    builder.add_node("advance_plan_step", advance_plan_step)
-    builder.add_node(
+    add_node("decide_next_action", decide_next_action)
+    add_node("advance_plan_step", advance_plan_step)
+    add_node(
         "revise_plan",
         create_revise_plan_node(
             models.planner,
@@ -150,16 +162,16 @@ def create_agent_graph(
             context_strategy,
         ),
     )
-    builder.add_node("mark_investigation_accepted", mark_investigation_accepted)
-    builder.add_node("mark_investigation_cancelled", mark_investigation_cancelled)
-    builder.add_node("mark_investigation_exhausted", mark_investigation_exhausted)
-    builder.add_node(
+    add_node("mark_investigation_accepted", mark_investigation_accepted)
+    add_node("mark_investigation_cancelled", mark_investigation_cancelled)
+    add_node("mark_investigation_exhausted", mark_investigation_exhausted)
+    add_node(
         "finalize_cost_budget_exhausted",
         finalize_cost_budget_exhausted,
     )
-    builder.add_node("prepare_human_review", prepare_human_review)
-    builder.add_node("review_final_candidate", review_final_candidate)
-    builder.add_node("finalize", finalize_candidate)
+    add_node("prepare_human_review", prepare_human_review)
+    add_node("review_final_candidate", review_final_candidate)
+    add_node("finalize", finalize_candidate)
 
     explorer_invocation_routes = {
         "agent": "agent",

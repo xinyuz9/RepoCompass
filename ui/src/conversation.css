@@ -440,3 +440,15 @@ select:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
 .review-exchange__body { border-top: 1px solid var(--line); padding: 10px 16px; }
 .review-exchange__body p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; font-size: 13px; }
 .review-exchange__feedback { border-left: 2px solid var(--teal); padding: 8px 14px; margin: 14px 0; font-size: 13px; }
+
+.run-cancellation { grid-column: 1 / -1; min-width: 0; padding: 14px 16px; margin-bottom: 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(100,205,195,.035); }
+.run-cancellation strong { color: var(--text); font-size: 13px; }
+.run-cancellation p { color: var(--text-soft); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.run-cancellation button { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; margin: 4px 8px 0 0; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; }
+.run-cancellation button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.run-cancellation button:disabled { opacity: .55; cursor: wait; }
+.recovery-center:has(.run-cancellation) { max-height: min(45dvh, 360px); }
+.recovery-item .run-cancellation { margin-bottom: 0; padding: 10px 12px; }
+.run-cancellation__limits { margin-top: 10px; color: var(--muted); font-size: 12px; }
+.run-cancellation__limits summary { cursor: pointer; }
+.run-cancellation__limits summary:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }

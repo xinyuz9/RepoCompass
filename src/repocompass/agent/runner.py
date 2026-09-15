@@ -69,6 +69,11 @@ from repocompass.tools.contracts import (
     decode_tool_audit_record,
 )
 from repocompass.tools.gateway import ToolExecutionContext
+from repocompass.storage.cancellation import (
+    CancellationIdentity,
+    CancellationStore,
+    RunCancellationRequested,
+)
 
 if TYPE_CHECKING:
     from repocompass.memory.consolidation import EpisodeConsolidationResult
@@ -480,10 +485,22 @@ class RunOutcome:
     usage_cost_report: AttemptUsageCostReport | None = None
     episode_consolidation: EpisodeConsolidationResult | None = None
     repository_consolidation: RepositoryConsolidationResult | None = None
+    cancellation_request_id: str | None = None
 
     def __post_init__(self) -> None:
         """Reject ambiguous combinations of terminal and interrupt fields."""
 
+        if self.cancellation_request_id is not None:
+            _normalize_identifier(
+                self.cancellation_request_id, name="cancellation_request_id"
+            )
+            if (
+                self.termination_status != "cancelled"
+                or self.step_stop_reason != "user_cancel_requested"
+            ):
+                raise ValueError(
+                    "cancellation acknowledgement requires a cancelled boundary outcome"
+                )
         if self.repository_consolidation is not None:
             from repocompass.memory.fact_consolidation import (
                 RepositoryConsolidationResult,
@@ -656,6 +673,8 @@ def _build_terminal_trace_event(
         payload["repository_consolidation"] = repository_consolidation.model_dump(
             mode="json"
         )
+    if outcome.cancellation_request_id is not None:
+        payload["cancellation_request_id"] = outcome.cancellation_request_id
     return TraceEvent(
         run_id=outcome.trace.run_id,
         sequence=len(outcome.trace),
@@ -722,6 +741,7 @@ class AgentRunner:
         raw_run_store: RawRunStore | None = None,
         pricing_table: PricingTable | None = None,
         memory_store: MemoryStore | None = None,
+        cancellation_store: CancellationStore | None = None,
         episode_clock_factory: EpisodeClockFactory = current_time_ms,
         run_id_factory: RunIdFactory = generate_run_id,
         thread_id_factory: ThreadIdFactory = generate_thread_id,
@@ -770,6 +790,15 @@ class AgentRunner:
         self._memory_store = memory_store
         self._episode_clock_factory = episode_clock_factory
         self._raw_run_store = raw_run_store
+        if cancellation_store is not None:
+            if not isinstance(cancellation_store, CancellationStore):
+                raise TypeError("cancellation_store must be a CancellationStore")
+            if raw_run_store is None:
+                raise ValueError("cancellation requires durable raw attempts")
+        self._cancellation_store = cancellation_store
+        self._cancellation_check = (
+            None if cancellation_store is None else self._check_cancellation
+        )
         self._raw_run_recorder = (
             None
             if raw_run_store is None
@@ -784,6 +813,10 @@ class AgentRunner:
 
         return self._architecture_profile
 
+    def _check_cancellation(self, config: RunnableConfig) -> None:
+        if self._cancellation_store is not None:
+            self._cancellation_store.check(config["configurable"]["repocompass_run_id"])
+
     def inspect_thread(self, request: ResumeRequest) -> ThreadInvestigationView:
         """Read the latest safe public view without executing any graph node."""
 
@@ -795,6 +828,7 @@ class AgentRunner:
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
+            cancellation_check=self._cancellation_check,
         )
         snapshot = graph.get_state(_thread_config(thread_id))
         if not snapshot.values:
@@ -818,6 +852,7 @@ class AgentRunner:
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
+            cancellation_check=self._cancellation_check,
         )
         return build_public_conversation(
             thread_id=thread_id,
@@ -895,6 +930,7 @@ class AgentRunner:
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
+            cancellation_check=self._cancellation_check,
         )
         config = _thread_config(thread_id)
         if graph.get_state(config).values:
@@ -922,6 +958,7 @@ class AgentRunner:
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
+            cancellation_check=self._cancellation_check,
         )
 
         config = _thread_config(thread_id)
@@ -949,6 +986,7 @@ class AgentRunner:
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
+            cancellation_check=self._cancellation_check,
         )
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)
@@ -1005,6 +1043,7 @@ class AgentRunner:
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
+            cancellation_check=self._cancellation_check,
         )
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)
@@ -1175,7 +1214,22 @@ class AgentRunner:
                 state=metadata_state,
             )
         phase = "graph_execution"
+        enrolled = False
+        outcome = None
         try:
+            if self._cancellation_store is not None:
+                attempt = self._raw_run_store.get_attempt(trace.run_id)
+                if attempt is None:
+                    raise RuntimeError("cancellation requires a persisted raw attempt")
+                self._cancellation_store.register(
+                    CancellationIdentity(
+                        run_id=attempt.run_id,
+                        thread_id=attempt.thread_id,
+                        repository_id=attempt.repository_id,
+                        commit_sha=attempt.commit_sha,
+                    )
+                )
+                enrolled = True
             if self._raw_run_store is not None:
                 self._raw_run_store.append_trace_event(trace.events[0])
             outcome = self._stream_graph_attempt(
@@ -1249,6 +1303,11 @@ class AgentRunner:
                     trace.run_id, status=status, terminal_event=terminal
                 )
             trace.record(terminal.kind, payload=terminal.payload)
+            if enrolled:
+                self._cancellation_store.finish(
+                    trace.run_id,
+                    cancelled=outcome.cancellation_request_id is not None,
+                )
         except BaseException as error:
             # Deliberately exclude arbitrary exception text/tracebacks/provider bodies.
             failure = TraceEvent(
@@ -1284,6 +1343,13 @@ class AgentRunner:
                         )
                     except BaseException:
                         error.add_note("Failed to finalize raw attempt status.")
+            if enrolled and outcome is None:
+                try:
+                    self._cancellation_store.finish(trace.run_id, cancelled=False)
+                except BaseException:
+                    error.add_note(
+                        "Cancellation control remains unconfirmed; inspect persisted state."
+                    )
             raise
         return replace(
             outcome,
@@ -1318,29 +1384,57 @@ class AgentRunner:
                 execution_mode=execution_mode,
             )
 
-        for part in graph.stream(
-            graph_input,
-            config=config,
-            stream_mode="updates",
-            durability="sync",
-            version="v2",
-        ):
-            if part["type"] != "updates":
-                continue
-
-            for node_name, update in part["data"].items():
-                if node_name.startswith("__"):
+        try:
+            for part in graph.stream(
+                graph_input,
+                config=config,
+                stream_mode="updates",
+                durability="sync",
+                version="v2",
+            ):
+                if part["type"] != "updates":
                     continue
-                if not isinstance(update, Mapping):
-                    raise TypeError(f"Node {node_name!r} returned a non-mapping update")
 
-                event = trace.record(
-                    TraceEventKind.NODE_COMPLETED,
-                    node=node_name,
-                    payload=_normalize_update(update),
-                )
-                if event_sink is not None:
-                    event_sink(event)
+                for node_name, update in part["data"].items():
+                    if node_name.startswith("__"):
+                        continue
+                    if not isinstance(update, Mapping):
+                        raise TypeError(
+                            f"Node {node_name!r} returned a non-mapping update"
+                        )
+                    event = trace.record(
+                        TraceEventKind.NODE_COMPLETED,
+                        node=node_name,
+                        payload=_normalize_update(update),
+                    )
+                    if event_sink is not None:
+                        event_sink(event)
+        except RunCancellationRequested as error:
+            if error.run_id != trace.run_id:
+                raise
+            objective = graph.get_state(config).values["objective"]
+            # No new graph/model/tool work. Use the existing terminal node's
+            # outgoing END edge to clear scheduled tasks in the checkpoint.
+            graph.update_state(
+                config,
+                {
+                    "termination_status": "cancelled",
+                    "step_stop_reason": "user_cancel_requested",
+                    "cancelled_run_id": trace.run_id,
+                    "cancellation_request_id": error.request_id,
+                    "next_action": None,
+                    "human_review_payload": None,
+                    "human_decision_action": None,
+                    "human_feedback": None,
+                    "final_result": FinalResult(
+                        relevant_files=[],
+                        evidence=[],
+                        summary="Investigation cancelled at a graph node boundary. No candidate is published as an accepted result.",
+                        unresolved_questions=[objective],
+                    ),
+                },
+                as_node="finalize",
+            )
 
         snapshot = graph.get_state(config)
         final_state = snapshot.values
@@ -1367,6 +1461,11 @@ class AgentRunner:
         return RunOutcome(
             thread_id=thread_id,
             final_result=final_result,
+            cancellation_request_id=(
+                final_state.get("cancellation_request_id")
+                if final_state.get("cancelled_run_id") == trace.run_id
+                else None
+            ),
             termination_status=termination_status,
             step_stop_reason=step_stop_reason,
             trace=trace,

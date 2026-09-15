@@ -523,14 +523,19 @@ def test_exact_replay_survives_changed_thread_state(tmp_path: Path, kind: str) -
     lifecycle = _Lifecycle()
     service = DashboardCommandService(query, lifecycle_service=lifecycle)
     # A successful operation may leave the thread completed or awaiting review.
-    query.thread_detail = query.thread_detail.model_copy(update={
-        "thread": query.thread_detail.thread.model_copy(update={
-            "execution_state": (
-                ThreadExecutionState.COMPLETED if kind == "resume"
-                else ThreadExecutionState.INTERRUPTED
+    query.thread_detail = query.thread_detail.model_copy(
+        update={
+            "thread": query.thread_detail.thread.model_copy(
+                update={
+                    "execution_state": (
+                        ThreadExecutionState.COMPLETED
+                        if kind == "resume"
+                        else ThreadExecutionState.INTERRUPTED
+                    ),
+                }
             ),
-        }),
-    })
+        }
+    )
     result = _operation_result("lost-response").model_copy(
         update={"idempotent_replay": True}
     )
@@ -544,9 +549,14 @@ def test_exact_replay_survives_changed_thread_state(tmp_path: Path, kind: str) -
         assert service.resume_thread("thread-1", command) == result
         lifecycle.replay_result = None
         with pytest.raises(DashboardCommandConflictError, match="not resumable"):
-            service.resume_thread("thread-1", command.model_copy(update={
-                "request_id": "new-request",
-            }))
+            service.resume_thread(
+                "thread-1",
+                command.model_copy(
+                    update={
+                        "request_id": "new-request",
+                    }
+                ),
+            )
     else:
         lifecycle.continue_replay_result = result
         follow_up = DashboardContinueCommand(
@@ -555,19 +565,29 @@ def test_exact_replay_survives_changed_thread_state(tmp_path: Path, kind: str) -
         assert service.continue_thread("thread-1", follow_up) == result
         lifecycle.continue_replay_result = None
         with pytest.raises(DashboardCommandConflictError, match="not completed"):
-            service.continue_thread("thread-1", follow_up.model_copy(update={
-                "request_id": "new-request",
-            }))
+            service.continue_thread(
+                "thread-1",
+                follow_up.model_copy(
+                    update={
+                        "request_id": "new-request",
+                    }
+                ),
+            )
     assert not lifecycle.response_requests
     assert not lifecycle.continue_requests
 
 
-@pytest.mark.parametrize("field,value", [
-    ("expected_repository_id", "f" * 64),
-    ("expected_commit_sha", "f" * 40),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("expected_repository_id", "f" * 64),
+        ("expected_commit_sha", "f" * 40),
+    ],
+)
 def test_start_rejects_stale_browser_before_reserving_or_calling_model(
-    tmp_path: Path, field: str, value: str,
+    tmp_path: Path,
+    field: str,
+    value: str,
 ) -> None:
     _, context = _create_repository(tmp_path)
     lifecycle = _Lifecycle()
@@ -585,29 +605,41 @@ def test_start_rejects_stale_browser_before_reserving_or_calling_model(
 
 @pytest.mark.parametrize("kind", ["start", "continue"])
 def test_focus_composition_limit_fails_before_lifecycle(
-    tmp_path: Path, kind: str,
+    tmp_path: Path,
+    kind: str,
 ) -> None:
     _, context = _create_repository(tmp_path)
     query = _Query(context)
-    query.thread_detail = query.thread_detail.model_copy(update={
-        "thread": query.thread_detail.thread.model_copy(update={
-            "execution_state": ThreadExecutionState.COMPLETED,
-        }),
-    })
+    query.thread_detail = query.thread_detail.model_copy(
+        update={
+            "thread": query.thread_detail.thread.model_copy(
+                update={
+                    "execution_state": ThreadExecutionState.COMPLETED,
+                }
+            ),
+        }
+    )
     lifecycle = _Lifecycle()
     service = DashboardCommandService(query, lifecycle_service=lifecycle)
     snapshot = dict(
-        request_id="long-focused-goal", focus_path="src",
+        request_id="long-focused-goal",
+        focus_path="src",
         expected_repository_id=context.repository_id,
         expected_commit_sha=context.commit_sha,
     )
     with pytest.raises(DashboardCommandConflictError, match="combined.*16384"):
         if kind == "start":
-            service.start_investigation(DashboardStartCommand(goal="x" * 16_384, **snapshot))
+            service.start_investigation(
+                DashboardStartCommand(goal="x" * 16_384, **snapshot)
+            )
         else:
-            service.continue_thread("thread-1", DashboardContinueCommand(
-                prompt="x" * 16_384, **snapshot,
-            ))
+            service.continue_thread(
+                "thread-1",
+                DashboardContinueCommand(
+                    prompt="x" * 16_384,
+                    **snapshot,
+                ),
+            )
     assert not lifecycle.start_requests
     assert not lifecycle.continue_requests
 

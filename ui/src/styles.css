@@ -256,6 +256,8 @@ button:focus-visible, input:focus-visible {
 .investigation-hero > div > p { margin: 9px 0 0; color: var(--muted); font-size: 11px; }
 .state-chip { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 7px; font-family: "JetBrains Mono Variable", monospace; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .state-chip--completed { color: var(--acid); background: var(--acid-soft); }
+.state-chip--cancelled, .state-chip--exhausted { color: var(--amber); background: var(--amber-soft); }
+.thread-card__topline--cancelled, .thread-card__topline--exhausted { color: var(--amber); }
 .state-chip--interrupted { color: var(--amber); background: var(--amber-soft); }
 .state-chip--resumable { color: var(--teal); background: var(--teal-soft); }
 

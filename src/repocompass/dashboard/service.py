@@ -120,6 +120,7 @@ class DashboardQueryService:
         pricing_table: PricingTable | None = None,
         lifecycle_mutations_enabled: bool = False,
         memory_mutations_enabled: bool = False,
+        cancellation_enabled: bool = False,
         demo_mode: bool = False,
     ) -> None:
         if not callable(getattr(runner, "inspect_thread", None)):
@@ -152,6 +153,11 @@ class DashboardQueryService:
         self._pricing_table = pricing_table
         self._lifecycle_mutations_enabled = lifecycle_mutations_enabled
         self._memory_mutations_enabled = memory_mutations_enabled
+        if type(cancellation_enabled) is not bool or (
+            cancellation_enabled and not lifecycle_mutations_enabled
+        ):
+            raise ValueError("cancellation requires lifecycle mutations")
+        self._cancellation_enabled = cancellation_enabled
         self._demo_mode = demo_mode
 
     @property
@@ -174,6 +180,7 @@ class DashboardQueryService:
             memory_available=self._memory_store is not None,
             lifecycle_mutations_enabled=self._lifecycle_mutations_enabled,
             memory_mutations_enabled=self._memory_mutations_enabled,
+            cancellation_enabled=self._cancellation_enabled,
         )
 
     def list_threads(self, *, max_results: int = 50) -> DashboardThreadCatalog:

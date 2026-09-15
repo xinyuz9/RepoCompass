@@ -50,6 +50,8 @@ class RepoCompassState(MessagesState):
     turn_number: int
     turn_history: list[TurnRecord]
     review_history: HumanReviewHistory | None
+    cancelled_run_id: str | None
+    cancellation_request_id: str | None
     human_review_policy: HumanReviewPolicy
     human_review_payload: HumanReviewInterruptPayload | None
     human_decision_action: HumanDecisionActionValue | None
@@ -99,6 +101,8 @@ class ContinuationStateUpdate(TypedDict):
     turn_number: int
     turn_history: list[TurnRecord]
     review_history: HumanReviewHistory
+    cancelled_run_id: None
+    cancellation_request_id: None
     human_review_policy: HumanReviewPolicy
     human_review_payload: None
     human_decision_action: None
@@ -228,6 +232,8 @@ def create_initial_state(
         "turn_number": 1,
         "turn_history": [],
         "review_history": HumanReviewHistory(),
+        "cancelled_run_id": None,
+        "cancellation_request_id": None,
         "human_review_policy": human_review_policy,
         "human_review_payload": None,
         "human_decision_action": None,
@@ -357,6 +363,8 @@ def create_continuation_update(
         "turn_number": turn_number + 1,
         "turn_history": [*turn_history, archived_turn],
         "review_history": HumanReviewHistory(),
+        "cancelled_run_id": None,
+        "cancellation_request_id": None,
         "human_review_policy": human_review_policy,
         "human_review_payload": None,
         "human_decision_action": None,

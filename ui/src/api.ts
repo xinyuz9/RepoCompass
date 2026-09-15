@@ -16,9 +16,19 @@ import type {
   DashboardThreadDetail,
   InvestigationOperationResult,
   PublicConversationPage,
+  CancellationRecord,
+  CancellationRequest,
 } from "./types";
 
 const API_ROOT = "/api/v1";
+
+export function getCancellation(runId: string, signal?: AbortSignal) {
+  return getJson<CancellationRecord>("/runs/" + encodeURIComponent(runId) + "/cancellation", signal);
+}
+
+export function requestCancellation(command: CancellationRequest) {
+  return mutateJson<CancellationRequest, CancellationRecord>("/runs/" + encodeURIComponent(command.run_id) + "/cancellation", "POST", command);
+}
 
 export function getConversation(threadId: string, beforeTurn: number, signal?: AbortSignal, limit = 10) {
   return getJson<PublicConversationPage>(

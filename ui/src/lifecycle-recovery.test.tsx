@@ -128,6 +128,27 @@ function renderRecovery(onThreadActivated = vi.fn(), system = workspace) {
 }
 
 describe("recovery safety and bounded polling", () => {
+  it("allows only three reservation reads for an exact locally pending submission", async () => {
+    vi.useFakeTimers();
+    const draft = startDraft();
+    rememberLifecycleRequest(draft);
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(new Response("", { status: 404 })));
+    vi.stubGlobal("fetch", fetcher);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let release!: () => void;
+    const submission = client.getMutationCache().build<void, Error, DashboardStartCommand, unknown>(client, {
+      mutationFn: () => new Promise<void>((resolve) => { release = resolve; }),
+    }).execute(draft.command);
+    render(<QueryClientProvider client={client}><LifecycleRecoveryCenter system={workspace} onThreadActivated={vi.fn()} /></QueryClientProvider>);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(screen.getByText("Waiting for request reservation")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Replay exact request" })).not.toBeInTheDocument();
+    await act(async () => { release(); await submission; await vi.advanceTimersByTimeAsync(10); });
+    expect(screen.getByRole("button", { name: "Replay exact request" })).toBeVisible();
+    client.clear();
+  });
+
   it.each([403, 404, 503])("stops automatic polling after HTTP %i and allows manual status retry", async (status) => {
     vi.useFakeTimers();
     rememberLifecycleRequest(startDraft());

@@ -7,7 +7,8 @@ import {
   Search,
 } from "lucide-react";
 
-import type { DashboardThreadSummary, ExecutionState } from "./types";
+import type { DashboardThreadSummary } from "./types";
+import { investigationStateLabel } from "./format";
 
 interface ThreadListProps {
   hidden?: boolean;
@@ -57,6 +58,7 @@ export function ThreadList({
       </label>
       <div className="thread-list">
         {threads.map((thread) => {
+          const state = investigationStateLabel(thread);
           const stale = currentRepositoryId !== null && (
             thread.latest_attempt.repository_id !== currentRepositoryId
             || thread.latest_attempt.commit_sha !== currentCommitSha
@@ -69,9 +71,9 @@ export function ThreadList({
               aria-current={thread.thread_id === selectedId ? "true" : undefined}
               onClick={() => onSelect(thread.thread_id)}
             >
-              <div className="thread-card__topline">
-                <StateIcon state={thread.execution_state} stale={stale} />
-                <span>{stale ? "stale snapshot" : stateLabel(thread.execution_state)}</span>
+              <div className={`thread-card__topline thread-card__topline--${state}`}>
+                <StateIcon state={state} stale={stale} />
+                <span>{stale ? "stale snapshot" : state}</span>
                 <code>{shortId(thread.thread_id)}</code>
               </div>
               <strong>{thread.objective ?? "Checkpoint unavailable"}</strong>
@@ -90,15 +92,11 @@ export function ThreadList({
   );
 }
 
-function StateIcon({ state, stale }: { state: ExecutionState | null; stale: boolean }) {
+function StateIcon({ state, stale }: { state: ReturnType<typeof investigationStateLabel>; stale: boolean }) {
   if (stale) return <AlertCircle size={13} aria-hidden="true" />;
   if (state === "completed") return <CheckCircle2 size={13} aria-hidden="true" />;
-  if (state === "interrupted") return <AlertCircle size={13} aria-hidden="true" />;
+  if (["interrupted", "cancelled", "exhausted"].includes(state)) return <AlertCircle size={13} aria-hidden="true" />;
   return <CircleDot size={13} aria-hidden="true" />;
-}
-
-function stateLabel(state: ExecutionState | null): string {
-  return state ?? "unavailable";
 }
 
 function shortId(value: string): string {

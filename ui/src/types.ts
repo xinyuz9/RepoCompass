@@ -19,6 +19,23 @@ export interface DashboardSystemInfo {
   pricing_configured: boolean;
   lifecycle_mutations_enabled: boolean;
   memory_mutations_enabled: boolean;
+  cancellation_enabled?: boolean;
+}
+
+export interface CancellationRequest {
+  schema_version: 1;
+  request_id: string;
+  run_id: string;
+  thread_id: string;
+  repository_id: string;
+  commit_sha: string | null;
+}
+
+export interface CancellationRecord extends Omit<CancellationRequest, "request_id"> {
+  state: "running" | "cancel_requested" | "cancelled" | "finished";
+  request_id: string | null;
+  requested_at_ms: number | null;
+  finished_at_ms: number | null;
 }
 
 export interface RawRunAttempt {
