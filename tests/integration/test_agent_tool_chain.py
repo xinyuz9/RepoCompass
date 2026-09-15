@@ -15,7 +15,7 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import RunnableLambda
 
-from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.candidate_output import EvidenceOnlyCandidateResult
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.result import FinalResult
 from repocompass.agent.state import create_initial_state
@@ -180,7 +180,7 @@ def test_agent_executes_three_tool_rounds_before_finalizing() -> None:
     )
     model.bind_tools.assert_called_once()
     model.with_structured_output.assert_called_once_with(
-        CandidateResult,
+        EvidenceOnlyCandidateResult,
         method="function_calling",
         include_raw=True,
     )

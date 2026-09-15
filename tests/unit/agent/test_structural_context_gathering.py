@@ -11,7 +11,10 @@ from repocompass.agent.context import (
     RawArtifactKind,
     VerificationStatus,
 )
-from repocompass.agent.context_gathering import gather_candidate_context
+from repocompass.agent.context_gathering import (
+    gather_candidate_context,
+    has_selected_structural_records,
+)
 from repocompass.agent.planning import PlanStep
 from repocompass.tools.gateway import ToolExecutionContext
 from repocompass.tools.repository_tools import (
@@ -74,6 +77,7 @@ def test_normalized_read_code_gateway_output_is_verified_source_context(
     assert evidence.source.location.line_start == 1
     assert evidence.source.location.line_end == 2
     assert "def authenticate" in evidence.content
+    assert not has_selected_structural_records(gathered.pack)
 
 
 def test_structural_tool_records_become_individual_verified_context_items(
@@ -115,6 +119,7 @@ def test_structural_tool_records_become_individual_verified_context_items(
     )
 
     assert len(structural_items) == 3
+    assert has_selected_structural_records(gathered.pack)
     assert all(
         item.verification_status is VerificationStatus.VERIFIED
         for item in structural_items
@@ -178,6 +183,7 @@ def test_forged_or_wrong_snapshot_structural_output_never_becomes_verified(
     )
     assert len(tool_items) == 1
     assert tool_items[0].verification_status is VerificationStatus.UNVERIFIED
+    assert not has_selected_structural_records(gathered.pack)
     assert not any(
         item.source.kind is ContextSourceKind.SOURCE_EXCERPT
         for item in gathered.pack.items

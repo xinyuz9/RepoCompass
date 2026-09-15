@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.checkpoint import open_sqlite_checkpointer
+from repocompass.agent.candidate_output import EvidenceOnlyCandidateResult
 from repocompass.agent.lifecycle import (
     ContinueRequest,
     HumanDecision,
@@ -63,7 +64,9 @@ def _models_for(result: FinalResult) -> WorkflowModels:
         lambda _: AIMessage(content="Enough evidence is available.")
     )
     explorer.with_structured_output.return_value = RunnableLambda(
-        lambda _: candidate_from_final_result(result)
+        lambda _: EvidenceOnlyCandidateResult.model_validate_json(
+            candidate_from_final_result(result).model_dump_json(exclude={"relations"})
+        )
     )
     return with_scripted_planner(explorer)
 

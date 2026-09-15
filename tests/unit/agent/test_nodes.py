@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.candidate import CandidateResult, EvidenceItem
+from repocompass.agent.candidate_output import EvidenceOnlyCandidateResult
 from repocompass.agent.context import ContextPack
 from repocompass.agent.evaluation import (
     EvaluationReport,
@@ -30,11 +31,16 @@ from repocompass.agent.nodes import (
 )
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.prompts import (
-    CANDIDATE_BUILDING_SYSTEM_PROMPT,
+    CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT,
     INVESTIGATION_SYSTEM_PROMPT,
     PLANNING_SYSTEM_PROMPT,
 )
 from repocompass.agent.result import FinalResult
+from repocompass.tools.gateway import ToolExecutionContext
+from repocompass.tools.repository_tools import (
+    ListSymbolsArguments,
+    execute_list_symbols,
+)
 
 
 def _active_plan(objective: str = "Inspect the repository.") -> InvestigationPlan:
@@ -178,7 +184,8 @@ def test_candidate_builder_returns_internal_structured_result(
     assert isinstance(update["active_context_pack"], ContextPack)
     assert update["context_build_count"] == 1
     assert isinstance(received_messages[0][0], SystemMessage)
-    assert received_messages[0][0].content == CANDIDATE_BUILDING_SYSTEM_PROMPT
+    assert received_messages[0][0].content == CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT
+    assert update["candidate_output_contract"] == "source_evidence_only"
     assert len(received_messages[0]) == 2
     request = str(received_messages[0][-1].content)
     assert state["objective"] in request
@@ -190,7 +197,7 @@ def test_candidate_builder_returns_internal_structured_result(
     )
     assert state["messages"] == original_messages
     model.with_structured_output.assert_called_once_with(
-        CandidateResult,
+        EvidenceOnlyCandidateResult,
         method="function_calling",
         include_raw=True,
     )
@@ -221,6 +228,14 @@ def test_candidate_builder_rejects_non_candidate_model_response(
 def test_candidate_builder_revalidates_strict_types_from_json_tool_call(
     tmp_path: Path,
 ) -> None:
+    (tmp_path / "auth.py").write_text("def authenticate(): pass\n")
+    repository = ToolExecutionContext(tmp_path)
+    symbols = execute_list_symbols(
+        tmp_path,
+        ListSymbolsArguments(relative_path="auth.py", max_results=10),
+        repository_id=repository.repository_id,
+        commit_sha=repository.commit_sha,
+    )
     raw = AIMessage(
         content="",
         tool_calls=[
@@ -262,7 +277,10 @@ def test_candidate_builder_revalidates_strict_types_from_json_tool_call(
     model = MagicMock(spec=BaseChatModel)
     model.with_structured_output.return_value = RunnableLambda(lambda _: envelope)
     state: CandidateBuilderInput = {
-        "messages": [HumanMessage(content="Inspect authentication.")],
+        "messages": [
+            HumanMessage(content="Inspect authentication."),
+            ToolMessage(content=symbols, name="list_symbols", tool_call_id="symbols"),
+        ],
         "repo_path": tmp_path,
         "objective": "Inspect authentication.",
         "investigation_plan": _active_plan(),
@@ -271,8 +289,13 @@ def test_candidate_builder_revalidates_strict_types_from_json_tool_call(
         "context_build_count": 0,
     }
 
-    candidate = create_build_candidate_node(model)(state)["candidate_result"]
+    update = create_build_candidate_node(model)(state)
+    candidate = update["candidate_result"]
 
+    assert update["candidate_output_contract"] == "structural_proposals"
+    model.with_structured_output.assert_called_once_with(
+        CandidateResult, method="function_calling", include_raw=True
+    )
     assert candidate.relations[0].relation.value == "references"
     assert candidate.relations[0].supporting_evidence_indices == (0,)
 

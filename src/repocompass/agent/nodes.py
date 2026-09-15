@@ -24,6 +24,7 @@ from pydantic import BaseModel, ValidationError
 from repocompass.agent.admission import PRECALL_BUDGET_STOP_REASONS, PrecallBudgetDenied
 
 from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.candidate_output import EvidenceOnlyCandidateResult
 from repocompass.agent.context import ContextItem, ContextPack, MemoryRecallReport
 from repocompass.agent.context_builder import (
     DEFAULT_CONTEXT_BUDGET_TOKENS,
@@ -36,6 +37,7 @@ from repocompass.agent.context_gathering import (
     gather_explorer_context,
     gather_planner_context,
     gather_replanner_context,
+    has_selected_structural_records,
     render_model_context,
 )
 from repocompass.agent.cost import AttemptCostBudgetSummary
@@ -64,6 +66,7 @@ from repocompass.agent.lifecycle import (
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.prompts import (
     CANDIDATE_BUILDING_SYSTEM_PROMPT,
+    CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT,
     EVALUATION_SYSTEM_PROMPT,
     INVESTIGATION_SYSTEM_PROMPT,
     PLANNING_SYSTEM_PROMPT,
@@ -856,6 +859,7 @@ class CandidateBuilderInput(MessagesState):
 
 class CandidateBuilderUpdate(TypedDict):
     candidate_result: CandidateResult
+    candidate_output_contract: str
     active_context_pack: ContextPack
     context_build_count: int
     investigation_structure: None
@@ -885,7 +889,13 @@ def build_candidate_messages(
         evaluation_report=state.get("evaluation_report"),
     )
     return [
-        SystemMessage(content=CANDIDATE_BUILDING_SYSTEM_PROMPT),
+        SystemMessage(
+            content=(
+                CANDIDATE_BUILDING_SYSTEM_PROMPT
+                if has_selected_structural_records(gathered.pack)
+                else CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT
+            )
+        ),
         HumanMessage(
             content=render_model_context(ModelRole.CANDIDATE_BUILDER, gathered.pack)
         ),
@@ -900,12 +910,6 @@ def create_build_candidate_node(
     ),
 ) -> CandidateBuilderNode:
     """Create a node that turns Explorer evidence into an internal candidate."""
-
-    structured_model = model.with_structured_output(
-        CandidateResult,
-        method="function_calling",
-        include_raw=True,
-    )
 
     def build_candidate_node(
         state: CandidateBuilderInput,
@@ -927,6 +931,12 @@ def create_build_candidate_node(
             selection_strategy=context_selection_strategy,
         )
         messages = build_candidate_messages(state, gathered_context=gathered)
+        allow_relations = has_selected_structural_records(gathered.pack)
+        structured_model = model.with_structured_output(
+            CandidateResult if allow_relations else EvidenceOnlyCandidateResult,
+            method="function_calling",
+            include_raw=True,
+        )
         response = _invoke_model(
             recorder=recorder,
             state=state,
@@ -938,10 +948,8 @@ def create_build_candidate_node(
             messages=messages,
             plan_step_id=investigation_plan.active_step.id,
             invoke=structured_model.invoke,
-            parse=lambda value: _parse_structured_response(
-                value,
-                expected_type=CandidateResult,
-                error_message="Candidate builder model did not return CandidateResult",
+            parse=lambda value: _parse_candidate_response(
+                value, allow_relations=allow_relations
             ),
         )
         if isinstance(response, _ModelCostBudgetDenied):
@@ -952,12 +960,41 @@ def create_build_candidate_node(
 
         return {
             "candidate_result": response,
+            "candidate_output_contract": "structural_proposals"
+            if allow_relations
+            else "source_evidence_only",
             "active_context_pack": gathered.pack,
             "context_build_count": _next_context_build_count(state),
             "investigation_structure": None,
         }
 
     return build_candidate_node
+
+
+def _parse_candidate_response(
+    value: object, *, allow_relations: bool
+) -> CandidateResult:
+    parsed = value.get("parsed") if isinstance(value, Mapping) else value
+    if not allow_relations and isinstance(parsed, CandidateResult):
+        # Scripted/custom clients may return the domain type. Never silently
+        # strip nonempty proposals, even when no provider parser ran.
+        if parsed.relations:
+            raise TypeError(
+                "Candidate builder returned relations without selected structural evidence"
+            )
+        parsed = EvidenceOnlyCandidateResult.model_validate_json(
+            parsed.model_dump_json(exclude={"relations"})
+        )
+    else:
+        parsed = _parse_structured_response(
+            value,
+            expected_type=CandidateResult
+            if allow_relations
+            else EvidenceOnlyCandidateResult,
+            error_message="Candidate builder model did not return CandidateResult",
+        )
+    # Invocation-only schemas never enter the checkpoint model allowlist.
+    return CandidateResult.model_validate_json(parsed.model_dump_json())
 
 
 class EvaluatorInput(TypedDict):

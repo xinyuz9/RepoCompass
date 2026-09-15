@@ -17,7 +17,7 @@ from langchain_core.messages import (
 from langchain_core.runnables import RunnableLambda
 
 import repocompass.tools.gateway as gateway_module
-from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.candidate_output import EvidenceOnlyCandidateResult
 from repocompass.agent.evaluation import SemanticAssessment
 from repocompass.agent.graph import create_agent_graph
 from repocompass.agent.planning import InvestigationPlan, PlanStep
@@ -114,7 +114,7 @@ def test_graph_finalizes_when_agent_returns_no_tool_calls(tmp_path: Path) -> Non
     assert messages[1] == agent_response
     model.bind_tools.assert_called_once()
     model.with_structured_output.assert_called_once_with(
-        CandidateResult,
+        EvidenceOnlyCandidateResult,
         method="function_calling",
         include_raw=True,
     )
@@ -189,7 +189,7 @@ def test_graph_finalizes_when_agent_returns_tool_calls(tmp_path: Path) -> None:
     assert audit.decision.reason is ToolDecisionReason.ALLOWED
     model.bind_tools.assert_called_once()
     model.with_structured_output.assert_called_once_with(
-        CandidateResult,
+        EvidenceOnlyCandidateResult,
         method="function_calling",
         include_raw=True,
     )

@@ -86,6 +86,7 @@ class RepoCompassState(MessagesState):
     step_stop_reason: str | None
     termination_status: TerminationStatus | None
     candidate_result: CandidateResult | None
+    candidate_output_contract: str | None
     evaluation_report: EvaluationReport | None
     investigation_structure: InvestigationStructure | None
     next_action: ControllerAction | None
@@ -135,6 +136,7 @@ class ContinuationStateUpdate(TypedDict):
     cost_budget: None
     termination_status: None
     candidate_result: None
+    candidate_output_contract: None
     evaluation_report: None
     investigation_structure: None
     next_action: None
@@ -260,6 +262,7 @@ def create_initial_state(
         "step_stop_reason": None,
         "termination_status": None,
         "candidate_result": None,
+        "candidate_output_contract": None,
         "context_budget_tokens": context_budget_tokens,
         "context_build_count": 0,
         "active_context_pack": None,
@@ -391,6 +394,7 @@ def create_continuation_update(
         "step_stop_reason": None,
         "termination_status": None,
         "candidate_result": None,
+        "candidate_output_contract": None,
         "evaluation_report": None,
         "investigation_structure": None,
         "context_budget_tokens": context_budget_tokens,

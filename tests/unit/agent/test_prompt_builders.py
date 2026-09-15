@@ -25,7 +25,7 @@ from repocompass.agent.nodes import (
 )
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.prompts import (
-    CANDIDATE_BUILDING_SYSTEM_PROMPT,
+    CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT,
     EVALUATION_SYSTEM_PROMPT,
     INVESTIGATION_SYSTEM_PROMPT,
     PLANNING_SYSTEM_PROMPT,
@@ -252,7 +252,7 @@ def test_candidate_messages_render_tool_results_without_tool_protocol_history(
     messages = build_candidate_messages(state)
 
     assert isinstance(messages[0], SystemMessage)
-    assert messages[0].content == CANDIDATE_BUILDING_SYSTEM_PROMPT
+    assert messages[0].content == CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT
     assert len(messages) == 2
     assert isinstance(messages[1], HumanMessage)
     request = _selected_content(messages[1])

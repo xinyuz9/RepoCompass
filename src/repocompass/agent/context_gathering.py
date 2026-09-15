@@ -138,6 +138,63 @@ def render_model_context(role: ModelRole, pack: ContextPack) -> str:
     )
 
 
+def has_selected_structural_records(pack: ContextPack) -> bool:
+    """Gate proposals on complete, selected AST records, not raw/excluded history.
+
+    Gathering already re-derived these records from the snapshot. This grants
+    no authority to proposed edges: deterministic evaluation still resolves
+    endpoints and verifies the cited occurrence.
+    """
+    for item in pack.items:
+        if (
+            item.section is not ContextSection.EVIDENCE
+            or item.source.kind is not ContextSourceKind.SOURCE_EXCERPT
+            or item.verification_status is not VerificationStatus.VERIFIED
+            or item.source.location is None
+        ):
+            continue
+        try:
+            payload = json.loads(item.content)
+            if not isinstance(payload, dict) or set(payload) != {
+                "tool",
+                "tool_call_id",
+                "record",
+            }:
+                continue
+            tool = payload["tool"]
+            if not isinstance(tool, str) or tool not in _STRUCTURAL_RESULT_KEYS:
+                continue
+            record = _parse_structural_record(tool, payload["record"])
+            location = (
+                record.definition
+                if isinstance(record, PythonSymbolRecord)
+                else record.location
+            )
+            source = item.source.location
+            symbol = (
+                record.qualified_name
+                if isinstance(record, PythonSymbolRecord)
+                else record.bound_name
+                if isinstance(record, PythonImportRecord)
+                else record.name
+            )
+            if (
+                source.path == location.path
+                and source.line_start == location.line_start
+                and source.line_end == location.line_end
+                and source.symbol == symbol
+                and any(
+                    link.kind is ProvenanceKind.TOOL_CALL
+                    and link.id == payload["tool_call_id"]
+                    for link in item.source.provenance
+                )
+            ):
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 def gather_planner_context(
     *,
     objective: str,

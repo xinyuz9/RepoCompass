@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 from langgraph.checkpoint.memory import InMemorySaver
 
-from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.candidate_output import EvidenceOnlyCandidateResult
 from repocompass.agent.evaluation import SemanticAssessment
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.runner import AgentRunner, ResumeRequest, RunRequest
@@ -58,8 +58,8 @@ def _models(*, provider_failure=False):
                 value = next(responses)
                 if value == rejected and provider_failure:
                     raise ValueError("provider fault must not become a successful stop")
-            elif schema is CandidateResult:
-                value = CandidateResult(
+            elif schema is EvidenceOnlyCandidateResult:
+                value = EvidenceOnlyCandidateResult(
                     evidence=[],
                     summary="unvalidated candidate narrative",
                     unresolved_questions=["Source required."],
@@ -109,7 +109,7 @@ def test_rejected_revision_finishes_checkpoint_and_preserves_failed_usage(tmp_pa
         assert calls == [
             "InvestigationPlan",
             "explorer",
-            "CandidateResult",
+            "EvidenceOnlyCandidateResult",
             "SemanticAssessment",
             "InvestigationPlan",
         ]

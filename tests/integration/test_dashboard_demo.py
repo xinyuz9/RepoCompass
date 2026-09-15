@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.checkpoint import open_sqlite_checkpointer
 from repocompass.agent.runner import AgentRunner
 from repocompass.dashboard.demo import (
@@ -84,6 +85,25 @@ def test_demo_uses_production_stores_and_populates_every_observability_lens(
         catalog = service.list_threads()
         thread = service.get_thread(DEMO_THREAD_ID)
         run = service.get_run(DEMO_RUN_ID)
+        candidate_events = [
+            event
+            for event in raw_store.list_trace_events(DEMO_RUN_ID)
+            if event.node == "build_candidate"
+        ]
+        assert [
+            event.payload["candidate_output_contract"] for event in candidate_events
+        ] == [
+            "source_evidence_only",
+            "structural_proposals",
+            "structural_proposals",
+        ]
+        checkpoint = checkpointer.get_tuple(
+            {"configurable": {"thread_id": DEMO_THREAD_ID}}
+        )
+        assert (
+            type(checkpoint.checkpoint["channel_values"]["candidate_result"])
+            is CandidateResult
+        )
         memory = service.list_memory()
         policy_step = next(
             step

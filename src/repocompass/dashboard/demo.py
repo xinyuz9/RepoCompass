@@ -18,6 +18,7 @@ from repocompass.agent.candidate import (
     CandidateResult,
     EvidenceItem,
 )
+from repocompass.agent.candidate_output import EvidenceOnlyCandidateResult
 from repocompass.agent.checkpoint import open_sqlite_checkpointer
 from repocompass.agent.context import RepositoryLocation
 from repocompass.agent.cost import (
@@ -167,7 +168,9 @@ def create_dashboard_demo(
                 max_explorer_calls_per_step=3,
                 max_no_progress_rounds=2,
                 max_plan_revisions=2,
-                context_budget_tokens=4_000,
+                # Keep the import record whole alongside the final source excerpts.
+                # This scripted UI fixture does not change paid-pilot admission caps.
+                context_budget_tokens=8_192,
                 human_review_policy=HumanReviewPolicy.NEVER,
                 memory_retrieval_enabled=True,
                 max_repository_memory_results=3,
@@ -393,9 +396,9 @@ class _DemoExplorer(_DemoModelBase):
         return RunnableLambda(self._next_response)
 
     def with_structured_output(self, schema: object, *_: object, **__: object):
-        if schema is not CandidateResult:
+        if schema not in (CandidateResult, EvidenceOnlyCandidateResult):
             raise DashboardDemoError("demo explorer received an unexpected schema")
-        return RunnableLambda(self._next_candidate)
+        return RunnableLambda(lambda messages: self._next_candidate(messages, schema))
 
     def _next_response(self, _: object) -> AIMessage:
         responses = _explorer_responses()
@@ -405,12 +408,22 @@ class _DemoExplorer(_DemoModelBase):
         self._response_index += 1
         return response
 
-    def _next_candidate(self, _: object) -> dict[str, object]:
+    def _next_candidate(self, _: object, schema: object) -> dict[str, object]:
         candidates = _demo_candidates()
         if self._candidate_index >= len(candidates):
             raise DashboardDemoError("demo candidate script was exhausted")
         candidate = candidates[self._candidate_index]
         self._candidate_index += 1
+        if schema is EvidenceOnlyCandidateResult:
+            if candidate.relations:
+                raise DashboardDemoError("demo relation requires selected AST evidence")
+            return _envelope(
+                EvidenceOnlyCandidateResult.model_validate_json(
+                    candidate.model_dump_json(exclude={"relations"})
+                ),
+                96,
+                36,
+            )
         return _envelope(candidate, 96, 36)
 
 
@@ -522,13 +535,13 @@ def _explorer_responses() -> tuple[AIMessage, ...]:
         ),
         _text_message("The application entry point is bounded and located."),
         _tool_message(
-            "read_code",
-            {"relative_path": "pkg/api.py", "start_line": 1, "end_line": 15},
-            "demo-read-api",
+            "inspect_imports",
+            {"relative_path": "pkg/api.py", "max_results": 10},
+            "demo-inspect-api",
         ),
         _tool_message(
             "read_code",
-            {"relative_path": "pkg/policy.py", "start_line": 1, "end_line": 18},
+            {"relative_path": "pkg/policy.py", "start_line": 12, "end_line": 18},
             "demo-read-policy",
         ),
         _text_message("The application imports and invokes the verifier gate."),

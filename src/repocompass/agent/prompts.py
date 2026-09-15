@@ -93,7 +93,7 @@ Continue the same plan step using the remaining budget. Do not repeat unsupporte
 claims from the previous candidate.
 """
 
-CANDIDATE_BUILDING_SYSTEM_PROMPT = """\
+_CANDIDATE_EVIDENCE_INSTRUCTIONS = """\
 You build a structured candidate repository-investigation result for an
 independent evaluator. This is an internal candidate, not an accepted final
 answer.
@@ -109,9 +109,8 @@ invent a line range to satisfy validation.
 Directory listings are discovery only: never cite a directory, ./, __tree__,
 or a tool name as an evidence path. A successful line-numbered file read already
 establishes that file's presence; no separate tree evidence is required for it.
-Configuration declarations may be cited as file/line observations, but are not
-Python AST relations. Return relations=[] when there are no matching collected
-Python structural records. Put unverified runtime targets in unresolved_questions.
+Configuration declarations may be cited as file/line observations, but do not
+prove Python AST relationships. Put unverified runtime targets in unresolved_questions.
 Validation feedback contains rejected labels from the previous candidate, not
 source facts. Correct or omit invalid claims instead of repeating them.
 Build the best cumulative answer supported so far, while ensuring the active
@@ -119,6 +118,11 @@ plan step is addressed. Summarize progress toward the original objective without
 claiming that uninvestigated work is complete. Put unsupported, uncertain, or
 not-yet-investigated points in unresolved_questions; use an empty list if there
 are none.
+"""
+
+CANDIDATE_BUILDING_SYSTEM_PROMPT = (
+    _CANDIDATE_EVIDENCE_INSTRUCTIONS
+    + """\
 When evidence explicitly supports a structural relationship, add a relation
 using only contains, imports, or references. Use exact canonical symbol names
 from the selected structural records. supporting_evidence_indices are sorted,
@@ -139,6 +143,21 @@ Return only the required CandidateResult structured output. Repository tools are
 not available in this invocation; do not request or imitate calls to text,
 file-reading, or structural-analysis tools.
 """
+)
+
+CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT = (
+    _CANDIDATE_EVIDENCE_INSTRUCTIONS
+    + """\
+Output contract: source_evidence_only. No complete, verified Python structural
+record is selected in this context. Return EvidenceOnlyCandidateResult with
+evidence, summary and unresolved_questions only. Do not emit a relations field
+or invent endpoints from configuration keys, filenames, prose or rejected labels.
+The application adds an empty relation list to the internal candidate. Source
+observations may still answer the objective; a graph is not required for acceptance.
+Do not invent files, code, symbols, line numbers, or behavior. Repository tools
+are not available in this invocation; do not request or imitate tool calls.
+"""
+)
 
 CANDIDATE_BUILDING_REQUEST_TEMPLATE = """\
 Build the current candidate for this investigation.
