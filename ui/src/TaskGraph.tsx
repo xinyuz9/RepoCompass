@@ -218,7 +218,7 @@ function SourcePreview({
         <code title={snippet.path}>{snippet.path}</code>
         <span>L{snippet.evidence_line_start}–{snippet.evidence_line_end}</span>
       </div>
-      <div className="source-code" aria-label={`Source preview for ${snippet.path}`}>
+      <div className="source-code" role="region" tabIndex={0} aria-label={`Source preview for ${snippet.path}`}>
         {snippet.truncated_before ? <div className="source-omission">earlier lines omitted</div> : null}
         {snippet.lines.map((line) => {
           const evidence = line.number >= snippet.evidence_line_start

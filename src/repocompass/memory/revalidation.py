@@ -44,6 +44,22 @@ def read_memory_source_digest(
 ) -> str:
     """Hash one bounded regular file using component-wise ``openat`` calls."""
 
+    return hashlib.sha256(
+        read_memory_source_bytes(repository_root, relative_path)
+    ).hexdigest()
+
+
+def read_memory_source_bytes(
+    repository_root: Path,
+    relative_path: str,
+    *,
+    max_bytes: int = MAX_MEMORY_SOURCE_BYTES,
+) -> bytes:
+    """Read bounded source through the same no-follow boundary; never execute it."""
+
+    if type(max_bytes) is not int or not 0 <= max_bytes <= MAX_MEMORY_SOURCE_BYTES:
+        raise ValueError("source byte limit is invalid")
+
     parts = _validated_path_parts(relative_path)
     if not isinstance(repository_root, Path):
         raise MemorySourceReadError(MemorySourceReadReason.INVALID_REPOSITORY)
@@ -101,10 +117,10 @@ def read_memory_source_digest(
         opened_stat = os.fstat(file_descriptor)
         if not stat.S_ISREG(opened_stat.st_mode):
             raise MemorySourceReadError(MemorySourceReadReason.SPECIAL_FILE)
-        if opened_stat.st_size > MAX_MEMORY_SOURCE_BYTES:
+        if opened_stat.st_size > max_bytes:
             raise MemorySourceReadError(MemorySourceReadReason.OVERSIZED)
         chunks: list[bytes] = []
-        remaining = MAX_MEMORY_SOURCE_BYTES + 1
+        remaining = max_bytes + 1
         while remaining > 0:
             chunk = os.read(file_descriptor, min(65_536, remaining))
             if not chunk:
@@ -113,7 +129,7 @@ def read_memory_source_digest(
             remaining -= len(chunk)
         content = b"".join(chunks)
         finished_stat = os.fstat(file_descriptor)
-        if len(content) > MAX_MEMORY_SOURCE_BYTES:
+        if len(content) > max_bytes:
             raise MemorySourceReadError(MemorySourceReadReason.OVERSIZED)
         if (
             finished_stat.st_dev != opened_stat.st_dev
@@ -123,7 +139,7 @@ def read_memory_source_digest(
             or len(content) != opened_stat.st_size
         ):
             raise MemorySourceReadError(MemorySourceReadReason.CHANGED_DURING_READ)
-        return hashlib.sha256(content).hexdigest()
+        return content
     finally:
         for descriptor in reversed(descriptors):
             try:

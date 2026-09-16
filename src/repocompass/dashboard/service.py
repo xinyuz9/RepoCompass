@@ -392,6 +392,47 @@ class DashboardQueryService:
             usage_cost_report=report,
         )
 
+    def get_drift(self, thread_id: str, *, expected_artifact_id: str | None = None):
+        """Compare only persisted task evidence with the server-bound checkout."""
+        from repocompass.structure.drift import (
+            analyze_evidence_drift,
+            baseline_from_structure,
+        )
+
+        detail = self.get_thread(_validate_identifier(thread_id, name="thread_id"))
+        structure = detail.thread.structure
+        if structure is None:
+            raise DashboardNotFoundError(
+                "thread has no digest-bound structural evidence"
+            )
+        if (
+            expected_artifact_id is not None
+            and structure.artifact_id != expected_artifact_id
+        ):
+            raise DashboardSnapshotConflictError("drift evidence artifact changed")
+        current = self.repository_context
+        if structure.repository_id != current.repository_id:
+            raise DashboardSnapshotConflictError("drift repository identity changed")
+        memories = []
+        metadata = ()
+        if self._memory_store is not None:
+            metadata = self._memory_store.list_memory_metadata(
+                context=current, max_results=50, memory_scope=MemoryScope.REPOSITORY
+            )
+            for entry in metadata:
+                memory = self._memory_store.get_repository_memory(entry.memory_id)
+                if memory is not None:
+                    memories.append(memory)
+        baseline = baseline_from_structure(
+            structure, memories, scope_truncated=len(metadata) == 50
+        )
+        try:
+            return analyze_evidence_drift(baseline, current.repository_root)
+        except ValueError as error:
+            raise DashboardSnapshotConflictError(
+                "drift repository identity changed"
+            ) from error
+
     def get_source(self, thread_id: str, entity_id: str) -> DashboardSourceSnippet:
         """Read one source window only when its persisted digest still matches."""
 

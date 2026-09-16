@@ -1,6 +1,30 @@
 import { expect, test } from "@playwright/test";
 import axe from "axe-core";
 
+test("compares real saved evidence on demand with accessible drift tables", async ({ page }, testInfo) => {
+  const reads: string[] = [], writes: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/drift?")) reads.push(request.url());
+    if (!["GET", "HEAD"].includes(request.method())) writes.push(request.url());
+  });
+  await page.goto("/?lens=topology");
+  const panel = page.getByRole("region", { name: "Evidence drift", exact: true });
+  await expect(panel).toBeVisible();
+  expect(reads).toHaveLength(0);
+  await panel.getByRole("button", { name: "Compare saved evidence with HEAD" }).click();
+  await expect(panel.getByText("Clean worktree")).toBeVisible();
+  expect(reads).toHaveLength(1);
+  await panel.getByText(/Source fingerprints \(/).click();
+  await panel.getByText(/Claims, entities & same-snapshot memory/).click();
+  await expect(panel.getByRole("table", { name: "Recorded source files versus current checkout" })).toBeVisible();
+  await page.evaluate(axe.source);
+  const violations = await page.evaluate(async () => (await (window as unknown as { axe: typeof import("axe-core") }).axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations.map((v) => ({ id: v.id, nodes: v.nodes.map((node) => ({ target: node.target, html: node.html })) })));
+  expect(violations).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await panel.screenshot({ path: testInfo.outputPath("drift-comparison.png") });
+  expect(writes).toHaveLength(0);
+});
+
 test("scripted review history is keyboard-readable, bounded and read-only", async ({ page }, testInfo) => {
   // UI contract fixture only; actual SQLite/HTTP lifecycle is covered in Python integration tests.
   const writes: string[] = [];

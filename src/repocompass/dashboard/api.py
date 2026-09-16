@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from repocompass.structure.drift import EvidenceDriftReport
 
 from repocompass.dashboard.contracts import (
     DashboardEventStreamCursor,
@@ -431,6 +432,21 @@ def create_dashboard_app(
         if not callable(reader):
             raise DashboardServiceError("public conversation reader is unavailable")
         return reader(thread_id, before_turn=before_turn, limit=limit)
+
+    @app.get(
+        f"{DASHBOARD_API_PREFIX}/threads/{{thread_id}}/drift",
+        response_model=EvidenceDriftReport,
+    )
+    def get_drift(
+        thread_id: str,
+        expected_artifact_id: Annotated[
+            str | None, Query(pattern=SHA256_PATTERN)
+        ] = None,
+    ) -> EvidenceDriftReport:
+        reader = getattr(service, "get_drift", None)
+        if not callable(reader):
+            raise DashboardServiceError("evidence drift reader is unavailable")
+        return reader(thread_id, expected_artifact_id=expected_artifact_id)
 
     @app.get(
         f"{DASHBOARD_API_PREFIX}/threads/{{thread_id}}/source/{{entity_id}}",

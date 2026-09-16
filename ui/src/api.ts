@@ -23,6 +23,11 @@ import type {
 
 const API_ROOT = "/api/v1";
 
+export function getEvidenceDrift(threadId: string, signal?: AbortSignal, artifactId?: string) {
+  const identity = artifactId ? "?expected_artifact_id=" + encodeURIComponent(artifactId) : "";
+  return getJson<import("./drift-types").EvidenceDriftReport>("/threads/" + encodeURIComponent(threadId) + "/drift" + identity, signal);
+}
+
 export function reconcileOperation(command: ReconcileInvestigationRequest) {
   return mutateJson<ReconcileInvestigationRequest, InvestigationOperationResult>(
     "/operations/" + encodeURIComponent(command.request_id) + "/reconcile", "POST", command,

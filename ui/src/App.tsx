@@ -26,6 +26,7 @@ import {
   type InspectorLens,
 } from "./ConversationWorkspace";
 import { HumanReviewPanel } from "./HumanReviewPanel";
+import { DriftPanel } from "./DriftPanel";
 import { LifecycleRecoveryCenter } from "./lifecycle-recovery";
 import { ObservabilityPanel } from "./ObservabilityPanel";
 import { ThreadList } from "./ThreadList";
@@ -373,9 +374,12 @@ function InvestigationStage({
 
       {lens === "topology" ? (
         thread.structure ? (
+          <>
+          <DriftPanel key={thread.structure.artifact_id} threadId={thread.thread_id} artifactId={thread.structure.artifact_id} />
           <Suspense fallback={<LoadingState compact />}>
             <TaskGraph threadId={thread.thread_id} structure={thread.structure} />
           </Suspense>
+          </>
         ) : <StructureEmpty />
       ) : (
         <ObservabilityPanel
