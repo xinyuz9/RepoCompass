@@ -112,6 +112,24 @@ def _evaluate(path, *, assessment=None, state=None):
     return state | update, seen
 
 
+@pytest.mark.parametrize("disposition", ["covered", "unresolved"])
+def test_empty_requirement_evidence_is_parseable_but_never_approved(disposition):
+    claim = _claim()
+    claim["disposition"] = disposition
+    claim["requirements"][0]["evidence_indices"] = []
+    assessment = _assessment([claim])
+    decision = assess_plan_coverage(
+        objective="Explain the flag.",
+        plan=_plan(),
+        candidate=_candidate(),
+        claims=assessment.remaining_step_coverage,
+        selected_indices=frozenset({0}),
+        evaluation_passed=True,
+    )
+    assert not decision.approved_step_ids
+    assert decision.reason in {"incomplete", "invalid_references"}
+
+
 def test_real_evaluator_supplies_full_plan_and_controller_accepts_covered_work(
     tmp_path,
 ):

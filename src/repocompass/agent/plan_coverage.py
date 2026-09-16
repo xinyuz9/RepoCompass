@@ -24,7 +24,9 @@ class _CoverageModel(BaseModel):
 
 class RequirementCoverage(_CoverageModel):
     requirement_index: int = Field(ge=0)
-    evidence_indices: list[int] = Field(min_length=1, max_length=16)
+    # An unresolved requirement can truthfully have no supporting excerpt.
+    # Nonempty references are enforced by assess_plan_coverage for approval.
+    evidence_indices: list[int] = Field(default_factory=list, max_length=16)
     explanation: str = Field(min_length=1, max_length=768)
 
 
