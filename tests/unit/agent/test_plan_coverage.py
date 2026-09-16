@@ -130,6 +130,38 @@ def test_empty_requirement_evidence_is_parseable_but_never_approved(disposition)
     assert decision.reason in {"incomplete", "invalid_references"}
 
 
+@pytest.mark.parametrize("disposition", ["covered", "unresolved"])
+@pytest.mark.parametrize("missing", [True, False])
+def test_missing_diagnostic_explanation_never_approves_work(disposition, missing):
+    claim = _claim()
+    claim["disposition"] = disposition
+    if missing:
+        del claim["explanation"]
+    else:
+        claim["explanation"] = None
+    assessment = _assessment([claim])
+    decision = assess_plan_coverage(
+        objective="Explain the flag.",
+        plan=_plan(),
+        candidate=_candidate(),
+        claims=assessment.remaining_step_coverage,
+        selected_indices=frozenset({0}),
+        evaluation_passed=True,
+    )
+    assert decision.reason == "incomplete"
+    assert not decision.approved_step_ids
+
+
+def test_incomplete_diagnostic_preserves_negative_review_in_real_node(tmp_path):
+    claim = _claim()
+    del claim["explanation"]
+    claim["disposition"] = "unresolved"
+    assessment = _assessment([claim]).model_copy(update={"answers_objective": False})
+    state, _ = _evaluate(tmp_path, assessment=assessment)
+    assert not state["evaluation_report"].passed
+    assert decide_next_action(state)["next_action"] == "advance_step"
+
+
 def test_real_evaluator_supplies_full_plan_and_controller_accepts_covered_work(
     tmp_path,
 ):

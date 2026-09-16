@@ -35,7 +35,9 @@ class StepCoverage(_CoverageModel):
     disposition: Literal["covered", "unresolved"]
     objective_evidence_indices: list[int] = Field(default_factory=list, max_length=16)
     requirements: list[RequirementCoverage] = Field(default_factory=list, max_length=32)
-    explanation: str = Field(min_length=1, max_length=768)
+    # Missing diagnostic prose must not discard the entire negative assessment.
+    # It remains mandatory for any code-issued coverage approval below.
+    explanation: str | None = Field(default=None, min_length=1, max_length=768)
 
 
 class PlanCoverageDecision(_CoverageModel):
@@ -139,7 +141,7 @@ def assess_plan_coverage(
 
     for step in pending:
         claim = by_id[step.id]
-        if claim.disposition != "covered":
+        if claim.disposition != "covered" or not claim.explanation:
             return denied("incomplete")
         if not valid_indices(claim.objective_evidence_indices):
             return denied("invalid_references")

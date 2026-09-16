@@ -221,7 +221,7 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         live_cli.execute(args)
     path = args.output / "config.json"
     config = json.loads(path.read_text())
-    assert config["schema_version"] == 14
+    assert config["schema_version"] == 15
     assert (
         config["revision_rejection_policy"] == "terminal_exhausted_preserve_history_v1"
     )
@@ -241,7 +241,7 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         == "selected_ast_or_unbound_source_observations_v2"
     )
     assert (
-        config["plan_coverage_policy"] == "unresolved_empty_excerpts_identity_bound_v2"
+        config["plan_coverage_policy"] == "incomplete_diagnostic_denies_approval_v3"
     )
     assert config["step_completion_policy"] == "deterministic_and_semantic_gate_v2"
     assert config["validation_feedback_policy"] == "bounded_pinned_defects_v1"
