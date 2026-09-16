@@ -485,7 +485,7 @@ def _demo_candidates() -> tuple[CandidateResult, ...]:
     )
     return (
         CandidateResult(
-            evidence=[evidence[0]],
+            evidence=[evidence[0].model_copy(update={"symbol": None})],
             summary="The application entry point validates before mutation.",
             unresolved_questions=[
                 "The verifier policy and regression test remain to inspect."

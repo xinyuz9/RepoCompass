@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.domain_model import CheckpointSafeModel
+from repocompass.agent.plan_coverage import PlanCoverageDecision, StepCoverage
 from repocompass.tools.repository import read_code
 
 
@@ -62,6 +63,11 @@ class SemanticAssessment(BaseModel):
             "plan step."
         )
     )
+    remaining_step_coverage: list[StepCoverage] = Field(
+        default_factory=list,
+        max_length=5,
+        description="Review each pending step from the supplied full plan. Cite zero-based candidate evidence indices for its objective and every expected-evidence requirement. Mark unresolved when anything is unproved. Empty means no early completion permission.",
+    )
     answers_objective: bool = Field(
         description=(
             "Whether the candidate directly answers the original investigation "
@@ -115,6 +121,7 @@ class EvaluationReport(CheckpointSafeModel):
     semantic_assessment: SemanticAssessment = Field(
         description="Independent model assessment of the validated candidate."
     )
+    plan_coverage: PlanCoverageDecision | None = None
 
     @computed_field(
         description=(

@@ -219,7 +219,11 @@ def test_evaluator_node_publishes_isolated_context_pack(tmp_path: Path) -> None:
 
     update = create_evaluate_candidate_node(_structured_model(_assessment()))(state)
 
-    assert update["evaluation_report"] == _report()
+    assert update["evaluation_report"].plan_coverage.reason == "not_requested"
+    assert (
+        update["evaluation_report"].model_copy(update={"plan_coverage": None})
+        == _report()
+    )
     assert isinstance(update["active_context_pack"], ContextPack)
     assert update["context_build_count"] == 8
     structure = update["investigation_structure"]

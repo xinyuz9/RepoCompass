@@ -25,6 +25,11 @@ from repocompass.agent.admission import PRECALL_BUDGET_STOP_REASONS, PrecallBudg
 
 from repocompass.agent.candidate import CandidateResult
 from repocompass.agent.candidate_output import EvidenceOnlyCandidateResult
+from repocompass.agent.plan_coverage import (
+    assess_plan_coverage,
+    covers_pending_plan,
+    selected_evidence_indices,
+)
 from repocompass.agent.context import ContextItem, ContextPack, MemoryRecallReport
 from repocompass.agent.context_builder import (
     DEFAULT_CONTEXT_BUDGET_TOKENS,
@@ -982,9 +987,10 @@ def _parse_candidate_response(
             raise TypeError(
                 "Candidate builder returned relations without selected structural evidence"
             )
-        parsed = EvidenceOnlyCandidateResult.model_validate_json(
-            parsed.model_dump_json(exclude={"relations"})
-        )
+        # Compatibility for trusted custom clients returning the domain type.
+        # Keep their explicit symbol claims for the unchanged AST validator;
+        # never silently strip a selector or a relation to manufacture success.
+        return CandidateResult.model_validate_json(parsed.model_dump_json())
     else:
         parsed = _parse_structured_response(
             value,
@@ -1022,6 +1028,7 @@ class EvaluationPromptInput(TypedDict):
     context_budget_tokens: int
     context_build_count: int
     investigation_structure: InvestigationStructure | None
+    investigation_plan: NotRequired[InvestigationPlan]
 
 
 class EvaluatorNodeUpdate(TypedDict):
@@ -1050,6 +1057,7 @@ def build_evaluator_messages(
         evidence_pack=state["evidence_pack"],
         budget_tokens=_context_budget(state),
         investigation_structure=state.get("investigation_structure"),
+        investigation_plan=state.get("investigation_plan"),
     )
     return [
         SystemMessage(content=EVALUATION_SYSTEM_PROMPT),
@@ -1109,6 +1117,7 @@ def create_evaluate_candidate_node(
             "repo_path": state["repo_path"],
             "objective": state["objective"],
             "active_step": investigation_plan.active_step,
+            "investigation_plan": investigation_plan,
             "candidate_result": candidate,
             "deterministic_issues": deterministic_issues,
             "evidence_pack": validation.evidence_pack,
@@ -1125,6 +1134,7 @@ def create_evaluate_candidate_node(
             evidence_pack=prompt_input["evidence_pack"],
             budget_tokens=_context_budget(prompt_input),
             investigation_structure=prompt_input["investigation_structure"],
+            investigation_plan=investigation_plan,
             selection_strategy=context_selection_strategy,
         )
         messages = build_evaluator_messages(prompt_input, gathered_context=gathered)
@@ -1150,12 +1160,24 @@ def create_evaluate_candidate_node(
                 response.budget, stop_reason=response.stop_reason
             )  # type: ignore[return-value]
         assert isinstance(response, SemanticAssessment)
+        response = SemanticAssessment.model_validate_json(response.model_dump_json())
+        report = EvaluationReport(
+            deterministic_issues=list(deterministic_issues),
+            semantic_assessment=response,
+        )
+        coverage = assess_plan_coverage(
+            objective=state["objective"],
+            plan=investigation_plan,
+            candidate=candidate,
+            claims=response.remaining_step_coverage,
+            selected_indices=selected_evidence_indices(
+                gathered.pack, validation.evidence_pack
+            ),
+            evaluation_passed=report.passed and response.active_step_completed,
+        )
 
         return {
-            "evaluation_report": EvaluationReport(
-                deterministic_issues=list(deterministic_issues),
-                semantic_assessment=response,
-            ),
+            "evaluation_report": report.model_copy(update={"plan_coverage": coverage}),
             "active_context_pack": gathered.pack,
             "context_build_count": _next_context_build_count(state),
             "investigation_structure": structure_result.artifact,
@@ -1174,6 +1196,8 @@ class ControllerInput(TypedDict):
     max_explorer_calls_per_step: int
     plan_revision_count: int
     max_plan_revisions: int
+    objective: NotRequired[str]
+    candidate_result: NotRequired[CandidateResult | None]
 
 
 class ControllerNodeUpdate(TypedDict):
@@ -1183,9 +1207,9 @@ class ControllerNodeUpdate(TypedDict):
 def decide_next_action(state: ControllerInput) -> ControllerNodeUpdate:
     """Select the next workflow action after one active-step evaluation.
 
-    A completed active step advances before the overall answer can be accepted,
-    so pending plan work cannot be bypassed. This deterministic node must not
-    call a model or mutate the investigation plan.
+    Pending work advances unless independently reviewed against every declared
+    requirement with complete selected source excerpts. Goal approval alone is
+    insufficient. This node never mutates recorded plan execution history.
     """
     if state["investigation_plan"] is None:
         raise ValueError("InvestigationPlan is missing")
@@ -1204,6 +1228,13 @@ def decide_next_action(state: ControllerInput) -> ControllerNodeUpdate:
     # so any deterministic defect keeps the active step uncompleted.
     if semantic_assessment.active_step_completed and not report.deterministic_issues:
         if plan.next_pending_step() is not None:
+            if report.passed and covers_pending_plan(
+                report.plan_coverage,
+                objective=state.get("objective"),
+                plan=plan,
+                candidate=state.get("candidate_result"),
+            ):
+                return {"next_action": "accepted"}
             return {"next_action": "advance_step"}
 
         if report.passed:

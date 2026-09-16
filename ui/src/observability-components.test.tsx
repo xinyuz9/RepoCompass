@@ -24,6 +24,27 @@ const attempt = {
 afterEach(cleanup);
 
 describe("investigation observability lenses", () => {
+  it("distinguishes evidence approval and auditable coverage from task acceptance", () => {
+    const detail = {
+      thread: { plan: null }, plan_timeline: [],
+      evaluator_timeline: [{ run_id: "run-1", turn_number: 1, sequence: 8, report: {
+        passed: true, deterministic_issues: [],
+        plan_coverage: { reason: "all_pending_covered", approved_step_ids: ["summary"], identity_digest: "a".repeat(64) },
+        semantic_assessment: { active_step_completed: true, answers_objective: true, evidence_supports_summary: true, has_critical_omissions: false, missing_evidence: [], recommended_focus: [], summary: "Source supported.", remaining_step_coverage: [
+          { step_id: "summary", disposition: "covered", objective_evidence_indices: [0], requirements: [], explanation: "The current result already provides the requested summary." },
+          { step_id: "not-approved", disposition: "covered", objective_evidence_indices: [1], requirements: [], explanation: "Unapproved marker." },
+        ] },
+      } }],
+    } as unknown as DashboardThreadDetail;
+    render(<PlanLens detail={detail} />);
+    expect(screen.getByText("evidence passed")).toBeVisible();
+    expect(screen.queryByText("accepted")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Pending work covered by existing evidence"));
+    expect(screen.getByText(/No additional execution is claimed/)).toBeVisible();
+    expect(screen.getByText(/requested summary/)).toBeVisible();
+    expect(screen.queryByText("Unapproved marker.")).not.toBeInTheDocument();
+  });
+
   it("replays plan revisions beside evaluator decisions", () => {
     const detail = {
       thread: {

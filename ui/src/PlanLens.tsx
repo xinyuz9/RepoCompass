@@ -84,10 +84,19 @@ function EvaluatorTimeline({ frames }: { frames: EvaluatorReplayFrame[] }) {
             return (
               <article key={`${frame.run_id}:${frame.sequence}`} className={frame.report.passed ? "is-pass" : "is-review"}>
                 <div className="evaluation-card__head">
-                  <span>{frame.report.passed ? <CheckCircle2 size={17} /> : <AlertTriangle size={17} />}{frame.report.passed ? "accepted" : "more evidence"}</span>
+                  <span>{frame.report.passed ? <CheckCircle2 size={17} /> : <AlertTriangle size={17} />}{frame.report.passed ? "evidence passed" : "more evidence"}</span>
                   <code>t{frame.turn_number} · #{frame.sequence}</code>
                 </div>
                 <p>{assessment.summary}</p>
+                {frame.report.plan_coverage?.reason === "all_pending_covered" ? (
+                  <details className="focus-box">
+                    <summary>Pending work covered by existing evidence</summary>
+                    <p>No additional execution is claimed. Recorded plan states remain unchanged; every pending objective and requirement was reviewed against selected source excerpts.</p>
+                    <ul>{assessment.remaining_step_coverage?.filter((step) => frame.report.plan_coverage?.approved_step_ids.includes(step.step_id)).map((step) => (
+                      <li key={step.step_id}><strong>{step.step_id}</strong>: {step.explanation} <small>Evidence #{step.objective_evidence_indices.join(", #")}</small></li>
+                    ))}</ul>
+                  </details>
+                ) : null}
                 <div className="evaluation-checks">
                   <Check label="objective" value={assessment.answers_objective} />
                   <Check label="supported" value={assessment.evidence_supports_summary} />

@@ -396,6 +396,13 @@ export interface ValidationIssue {
 }
 
 export interface SemanticAssessment {
+  remaining_step_coverage?: {
+    step_id: string;
+    disposition: "covered" | "unresolved";
+    objective_evidence_indices: number[];
+    requirements: { requirement_index: number; evidence_indices: number[]; explanation: string }[];
+    explanation: string;
+  }[];
   active_step_completed: boolean;
   answers_objective: boolean;
   evidence_supports_summary: boolean;
@@ -406,6 +413,11 @@ export interface SemanticAssessment {
 }
 
 export interface EvaluationReport {
+  plan_coverage?: {
+    identity_digest: string;
+    approved_step_ids: string[];
+    reason: "all_pending_covered" | "not_requested" | "incomplete" | "invalid_references" | "evaluation_failed";
+  } | null;
   deterministic_issues: ValidationIssue[];
   semantic_assessment: SemanticAssessment;
   passed: boolean;

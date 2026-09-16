@@ -27,6 +27,7 @@ def test_internal_contract_fields_are_minimal() -> None:
     assert set(EvaluationReport.model_fields) == {
         "deterministic_issues",
         "semantic_assessment",
+        "plan_coverage",
     }
     assert set(EvaluationReport.model_computed_fields) == {"passed"}
 

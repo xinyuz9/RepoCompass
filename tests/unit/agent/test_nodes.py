@@ -441,7 +441,10 @@ def test_evaluator_merges_deterministic_and_semantic_results(
 
     update = create_evaluate_candidate_node(model)(state)
 
-    assert update["evaluation_report"] == EvaluationReport(
+    assert update["evaluation_report"].plan_coverage.reason == "not_requested"
+    assert update["evaluation_report"].model_copy(
+        update={"plan_coverage": None}
+    ) == EvaluationReport(
         deterministic_issues=[],
         semantic_assessment=assessment,
     )

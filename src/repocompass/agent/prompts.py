@@ -152,6 +152,8 @@ Output contract: source_evidence_only. No complete, verified Python structural
 record is selected in this context. Return EvidenceOnlyCandidateResult with
 evidence, summary and unresolved_questions only. Do not emit a relations field
 or invent endpoints from configuration keys, filenames, prose or rejected labels.
+Keep evidence.symbol null. A visible assigned variable, import alias or function
+name is not an AST selector here: describe it in the claim with exact source lines.
 The application adds an empty relation list to the internal candidate. Source
 observations may still answer the objective; a graph is not required for acceptance.
 Do not invent files, code, symbols, line numbers, or behavior. Repository tools
@@ -201,6 +203,15 @@ a critical omission prevents acceptance. Report concrete missing evidence and a
 focused next investigation target when more work is needed. Return a concise
 assessment summary, not hidden chain of thought. Deterministic validation
 findings are authoritative and must not be overruled.
+When a full plan is supplied, review EVERY pending step separately in
+remaining_step_coverage. A step is covered only if its objective AND every
+expected_evidence requirement are established by the current candidate and full
+validated excerpts actually present in this invocation. Cite their zero-based
+candidate evidence indices; requirement_index indexes that step's expected_evidence.
+Keep missing, omitted or conditional-but-unproved work unresolved. A summary-only
+step can be covered by the source-backed answer already present. Do not mark
+steps covered merely because answers_objective is true. Explain each coverage
+judgment concisely; never invent unseen source support or change step IDs.
 """
 
 EVALUATION_REQUEST_TEMPLATE = """\

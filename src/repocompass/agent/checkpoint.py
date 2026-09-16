@@ -60,6 +60,11 @@ from repocompass.agent.lifecycle import (
     TurnRecord,
 )
 from repocompass.agent.planning import InvestigationPlan, PlanStep
+from repocompass.agent.plan_coverage import (
+    PlanCoverageDecision,
+    StepCoverage,
+    RequirementCoverage,
+)
 from repocompass.agent.result import FinalResult
 from repocompass.agent.structural_artifacts import (
     InvestigationStructure,
@@ -145,6 +150,9 @@ _CHECKPOINT_MODEL_TYPES: tuple[type[BaseModel], ...] = (
     ValidationIssue,
     SemanticAssessment,
     InvestigationPlan,
+    PlanCoverageDecision,
+    StepCoverage,
+    RequirementCoverage,
     PlanStep,
     FinalResult,
     TurnRecord,

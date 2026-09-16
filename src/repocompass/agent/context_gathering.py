@@ -389,6 +389,7 @@ def gather_evaluator_context(
     deterministic_issues: tuple[ValidationIssue, ...],
     evidence_pack: tuple[EvidenceExcerpt, ...],
     budget_tokens: int,
+    investigation_plan: InvestigationPlan | None = None,
     investigation_structure: InvestigationStructure | None = None,
     selection_strategy: ContextSelectionStrategy = (
         ContextSelectionStrategy.PRIORITIZED
@@ -403,6 +404,13 @@ def gather_evaluator_context(
         "Expected evidence for the active step:\n"
         f"{json.dumps(active_step.expected_evidence, ensure_ascii=False, indent=2)}"
     )
+    if investigation_plan is not None:
+        if investigation_plan.active_step != active_step:
+            raise ValueError("Evaluator plan does not match its active step")
+        objective_content += (
+            "\n\nFull bounded investigation plan (pending work is not presumed complete):\n"
+            + investigation_plan.model_dump_json()
+        )
     objective_item, objective_artifact = _make_item(
         content=objective_content,
         raw_content=objective,
