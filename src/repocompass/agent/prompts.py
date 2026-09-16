@@ -19,6 +19,14 @@ round only to report discovered filenames.
 Avoid overlapping steps that reread the same declarations merely to summarize
 them again. Scope the plan to the requested objective, not an exhaustive audit
 of all possible public APIs unless explicitly requested.
+Every returned step is a required obligation, not an optional branch. Do not
+add speculative "if another file exists" steps, exhaustive absence proofs, or
+override/precedence requirements not requested by the user. Keep conditional
+follow-up inside the relevant evidence-gathering step; later evidence can justify
+a plan revision if genuinely new work is needed. Prefer one integrated step for
+a small discovery-and-read objective that fits the supplied budgets. More steps
+are appropriate only for distinct, necessary outcomes. Do not invent packaging
+conventions before identifying the repository's actual language and manifests.
 """
 
 PLANNING_REQUEST_TEMPLATE = """\
@@ -204,7 +212,8 @@ focused next investigation target when more work is needed. Return a concise
 assessment summary, not hidden chain of thought. Deterministic validation
 findings are authoritative and must not be overruled.
 When a full plan is supplied, review EVERY pending step separately in
-remaining_step_coverage. A step is covered only if its objective AND every
+remaining_step_coverage. Include pending steps ONLY, not active or completed
+steps. A step is covered only if its objective AND every
 expected_evidence requirement are established by the current candidate and full
 validated excerpts actually present in this invocation. Cite their zero-based
 candidate evidence indices; requirement_index indexes that step's expected_evidence.

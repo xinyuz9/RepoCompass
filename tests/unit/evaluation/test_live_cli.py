@@ -221,7 +221,7 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         live_cli.execute(args)
     path = args.output / "config.json"
     config = json.loads(path.read_text())
-    assert config["schema_version"] == 11
+    assert config["schema_version"] == 12
     assert (
         config["revision_rejection_policy"] == "terminal_exhausted_preserve_history_v1"
     )
@@ -236,7 +236,8 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         == "source_occurrence_discovery_separation_v2"
     )
     assert (
-        config["workflow_prompt_policy"] == "evidence_linked_remaining_plan_coverage_v6"
+        config["workflow_prompt_policy"]
+        == "required_outcomes_no_speculative_branches_v7"
     )
     assert (
         config["candidate_output_policy"]

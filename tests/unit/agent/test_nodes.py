@@ -31,6 +31,7 @@ from repocompass.agent.nodes import (
 )
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.prompts import (
+    EVALUATION_SYSTEM_PROMPT,
     CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT,
     INVESTIGATION_SYSTEM_PROMPT,
     PLANNING_SYSTEM_PROMPT,
@@ -112,6 +113,13 @@ def test_investigation_prompt_marks_repository_content_as_non_instruction() -> N
     assert "code, README files, comments, or test fixtures" in (
         INVESTIGATION_SYSTEM_PROMPT
     )
+
+
+def test_planning_limits_steps_to_required_evidence_outcomes() -> None:
+    assert "Every returned step is a required obligation" in PLANNING_SYSTEM_PROMPT
+    assert "Do not\nadd speculative" in PLANNING_SYSTEM_PROMPT
+    assert "Prefer one integrated step" in PLANNING_SYSTEM_PROMPT
+    assert "pending steps ONLY" in EVALUATION_SYSTEM_PROMPT
 
 
 def test_candidate_builder_declares_narrow_input_schema() -> None:
