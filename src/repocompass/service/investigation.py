@@ -5,12 +5,15 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from contextlib import ExitStack
 from pathlib import Path
 from threading import RLock
+from time import time_ns
 from typing import Protocol
 from uuid import uuid4
 
 from repocompass.agent.lifecycle import ContinueRequest, HumanResponseRequest
+from repocompass.agent.execution_binding import bind_run_observer
 from repocompass.agent.runner import (
     ResumeRequest,
     RunOutcome,
@@ -20,7 +23,10 @@ from repocompass.agent.thread_view import (
     ThreadExecutionState,
     ThreadInvestigationView,
 )
-from repocompass.agent.trace import RunTrace
+from repocompass.agent.trace import RunTrace, TraceEvent, TraceEventKind
+from repocompass.agent.cost import PricingTable
+from repocompass.storage.raw_store import RawRunStore, AttemptStatus
+from repocompass.storage.execution_lock import ExecutionLockUnavailable
 from repocompass.structure.evidence_graph import EvidenceNodeKind
 from repocompass.service.contracts import (
     ArtifactAvailability,
@@ -37,6 +43,7 @@ from repocompass.service.contracts import (
     LocalizationResultPayload,
     LocalizationResultView,
     ResumeInvestigationRequest,
+    ReconcileInvestigationRequest,
     StartInvestigationRequest,
     ThreadArtifactRequest,
 )
@@ -97,6 +104,8 @@ class InvestigationService:
         thread_id_factory: Callable[[], str] = lambda: str(uuid4()),
         trace_sink: InvestigationTraceSink | None = None,
         trace_directory: Path | None = None,
+        raw_run_store: RawRunStore | None = None,
+        pricing_table: PricingTable | None = None,
     ) -> None:
         if not all(
             callable(getattr(runner, method, None))
@@ -127,6 +136,8 @@ class InvestigationService:
         self._trace_sink = trace_sink
         self._trace_directory = trace_directory
         self._mutation_lock = RLock()
+        self._raw_run_store = raw_run_store
+        self._pricing_table = pricing_table
 
     @staticmethod
     def request_digest(
@@ -178,7 +189,124 @@ class InvestigationService:
             ),
             reserved_at_ms=reservation.reserved_at_ms,
             result=reservation.response,
+            bound_run_id=self._operation_store.execution_run(request_id),
+            recovery_status=(
+                "not_needed"
+                if completed
+                else "unavailable"
+                if self._raw_run_store is None
+                else self._operation_store.recovery_availability(request_id)
+            ),
         )
+
+    def reconcile_operation(
+        self, request: ReconcileInvestigationRequest
+    ) -> InvestigationOperationResult:
+        """Explicit, run-bound local reconciliation. Never re-invokes the runner."""
+        if self._raw_run_store is None or not all(
+            callable(getattr(self._runner, name, None))
+            for name in ("reconcile_persisted_artifacts", "recovery_guard")
+        ):
+            raise InvestigationOperationPendingError(
+                "local reconciliation is unavailable"
+            )
+        try:
+            with ExitStack() as guards:
+                run_id = guards.enter_context(
+                    self._operation_store.recovery(request.request_id)
+                )
+                reservation = self._operation_store.get(request.request_id)
+                if reservation is None or run_id != request.expected_run_id:
+                    raise InvestigationOperationPendingError(
+                        "operation run binding changed"
+                    )
+                guards.enter_context(self._runner.recovery_guard(reservation.thread_id))
+                raw = self._raw_run_store
+                attempt = raw.get_attempt(run_id)
+                if attempt is None or (
+                    attempt.thread_id != reservation.thread_id
+                    or attempt.execution_mode.value != reservation.kind.value
+                    or attempt.repository_id != request.expected_repository_id
+                    or attempt.commit_sha != request.expected_commit_sha
+                ):
+                    raise InvestigationOperationPendingError(
+                        "operation and raw identity do not reconcile"
+                    )
+                if reservation.response is not None:
+                    return reservation.response.model_copy(
+                        update={"idempotent_replay": True}
+                    )
+                latest = raw.list_attempts(
+                    thread_id=reservation.thread_id, max_results=1
+                )
+                if not latest or latest[0].run_id != run_id:
+                    raise InvestigationOperationPendingError(
+                        "a later attempt requires manual inspection"
+                    )
+                events = raw.list_trace_events(run_id)
+                if not events:
+                    raise InvestigationOperationPendingError(
+                        "committed attempt journal is unavailable"
+                    )
+                view, episode, repository = self._runner.reconcile_persisted_artifacts(
+                    attempt=attempt
+                )
+                if view.turn_number != attempt.turn_number:
+                    raise InvestigationOperationPendingError(
+                        "checkpoint turn does not reconcile"
+                    )
+                if attempt.status is AttemptStatus.RUNNING:
+                    raw.finish_attempt(
+                        run_id,
+                        status=AttemptStatus.FAILED,
+                        finished_at_ms=max(
+                            time_ns() // 1_000_000, attempt.started_at_ms
+                        ),
+                        terminal_event=TraceEvent(
+                            run_id=run_id,
+                            sequence=len(events),
+                            kind=TraceEventKind.RUN_FAILED,
+                            payload={
+                                "error_code": "orphan_reconciled",
+                                "phase": "local_recovery",
+                                "request_id": request.request_id,
+                                "checkpoint_state": view.execution_state.value,
+                                "model_replayed": False,
+                                "unknown_usage_preserved": True,
+                                "episode_consolidation": None
+                                if episode is None
+                                else episode.disposition.value,
+                                "repository_consolidation": None
+                                if repository is None
+                                else repository.reason,
+                            },
+                        ),
+                    )
+                response = self._operation_from_view(
+                    request_id=request.request_id,
+                    view=view,
+                    outcome=None,
+                    recovered=True,
+                )
+                response = response.model_copy(
+                    update={
+                        "run_id": run_id,
+                        "recovery_note": "orphan_reconciled_without_model_replay",
+                        "usage_cost_report": None
+                        if self._pricing_table is None
+                        else raw.get_attempt_usage_cost_report(
+                            run_id, self._pricing_table
+                        ),
+                    }
+                )
+                self._operation_store.complete(
+                    request_id=request.request_id,
+                    request_digest=reservation.request_digest,
+                    response=response,
+                )
+                return response
+        except ExecutionLockUnavailable as error:
+            raise InvestigationOperationPendingError(str(error)) from error
 
     def start_investigation(
         self,
@@ -206,29 +334,32 @@ class InvestigationService:
             if replay is not None:
                 return replay
 
-            outcome = self._runner.run(
-                RunRequest(
-                    thread_id=reservation.thread_id,
-                    repo_path=request.repo_path,
-                    objective=request.objective,
-                    max_tool_calls_per_step=request.max_tool_calls_per_step,
-                    max_explorer_calls_per_step=(request.max_explorer_calls_per_step),
-                    max_no_progress_rounds=request.max_no_progress_rounds,
-                    max_plan_revisions=request.max_plan_revisions,
-                    context_budget_tokens=request.context_budget_tokens,
-                    max_attempt_cost_usd=request.max_attempt_cost_usd,
-                    human_review_policy=request.human_review_policy,
-                    memory_retrieval_enabled=request.memory_retrieval_enabled,
-                    max_repository_memory_results=(
-                        request.max_repository_memory_results
-                    ),
-                    max_episodic_memory_results=(request.max_episodic_memory_results),
-                )
-            )
-            return self._complete_outcome(
+            return self._execute_reserved(
                 request_id=request.request_id,
                 request_digest=digest,
-                outcome=outcome,
+                invoke=lambda: self._runner.run(
+                    RunRequest(
+                        thread_id=reservation.thread_id,
+                        repo_path=request.repo_path,
+                        objective=request.objective,
+                        max_tool_calls_per_step=request.max_tool_calls_per_step,
+                        max_explorer_calls_per_step=(
+                            request.max_explorer_calls_per_step
+                        ),
+                        max_no_progress_rounds=request.max_no_progress_rounds,
+                        max_plan_revisions=request.max_plan_revisions,
+                        context_budget_tokens=request.context_budget_tokens,
+                        max_attempt_cost_usd=request.max_attempt_cost_usd,
+                        human_review_policy=request.human_review_policy,
+                        memory_retrieval_enabled=request.memory_retrieval_enabled,
+                        max_repository_memory_results=(
+                            request.max_repository_memory_results
+                        ),
+                        max_episodic_memory_results=(
+                            request.max_episodic_memory_results
+                        ),
+                    )
+                ),
             )
 
     def replay_resume_investigation(
@@ -277,23 +408,24 @@ class InvestigationService:
             if replay is not None:
                 return replay
 
-            if request.decision is None:
-                outcome = self._runner.resume(
-                    ResumeRequest(thread_id=reservation.thread_id)
-                )
-            else:
+            def invoke():
+                if request.decision is None:
+                    return self._runner.resume(
+                        ResumeRequest(thread_id=reservation.thread_id)
+                    )
                 assert request.interrupt_id is not None
-                outcome = self._runner.respond(
+                return self._runner.respond(
                     HumanResponseRequest(
                         thread_id=reservation.thread_id,
                         interrupt_id=request.interrupt_id,
                         decision=request.decision,
                     )
                 )
-            return self._complete_outcome(
+
+            return self._execute_reserved(
                 request_id=request.request_id,
                 request_digest=digest,
-                outcome=outcome,
+                invoke=invoke,
             )
 
     def replay_continue_investigation(
@@ -342,16 +474,15 @@ class InvestigationService:
             if replay is not None:
                 return replay
 
-            outcome = self._runner.continue_thread(
-                ContinueRequest(
-                    thread_id=reservation.thread_id,
-                    prompt=request.prompt,
-                )
-            )
-            return self._complete_outcome(
+            return self._execute_reserved(
                 request_id=request.request_id,
                 request_digest=digest,
-                outcome=outcome,
+                invoke=lambda: self._runner.continue_thread(
+                    ContinueRequest(
+                        thread_id=reservation.thread_id,
+                        prompt=request.prompt,
+                    )
+                ),
             )
 
     def get_localization_result(
@@ -514,34 +645,32 @@ class InvestigationService:
         if reservation.state is OperationReservationState.NEW:
             return None
 
+        raise InvestigationOperationPendingError(
+            "pending lifecycle operation requires explicit run-bound reconciliation"
+        )
+
+    def _execute_reserved(
+        self,
+        *,
+        request_id: str,
+        request_digest: str,
+        invoke: Callable[[], RunOutcome],
+    ) -> InvestigationOperationResult:
         try:
-            view = self._runner.inspect_thread(
-                ResumeRequest(thread_id=reservation.thread_id)
-            )
-        except ValueError as error:
-            expected = f"Checkpoint thread does not exist: {reservation.thread_id}"
-            if (
-                str(error) == expected
-                and reservation.kind is InvestigationOperationKind.START
+            with (
+                self._operation_store.execution(request_id),
+                bind_run_observer(
+                    lambda run_id: self._operation_store.bind_run(request_id, run_id)
+                ),
             ):
-                return None
-            if str(error) == expected:
-                raise InvestigationOperationPendingError(
-                    "reserved lifecycle operation has no recoverable checkpoint"
-                ) from error
-            raise
-        recovered = self._operation_from_view(
-            request_id=reservation.request_id,
-            view=view,
-            outcome=None,
-            recovered=True,
-        )
-        self._operation_store.complete(
-            request_id=reservation.request_id,
-            request_digest=request_digest,
-            response=recovered,
-        )
-        return recovered.model_copy(update={"idempotent_replay": True})
+                outcome = invoke()
+                return self._complete_outcome(
+                    request_id=request_id,
+                    request_digest=request_digest,
+                    outcome=outcome,
+                )
+        except ExecutionLockUnavailable as error:
+            raise InvestigationOperationPendingError(str(error)) from error
 
     def _complete_outcome(
         self,

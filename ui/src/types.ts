@@ -354,6 +354,14 @@ export interface InvestigationOperationResult {
   run_id: string | null;
   idempotent_replay: boolean;
   recovered_from_checkpoint: boolean;
+  recovery_note?: "orphan_reconciled_without_model_replay" | null;
+}
+
+export interface ReconcileInvestigationRequest {
+  request_id: string;
+  expected_run_id: string;
+  expected_repository_id: string;
+  expected_commit_sha: string | null;
 }
 
 export type InvestigationOperationKind = "start" | "resume" | "continue" | "respond";
@@ -368,6 +376,8 @@ export interface DashboardLifecycleOperationStatus {
   reserved_at_ms: number;
   latest_attempt: RawRunAttempt | null;
   result: InvestigationOperationResult | null;
+  bound_run_id?: string | null;
+  recovery_status?: "not_needed" | "unavailable" | "active_or_unavailable" | "reconcilable";
 }
 
 export interface DashboardMemoryDeleteCommand {

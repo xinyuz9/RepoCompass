@@ -434,6 +434,7 @@ class DashboardQueryService:
         kind: InvestigationOperationKind,
         reserved_at_ms: int,
         run_id: str | None,
+        identity_bound: bool = False,
     ) -> RawRunAttempt | None:
         """Find only the attempt attributable to one durable operation window."""
 
@@ -462,7 +463,10 @@ class DashboardQueryService:
                 if attempt.thread_id == normalized_thread_id
                 and attempt.repository_id == self._context.repository_id
                 and attempt.execution_mode is expected_mode
-                and attempt.started_at_ms >= reserved_at_ms
+                and (
+                    (identity_bound and run_id is not None)
+                    or attempt.started_at_ms >= reserved_at_ms
+                )
             ),
             None,
         )

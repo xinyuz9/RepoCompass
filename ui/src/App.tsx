@@ -262,7 +262,8 @@ export function App() {
 
         {streamEnabled ? <p className="event-stream-status" role="status">Live events: {streamState}. Read-only, at most 6 bounded sessions. Errors pause updates; Refresh reconnects without rerunning the goal.</p> : null}
 
-        <LifecycleRecoveryCenter system={system.data} onThreadActivated={activateThread} />
+        <LifecycleRecoveryCenter system={system.data} onThreadActivated={activateThread}
+          visibleThreadId={lens === "chat" ? thread.data?.thread.thread_id : null} />
 
         {rootError ? <ErrorState error={rootError} onRetry={refresh} /> : null}
         {!rootError && (catalog.isPending || system.isPending) ? <LoadingState /> : null}

@@ -36,6 +36,7 @@ from repocompass.service import (
     StartInvestigationRequest,
 )
 from repocompass.tools.gateway import ToolExecutionContext
+from repocompass.service.contracts import ReconcileInvestigationRequest
 
 _LifecycleResult = TypeVar("_LifecycleResult")
 
@@ -176,7 +177,8 @@ class DashboardCommandService:
             thread_id=operation.thread_id,
             kind=operation.kind,
             reserved_at_ms=operation.reserved_at_ms,
-            run_id=result_run_id,
+            run_id=result_run_id or operation.bound_run_id,
+            **({"identity_bound": True} if operation.bound_run_id is not None else {}),
         )
         return DashboardLifecycleOperationStatus(
             request_id=operation.request_id,
@@ -186,7 +188,26 @@ class DashboardCommandService:
             reserved_at_ms=operation.reserved_at_ms,
             latest_attempt=attempt,
             result=operation.result,
+            bound_run_id=operation.bound_run_id,
+            recovery_status=operation.recovery_status,
         )
+
+    def reconcile_operation(
+        self, command: ReconcileInvestigationRequest
+    ) -> InvestigationOperationResult:
+        current = self._query_service.repository_context
+        if (
+            command.expected_repository_id != current.repository_id
+            or command.expected_commit_sha != current.commit_sha
+        ):
+            raise DashboardCommandConflictError("visible repository snapshot is stale")
+        service = self._require_lifecycle_service()
+        reconcile = getattr(service, "reconcile_operation", None)
+        if not callable(reconcile):
+            raise DashboardCommandUnavailableError(
+                "local reconciliation is unavailable"
+            )
+        return self._invoke_lifecycle(lambda: reconcile(command))
 
     def start_investigation(
         self,

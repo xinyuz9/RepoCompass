@@ -40,7 +40,12 @@ from repocompass.structure.evidence_graph import (
     EvidenceGraphEdge,
     EvidenceGraphNode,
 )
-from repocompass.tools.contracts import MAX_SAFE_JSON_INTEGER, Sha256Digest
+from repocompass.tools.contracts import (
+    MAX_SAFE_JSON_INTEGER,
+    Sha256Digest,
+    CommitSha,
+    IDENTIFIER_PATTERN,
+)
 
 SERVICE_SCHEMA_VERSION = 1
 REQUEST_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
@@ -195,6 +200,15 @@ class ExpandSymbolRequest(ThreadArtifactRequest):
         return self
 
 
+class ReconcileInvestigationRequest(_ServiceModel):
+    """No new execution: reconcile one exact request, run and repository snapshot."""
+
+    request_id: str = Field(pattern=REQUEST_ID_PATTERN)
+    expected_run_id: str = Field(pattern=IDENTIFIER_PATTERN)
+    expected_repository_id: Sha256Digest
+    expected_commit_sha: CommitSha | None = None
+
+
 class InvestigationOperationResult(_ServiceModel):
     """One lifecycle attempt or safely recovered checkpoint state."""
 
@@ -212,6 +226,7 @@ class InvestigationOperationResult(_ServiceModel):
     usage_cost_report: AttemptUsageCostReport | None = None
     idempotent_replay: bool = False
     recovered_from_checkpoint: bool = False
+    recovery_note: Literal["orphan_reconciled_without_model_replay"] | None = None
 
     @model_validator(mode="after")
     def require_consistent_state(self) -> "InvestigationOperationResult":
@@ -247,6 +262,10 @@ class InvestigationOperationSnapshot(_ServiceModel):
     state: InvestigationOperationState
     reserved_at_ms: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
     result: InvestigationOperationResult | None = None
+    bound_run_id: str | None = Field(default=None, pattern=IDENTIFIER_PATTERN)
+    recovery_status: Literal[
+        "not_needed", "unavailable", "active_or_unavailable", "reconcilable"
+    ] = "unavailable"
 
     @model_validator(mode="after")
     def require_consistent_operation_state(self) -> "InvestigationOperationSnapshot":

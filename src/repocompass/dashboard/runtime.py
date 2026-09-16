@@ -273,6 +273,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 InvestigationService(
                     runner,
                     operation_store=operation_store,
+                    raw_run_store=raw_run_store,
+                    pricing_table=pricing_table,
                     trace_sink=JsonlTraceSink(),
                     trace_directory=trace_directory,
                 )

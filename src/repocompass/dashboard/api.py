@@ -63,6 +63,7 @@ from repocompass.memory.contracts import MemoryScope
 from repocompass.memory.store import MemoryStoreError
 from repocompass.storage.raw_store import RawStoreError
 from repocompass.service.contracts import (
+    ReconcileInvestigationRequest,
     InvestigationOperationResult,
     REQUEST_ID_PATTERN,
 )
@@ -585,6 +586,32 @@ def create_dashboard_app(
         )
         def get_operation(request_id: str) -> DashboardLifecycleOperationStatus:
             return commands.get_operation(request_id)
+
+        @app.post(
+            f"{DASHBOARD_API_PREFIX}/operations/{{request_id}}/reconcile",
+            response_model=InvestigationOperationResult,
+        )
+        def reconcile_operation(
+            request_id: str,
+            command: ReconcileInvestigationRequest,
+            idempotency_key: Annotated[
+                str,
+                Header(
+                    alias="Idempotency-Key", pattern=REQUEST_ID_PATTERN, max_length=128
+                ),
+            ],
+        ) -> InvestigationOperationResult:
+            _require_idempotency(command.request_id, idempotency_key)
+            if request_id != command.request_id:
+                raise DashboardCommandConflictError(
+                    "reconciliation request identity differs"
+                )
+            reconcile = getattr(commands, "reconcile_operation", None)
+            if not callable(reconcile):
+                raise DashboardCommandUnavailableError(
+                    "local reconciliation is unavailable"
+                )
+            return reconcile(command)
 
         @app.post(
             f"{DASHBOARD_API_PREFIX}/investigations",

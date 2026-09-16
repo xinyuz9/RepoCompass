@@ -6,6 +6,10 @@ duplicating node routing, tool execution, or budget enforcement.
 """
 
 from __future__ import annotations
+import hashlib
+from functools import wraps
+from repocompass.agent.checkpoint import checkpoint_thread_lock
+from repocompass.agent.execution_binding import announce_run
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
@@ -47,6 +51,7 @@ from repocompass.agent.result import FinalResult, revalidate_final_result
 from repocompass.agent.routing import TerminationStatus
 from repocompass.agent.structural_artifacts import InvestigationStructure
 from repocompass.agent.thread_view import (
+    ThreadExecutionState,
     ThreadInvestigationView,
     build_thread_investigation_view,
 )
@@ -145,6 +150,20 @@ def _normalize_identifier(value: object, *, name: str) -> str:
         raise ValueError(f"{name} must not be empty")
 
     return normalized
+
+
+def _guard_thread_write(method):
+    @wraps(method)
+    def guarded(self, request):
+        thread_id = _normalize_identifier(
+            request.thread_id or self._thread_id_factory(), name="thread_id"
+        )
+        if request.thread_id is None:
+            request = request.model_copy(update={"thread_id": thread_id})
+        with checkpoint_thread_lock(self._checkpointer, thread_id):
+            return method(self, request)
+
+    return guarded
 
 
 def _thread_config(
@@ -838,6 +857,93 @@ class AgentRunner:
             snapshot=snapshot,
         )
 
+    def recovery_guard(self, thread_id: str):
+        return checkpoint_thread_lock(self._checkpointer, thread_id)
+
+    def reconcile_persisted_artifacts(self, *, attempt):
+        """Repair deterministic local artifacts under the service's execution lock.
+
+        Never streams the graph or invokes a model. The caller must prove this
+        request's worker lock is free and validate its exact raw run identity.
+        """
+        thread_id, run_id = attempt.thread_id, attempt.run_id
+        if (
+            self._raw_run_store is None
+            or self._raw_run_store.get_attempt(run_id) != attempt
+        ):
+            raise ValueError("runner raw store does not match recovery attempt")
+        graph = create_agent_graph(
+            self._models,
+            architecture_profile=self._architecture_profile,
+            checkpointer=self._checkpointer,
+            raw_run_recorder=self._raw_run_recorder,
+            memory_store=self._memory_store,
+            memory_clock=self._episode_clock_factory,
+            cancellation_check=self._cancellation_check,
+        )
+        snapshot = graph.get_state(_thread_config(thread_id))
+        if (
+            not snapshot.values
+            or (snapshot.metadata or {}).get("repocompass_run_id") != run_id
+        ):
+            raise ValueError("checkpoint does not match the exact reserved run")
+        self._require_current_repository_snapshot(snapshot, thread_id=thread_id)
+        view = build_thread_investigation_view(thread_id=thread_id, snapshot=snapshot)
+        state = snapshot.values
+        context = ToolExecutionContext(state["repo_path"])
+        if (
+            view.turn_number != attempt.turn_number
+            or hashlib.sha256(view.objective.strip().encode("utf-8")).hexdigest()
+            != attempt.objective_digest
+            or context.repository_id != attempt.repository_id
+            or context.commit_sha != attempt.commit_sha
+        ):
+            raise ValueError("checkpoint and raw recovery identity disagree")
+        episode = repository = None
+        if state.get("memory_retrieval_enabled") and self._memory_store is None:
+            raise ValueError("reconciliation requires the original memory store")
+        if (
+            view.execution_state is ThreadExecutionState.COMPLETED
+            and self._memory_store is not None
+        ):
+            from repocompass.memory.consolidation import consolidate_terminal_episode
+            from repocompass.memory.fact_consolidation import (
+                consolidate_repository_facts,
+            )
+
+            outcome = RunOutcome(
+                thread_id=thread_id,
+                final_result=view.final_result,
+                termination_status=view.termination_status,
+                step_stop_reason=view.step_stop_reason,
+                trace=RunTrace(run_id),
+                tool_audit_records=_read_attempt_tool_audits(state, run_id=run_id),
+            )
+            created_at = self._episode_clock_factory()
+            episode = consolidate_terminal_episode(
+                self._memory_store,
+                context=context,
+                outcome=outcome,
+                objective=view.objective,
+                turn_number=view.turn_number,
+                created_at_ms=created_at,
+            )
+            repository = consolidate_repository_facts(
+                self._memory_store,
+                context=context,
+                outcome=outcome,
+                created_at_ms=created_at,
+            )
+        if self._cancellation_store is not None:
+            record = self._cancellation_store.get(run_id)
+            if record is not None:
+                cancelled = (
+                    view.termination_status == "cancelled"
+                    and state.get("cancelled_run_id") == run_id
+                )
+                self._cancellation_store.finish(run_id, cancelled=cancelled)
+        return view, episode, repository
+
     def inspect_conversation(
         self, request: ResumeRequest, *, before_turn: int | None = None, limit: int = 10
     ):
@@ -861,6 +967,7 @@ class AgentRunner:
             limit=limit,
         )
 
+    @_guard_thread_write
     def run(self, request: RunRequest) -> RunOutcome:
         """Start one new repository investigation.
 
@@ -943,6 +1050,7 @@ class AgentRunner:
             execution_mode="start",
         )
 
+    @_guard_thread_write
     def resume(self, request: ResumeRequest) -> RunOutcome:
         """Resume the latest checkpoint for one persisted investigation."""
 
@@ -975,6 +1083,7 @@ class AgentRunner:
             execution_mode="resume",
         )
 
+    @_guard_thread_write
     def respond(self, request: HumanResponseRequest) -> RunOutcome:
         """Consume one exact pending Human-review interrupt."""
 
@@ -1032,6 +1141,7 @@ class AgentRunner:
             human_decision=request.decision,
         )
 
+    @_guard_thread_write
     def continue_thread(self, request: ContinueRequest) -> RunOutcome:
         """Start a new Human turn on one completed checkpoint thread."""
 
@@ -1205,6 +1315,7 @@ class AgentRunner:
             }
         trace.record(TraceEventKind.RUN_STARTED, payload=started_payload)
 
+        announce_run(trace.run_id)
         recorder = self._raw_run_recorder
         if recorder is not None:
             recorder.start_attempt(

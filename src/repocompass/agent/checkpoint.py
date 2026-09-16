@@ -13,6 +13,8 @@ from pathlib import Path
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.checkpoint.sqlite import SqliteSaver
 from pydantic import BaseModel
+from repocompass.storage.execution_lock import execution_file_lock
+
 
 from repocompass.agent.candidate import (
     CandidateRelation,
@@ -218,6 +220,25 @@ _CHECKPOINT_ALLOWED_TYPES: tuple[type[object], ...] = (
     ReadingStepKind,
     ReadingStepReason,
 )
+
+
+@contextmanager
+def checkpoint_thread_lock(checkpointer, thread_id: str):
+    """Coordinate every local SQLite Runner writer, including CLI and recovery."""
+    if not isinstance(checkpointer, SqliteSaver):
+        yield
+        return
+    with checkpointer.lock:
+        databases = checkpointer.conn.execute("PRAGMA database_list").fetchall()
+    database = next((row[2] for row in databases if row[1] == "main"), "")
+    if not database:
+        yield
+        return
+    path = Path(database).resolve()
+    with execution_file_lock(
+        path.with_name(path.name + ".execution-locks"), thread_id, create=True
+    ):
+        yield
 
 
 def _rehydrate_checkpoint_value(value: object) -> object:

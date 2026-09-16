@@ -122,6 +122,10 @@ class DashboardLifecycleOperationStatus(_DashboardModel):
     reserved_at_ms: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
     latest_attempt: RawRunAttempt | None = None
     result: InvestigationOperationResult | None = None
+    bound_run_id: str | None = Field(default=None, pattern=IDENTIFIER_PATTERN)
+    recovery_status: Literal[
+        "not_needed", "unavailable", "active_or_unavailable", "reconcilable"
+    ] = "unavailable"
 
     @model_validator(mode="after")
     def reconcile_operation_progress(self) -> "DashboardLifecycleOperationStatus":
@@ -137,7 +141,14 @@ class DashboardLifecycleOperationStatus(_DashboardModel):
             if (
                 self.latest_attempt.thread_id != self.thread_id
                 or self.latest_attempt.execution_mode.value != self.kind.value
-                or self.latest_attempt.started_at_ms < self.reserved_at_ms
+                or (
+                    self.bound_run_id is None
+                    and self.latest_attempt.started_at_ms < self.reserved_at_ms
+                )
+                or (
+                    self.bound_run_id is not None
+                    and self.latest_attempt.run_id != self.bound_run_id
+                )
             ):
                 raise ValueError("operation attempt identity does not reconcile")
             if (

@@ -18,9 +18,16 @@ import type {
   PublicConversationPage,
   CancellationRecord,
   CancellationRequest,
+  ReconcileInvestigationRequest,
 } from "./types";
 
 const API_ROOT = "/api/v1";
+
+export function reconcileOperation(command: ReconcileInvestigationRequest) {
+  return mutateJson<ReconcileInvestigationRequest, InvestigationOperationResult>(
+    "/operations/" + encodeURIComponent(command.request_id) + "/reconcile", "POST", command,
+  );
+}
 
 export function getCancellation(runId: string, signal?: AbortSignal) {
   return getJson<CancellationRecord>("/runs/" + encodeURIComponent(runId) + "/cancellation", signal);

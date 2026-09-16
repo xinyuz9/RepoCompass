@@ -32,6 +32,7 @@ from repocompass.service.contracts import (
     ThreadArtifactRequest,
 )
 from repocompass.service.investigation import (
+    InvestigationOperationPendingError,
     InvestigationArtifactUnavailableError,
     InvestigationService,
 )
@@ -371,7 +372,7 @@ def test_high_level_getters_never_offer_internal_repository_tools() -> None:
         )
 
 
-def test_pending_start_recovers_checkpoint_without_running_again(
+def test_pending_start_does_not_mistake_any_checkpoint_for_its_outcome(
     tmp_path: Path,
 ) -> None:
     runner = _FakeRunner()
@@ -394,12 +395,9 @@ def test_pending_start_recovers_checkpoint_without_running_again(
         proposed_thread_id="thread-1",
     )
 
-    recovered = service.start_investigation(request)
-
-    assert recovered.thread_id == "thread-1"
-    assert recovered.run_id is None
-    assert recovered.recovered_from_checkpoint is True
-    assert recovered.idempotent_replay is True
+    with pytest.raises(InvestigationOperationPendingError, match="reconciliation"):
+        service.start_investigation(request)
+    assert store.get(request.request_id).state.value == "pending"
     assert not runner.run_requests
 
 

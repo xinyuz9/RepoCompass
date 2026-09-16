@@ -172,7 +172,8 @@
   position: relative;
   z-index: 4;
   display: grid;
-  max-height: 180px;
+  grid-auto-rows: max-content;
+  max-height: min(40dvh, 320px);
   flex: 0 0 auto;
   gap: 7px;
   padding: 9px clamp(14px, 3vw, 32px);
@@ -202,6 +203,7 @@
 .recovery-item__actions button { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 9px; color: currentColor; border: 1px solid currentColor; border-radius: 7px; background: rgba(8, 13, 16, .48); font-size: 12px; cursor: pointer; }
 .recovery-item__actions button:disabled { opacity: .45; cursor: wait; }
 .recovery-item > p { grid-column: 2 / -1; margin: -2px 0 2px; color: var(--danger); font-size: 12px; }
+.recovery-item > p.recovery-note { color: var(--text-soft); }
 @media (max-width: 930px) {
   .recovery-item { grid-template-columns: auto minmax(0, 1fr); }
   .recovery-item__actions { grid-column: 1 / -1; }

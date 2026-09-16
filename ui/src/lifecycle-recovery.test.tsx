@@ -24,6 +24,36 @@ afterEach(() => {
 });
 
 describe("LifecycleRecoveryCenter", () => {
+  it("reconciles an inactive exact run only after a click and keeps the recovery explanation", async () => {
+    rememberLifecycleRequest(startDraft());
+    const onThreadActivated = vi.fn();
+    let reconciled = false;
+    const result = { ...operationResult(), run_id: "run-1", recovery_note: "orphan_reconciled_without_model_replay" };
+    const fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === "POST") { reconciled = true; return Promise.resolve(jsonResponse(result)); }
+      return Promise.resolve(jsonResponse({ schema_version: 1, request_id: "request-start", kind: "start", thread_id: "thread-1",
+        state: reconciled ? "completed" : "pending", reserved_at_ms: 1000,
+        bound_run_id: "run-1", recovery_status: reconciled ? "not_needed" : "reconcilable",
+        latest_attempt: null, result: reconciled ? result : null }));
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderRecovery(onThreadActivated);
+    const button = await screen.findByRole("button", { name: "Reconcile saved run" });
+    expect(fetch.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Replay exact request" })).not.toBeInTheDocument();
+    fireEvent.click(button);
+    expect(await screen.findByText("Local records reconciled")).toBeVisible();
+    expect(onThreadActivated).not.toHaveBeenCalled();
+    const posts = fetch.mock.calls.filter((call) => call[1]?.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.[0]).toBe("/api/v1/operations/request-start/reconcile");
+    expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({ request_id: "request-start", expected_run_id: "run-1",
+      expected_repository_id: workspace.repository_id, expected_commit_sha: workspace.commit_sha });
+    fireEvent.click(screen.getByRole("button", { name: "Open reconciled thread" }));
+    expect(onThreadActivated).toHaveBeenCalledWith("thread-1");
+    expect(readLifecycleRequests()).toEqual([]);
+  });
+
   it("projects a running backend attempt without offering a duplicate replay", async () => {
     rememberLifecycleRequest(startDraft());
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse({

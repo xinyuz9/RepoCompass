@@ -12,6 +12,7 @@ from repocompass.service.contracts import (
 from repocompass.service.operation_store import (
     OperationReservationState,
     ServiceOperationConflictError,
+    ServiceOperationMigrationError,
     ServiceOperationStore,
     open_service_operation_store,
 )
@@ -86,7 +87,7 @@ def test_operation_store_reserves_completes_and_replays() -> None:
     assert replay.state is OperationReservationState.COMPLETED
     assert replay.response == _result()
     assert replay.reserved_at_ms == 1_234
-    assert store.schema_version == 2
+    assert store.schema_version == 3
 
 
 def test_operation_store_get_is_read_only_and_hides_missing_requests() -> None:
@@ -276,10 +277,35 @@ def test_operation_store_migrates_v1_reservations_with_safe_epoch() -> None:
     store = ServiceOperationStore(connection, clock_ms=lambda: 9_999)
     migrated = store.get("request-legacy")
 
-    assert store.schema_version == 2
+    assert store.schema_version == 3
     assert migrated is not None
     assert migrated.reserved_at_ms == 0
     columns = {
         row[1] for row in connection.execute("PRAGMA table_info(service_operations)")
     }
     assert "reserved_at_ms" in columns
+
+
+def test_operation_migration_rolls_back_on_invalid_legacy_schema() -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.execute("CREATE TABLE service_operations(request_id TEXT)")
+    connection.execute("PRAGMA user_version = 2")
+    connection.commit()
+    with pytest.raises(ServiceOperationMigrationError, match="schema shape"):
+        ServiceOperationStore(connection)
+    assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert (
+        connection.execute(
+            "SELECT name FROM sqlite_master WHERE name = 'service_executions'"
+        ).fetchone()
+        is None
+    )
+
+
+@pytest.mark.parametrize("version", [3, 4])
+def test_operation_store_rejects_unrecognized_or_incomplete_schema(version) -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.execute(f"PRAGMA user_version = {version}")
+    with pytest.raises(ServiceOperationMigrationError):
+        ServiceOperationStore(connection)
+    assert connection.execute("PRAGMA user_version").fetchone()[0] == version

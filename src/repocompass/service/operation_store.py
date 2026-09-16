@@ -20,8 +20,12 @@ from repocompass.service.contracts import (
     InvestigationOperationResult,
     REQUEST_ID_PATTERN,
 )
+from repocompass.storage.execution_lock import (
+    execution_file_lock,
+    ExecutionLockUnavailable,
+)
 
-SERVICE_OPERATION_STORE_SCHEMA_VERSION = 2
+SERVICE_OPERATION_STORE_SCHEMA_VERSION = 3
 MAX_OPERATION_RESPONSE_BYTES = 33_554_432
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _REQUEST_ID_PATTERN = re.compile(REQUEST_ID_PATTERN)
@@ -72,6 +76,7 @@ class ServiceOperationStore:
         connection: sqlite3.Connection,
         *,
         clock_ms: Callable[[], int] = _wall_clock_ms,
+        execution_directory: Path | None = None,
     ) -> None:
         if not isinstance(connection, sqlite3.Connection):
             raise TypeError("connection must be a sqlite3.Connection")
@@ -80,6 +85,7 @@ class ServiceOperationStore:
         self._connection = connection
         self._lock = RLock()
         self._clock_ms = clock_ms
+        self._execution_directory = execution_directory
         self._migrate()
 
     @property
@@ -236,6 +242,14 @@ class ServiceOperationStore:
                 (normalized_request_id,),
             ).fetchone()
             if row is None:
+                pending = self._connection.execute(
+                    "SELECT 1 FROM service_operations WHERE thread_id = ? AND response_json IS NULL LIMIT 1",
+                    (normalized_thread_id,),
+                ).fetchone()
+                if pending is not None:
+                    raise ServiceOperationConflictError(
+                        "thread has an unresolved lifecycle operation"
+                    )
                 reserved_at_ms = _validate_timestamp(self._clock_ms())
                 self._connection.execute(
                     """
@@ -304,6 +318,83 @@ class ServiceOperationStore:
                 response=response,
             )
 
+    @contextmanager
+    def execution(self, request_id: str) -> Iterator[None]:
+        """Enroll new execution once and hold its OS lock through completion."""
+        request_id = _validate_request_id(request_id)
+        if self._execution_directory is None:
+            # In-memory/custom adapters remain usable but are not crash-recoverable.
+            yield
+            return
+        with execution_file_lock(self._execution_directory, request_id, create=True):
+            with self._transaction():
+                reservation = self.get(request_id)
+                if (
+                    reservation is None
+                    or reservation.state is not OperationReservationState.PENDING
+                ):
+                    raise ServiceOperationConflictError(
+                        "execution needs a pending reservation"
+                    )
+                existing = self._connection.execute(
+                    "SELECT 1 FROM service_executions WHERE request_id = ?",
+                    (request_id,),
+                ).fetchone()
+                if existing is not None:
+                    raise ServiceOperationConflictError(
+                        "execution already enrolled; reconcile explicitly"
+                    )
+                self._connection.execute(
+                    "INSERT INTO service_executions(request_id, run_id) VALUES (?, NULL)",
+                    (request_id,),
+                )
+            yield
+
+    def bind_run(self, request_id: str, run_id: str) -> None:
+        if self._execution_directory is None:
+            return
+        request_id = _validate_request_id(request_id)
+        run_id = _validate_thread_id(run_id)
+        with self._transaction():
+            row = self._connection.execute(
+                "SELECT run_id FROM service_executions WHERE request_id = ?",
+                (request_id,),
+            ).fetchone()
+            if row is None or (row[0] is not None and row[0] != run_id):
+                raise ServiceOperationConflictError("operation run binding conflicts")
+            self._connection.execute(
+                "UPDATE service_executions SET run_id = ? WHERE request_id = ?",
+                (run_id, request_id),
+            )
+
+    def execution_run(self, request_id: str) -> str | None:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT run_id FROM service_executions WHERE request_id = ?",
+                (_validate_request_id(request_id),),
+            ).fetchone()
+        return None if row is None or row[0] is None else _validate_thread_id(row[0])
+
+    @contextmanager
+    def recovery(self, request_id: str) -> Iterator[str]:
+        request_id = _validate_request_id(request_id)
+        if self._execution_directory is None:
+            raise ExecutionLockUnavailable("execution was not durably enrolled")
+        with execution_file_lock(self._execution_directory, request_id, create=False):
+            run_id = self.execution_run(request_id)
+            if run_id is None:
+                raise ExecutionLockUnavailable("operation has no exact run binding")
+            yield run_id
+
+    def recovery_availability(self, request_id: str) -> str:
+        if self.execution_run(request_id) is None:
+            return "unavailable"
+        try:
+            with self.recovery(request_id):
+                return "reconcilable"
+        except ExecutionLockUnavailable:
+            return "active_or_unavailable"
+
     def complete(
         self,
         *,
@@ -369,7 +460,8 @@ class ServiceOperationStore:
             return True
 
     def _migrate(self) -> None:
-        with self._lock:
+        # DDL, schema validation and version advancement commit together.
+        with self._transaction():
             row = self._connection.execute("PRAGMA user_version").fetchone()
             version = 0 if row is None else row[0]
             if type(version) is not int or version < 0:
@@ -398,18 +490,66 @@ class ServiceOperationStore:
                     "service_operations_thread_request "
                     "ON service_operations(thread_id, request_id)"
                 )
-                version = SERVICE_OPERATION_STORE_SCHEMA_VERSION
+                version = 2
             if version == 1:
                 self._connection.execute(
                     "ALTER TABLE service_operations ADD COLUMN reserved_at_ms "
                     "INTEGER NOT NULL DEFAULT 0 CHECK(reserved_at_ms >= 0)"
                 )
-                version = SERVICE_OPERATION_STORE_SCHEMA_VERSION
+                version = 2
+            if version == 2:
+                self._connection.execute(
+                    "CREATE TABLE service_executions (request_id TEXT PRIMARY KEY NOT NULL REFERENCES service_operations(request_id), run_id TEXT) STRICT"
+                )
+                version = 3
             if version == SERVICE_OPERATION_STORE_SCHEMA_VERSION:
+                self._validate_schema()
                 self._connection.execute(
                     f"PRAGMA user_version = {SERVICE_OPERATION_STORE_SCHEMA_VERSION}"
                 )
-                self._connection.commit()
+
+    def _validate_schema(self) -> None:
+        expected = {
+            "service_operations": {
+                "request_id": ("TEXT", 1, 1),
+                "request_digest": ("TEXT", 1, 0),
+                "operation_kind": ("TEXT", 1, 0),
+                "thread_id": ("TEXT", 1, 0),
+                "reserved_at_ms": ("INTEGER", 1, 0),
+                "response_json": ("TEXT", 0, 0),
+            },
+            "service_executions": {
+                "request_id": ("TEXT", 1, 1),
+                "run_id": ("TEXT", 0, 0),
+            },
+        }
+        tables = {row[1]: row for row in self._connection.execute("PRAGMA table_list")}
+        for name, columns in expected.items():
+            actual = {
+                row[1]: (row[2], row[3], row[5])
+                for row in self._connection.execute(f"PRAGMA table_info({name})")
+            }
+            table = tables.get(name)
+            if (
+                actual != columns
+                or table is None
+                or table[2] != "table"
+                or table[5] != 1
+            ):
+                raise ServiceOperationMigrationError(
+                    "operation schema shape is invalid"
+                )
+        foreign_keys = self._connection.execute(
+            "PRAGMA foreign_key_list(service_executions)"
+        ).fetchall()
+        if len(foreign_keys) != 1 or foreign_keys[0][2:5] != (
+            "service_operations",
+            "request_id",
+            "request_id",
+        ):
+            raise ServiceOperationMigrationError(
+                "execution ownership schema is invalid"
+            )
 
     @contextmanager
     def _transaction(self) -> Iterator[None]:
@@ -500,4 +640,6 @@ def open_service_operation_store(
     with closing(sqlite3.connect(str(resolved), check_same_thread=False)) as connection:
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA foreign_keys = ON")
-        yield ServiceOperationStore(connection)
+        yield ServiceOperationStore(
+            connection, execution_directory=resolved.with_name(resolved.name + ".locks")
+        )

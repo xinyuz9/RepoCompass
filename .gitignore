@@ -16,6 +16,7 @@ htmlcov/
 ui/node_modules/
 ui/test-results/
 ui/test-results-cancellation/
+ui/test-results-recovery/
 ui/playwright-report/
 
 # Local environment files

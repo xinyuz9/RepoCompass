@@ -17,6 +17,7 @@ import {
   respondToReview,
   resumeThread,
   startInvestigation,
+  reconcileOperation,
 } from "./api";
 import { compactId } from "./format";
 import { RunCancellationControl } from "./RunCancellationControl";
@@ -38,9 +39,11 @@ type RecoveryWorkspace = Pick<DashboardSystemInfo,
 export function LifecycleRecoveryCenter({
   system,
   onThreadActivated,
+  visibleThreadId,
 }: {
   system: RecoveryWorkspace | undefined;
   onThreadActivated: (threadId: string) => void;
+  visibleThreadId?: string | null;
 }) {
   const [requests, setRequests] = useState(readLifecycleRequests);
 
@@ -64,6 +67,7 @@ export function LifecycleRecoveryCenter({
           request={request}
           system={system}
           onThreadActivated={onThreadActivated}
+          visibleThreadId={visibleThreadId}
         />
       ))}
     </section>
@@ -74,10 +78,12 @@ function LifecycleRecoveryItem({
   request,
   system,
   onThreadActivated,
+  visibleThreadId,
 }: {
   request: StoredLifecycleRequest;
   system: RecoveryWorkspace | undefined;
   onThreadActivated: (threadId: string) => void;
+  visibleThreadId?: string | null;
 }) {
   const queryClient = useQueryClient();
   const blockReason = recoveryBlockReason(request, system);
@@ -98,7 +104,8 @@ function LifecycleRecoveryItem({
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchInterval: (query) => {
-      if (!canObserve) return false;
+      if (!canObserve || query.state.dataUpdateCount >= 120
+        || query.state.data?.recovery_status === "reconcilable") return false;
       if (query.state.status === "error") {
         // A locally pending POST may lose the race to its first status GET.
         // Recovery after reload has no local mutation: its 404 still stops.
@@ -126,19 +133,34 @@ function LifecycleRecoveryItem({
     onSuccess: (result) => completeRecovery(result),
     onError: () => { void operation.refetch(); },
   });
+  const reconcile = useMutation({
+    mutationFn: () => {
+      const runId = operation.data?.bound_run_id;
+      if (!canObserve || !runId || !system || operation.data?.recovery_status !== "reconcilable") {
+        return Promise.reject(new Error("An exact inactive worker binding is required."));
+      }
+      return reconcileOperation({ request_id: request.command.request_id, expected_run_id: runId,
+        expected_repository_id: system.repository_id, expected_commit_sha: system.commit_sha });
+    },
+    retry: false,
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["dashboard"] }); },
+    onError: () => { void operation.refetch(); },
+  });
 
   useEffect(() => {
     const result = operation.data?.result;
-    if (canObserve && operation.data?.state === "completed" && result) completeRecovery(result);
+    if (canObserve && operation.data?.state === "completed" && result && !result.recovery_note) completeRecovery(result);
   }, [canObserve, completeRecovery, operation.data]);
 
   const notFound = operation.error instanceof DashboardApiError
     && operation.error.status === 404;
   const attemptFailed = operation.data?.latest_attempt?.status === "failed";
-  const canReplay = canObserve && !locallySubmitting && (notFound || attemptFailed);
+  const canReplay = canObserve && !locallySubmitting && notFound;
+  const canReconcile = canObserve && operation.data?.state === "pending"
+    && operation.data.recovery_status === "reconcilable" && !!operation.data.bound_run_id;
   const phase = blockReason ?? (notFound && locallySubmitting ? "Waiting for request reservation"
     : operationPhase(operation.data, operation.error, operation.isPending));
-  const running = operation.data?.latest_attempt?.status === "running";
+  const running = operation.data?.latest_attempt?.status === "running" && !canReconcile;
   const threadId = operation.data?.thread_id;
 
   return (
@@ -164,8 +186,8 @@ function LifecycleRecoveryItem({
       </div>
       <div className="recovery-item__actions">
         {canObserve && threadId ? (
-          <button type="button" onClick={() => onThreadActivated(threadId)}>
-            Open thread
+          <button type="button" onClick={() => operation.data?.result?.recovery_note ? completeRecovery(operation.data.result) : onThreadActivated(threadId)}>
+            {operation.data?.result?.recovery_note ? "Open reconciled thread" : "Open thread"}
           </button>
         ) : null}
         {canReplay ? (
@@ -177,7 +199,10 @@ function LifecycleRecoveryItem({
             <RotateCcw size={12} />Replay exact request
           </button>
         ) : null}
-        {canObserve && (operation.isError || attemptFailed) ? (
+        {canReconcile ? <button type="button" disabled={reconcile.isPending} onClick={() => reconcile.mutate()}>
+          <RefreshCw size={12} />Reconcile saved run
+        </button> : null}
+        {canObserve && (operation.isError || attemptFailed || operation.data?.state === "pending") ? (
           <button type="button" disabled={operation.isFetching || replay.isPending} onClick={() => void operation.refetch()}>
             <RefreshCw size={12} />Retry status
           </button>
@@ -194,7 +219,10 @@ function LifecycleRecoveryItem({
       {replay.isError ? (
         <p role="alert">Exact replay was not confirmed. The same request remains recoverable.</p>
       ) : null}
-      {canObserve && operation.data?.latest_attempt ? <RunCancellationControl
+      {canReconcile ? <p>No worker holds this request lock. Reconciliation checks the exact checkpoint and repairs local records; it does not rerun models or release unknown cost reservations.</p> : null}
+      {operation.data?.result?.recovery_note ? <p className="recovery-note">Local records reconciled without model replay. The interrupted attempt remains failed; checkpoint acceptance is a separate result. Open the thread to inspect or explicitly resume pending work.</p> : null}
+      {reconcile.isError ? <p role="alert">Reconciliation was not confirmed. Inspect the persisted state or retry status; no automatic rerun occurs.</p> : null}
+      {canObserve && operation.data?.latest_attempt && threadId !== visibleThreadId && !canReconcile ? <RunCancellationControl
         attempt={operation.data.latest_attempt} enabled={system?.cancellation_enabled === true} /> : null}
     </article>
   );
@@ -237,9 +265,10 @@ function operationPhase(
   }
   if (error) return "Operation status disconnected";
   if (!operation) return "Waiting for operation status";
-  if (operation.state === "completed") return "Checkpoint confirmed";
+  if (operation.state === "completed") return operation.result?.recovery_note ? "Local records reconciled" : "Checkpoint confirmed";
+  if (operation.recovery_status === "reconcilable") return "Worker inactive · reconciliation available";
   if (operation.latest_attempt?.status === "running") return "Agent attempt running";
-  if (operation.latest_attempt?.status === "failed") return "Attempt failed · replay available";
+  if (operation.latest_attempt?.status === "failed") return "Attempt failed · inspect saved state";
   if (operation.latest_attempt) return "Finalizing durable checkpoint";
   return "Request reserved";
 }
