@@ -243,6 +243,7 @@ function ThreadConversation({
     [detail.attempts],
   );
   const latestAttempt = attempts.at(-1)?.attempt ?? null;
+  const unfinishedAttempt = latestAttempt?.status === "running";
   const stale = latestAttempt !== null && (
     latestAttempt.repository_id !== system.repository_id
     || latestAttempt.commit_sha !== system.commit_sha
@@ -273,7 +274,7 @@ function ThreadConversation({
   });
 
   const submitFollowUp = () => {
-    if (!enabled || stale || !prompt.trim() || continueMutation.isPending) return;
+    if (!enabled || stale || unfinishedAttempt || !prompt.trim() || continueMutation.isPending) return;
     const command: DashboardContinueCommand = {
       schema_version: 1,
       request_id: createRequestId("continue"),
@@ -291,7 +292,7 @@ function ThreadConversation({
     continueMutation.mutate(command);
   };
   const resume = () => {
-    if (!enabled || stale || resumeMutation.isPending) return;
+    if (!enabled || stale || unfinishedAttempt || resumeMutation.isPending) return;
     const command: DashboardResumeCommand = {
       schema_version: 1,
       request_id: createRequestId("resume"),
@@ -342,7 +343,7 @@ function ThreadConversation({
             <header>
               <strong>RepoCompass</strong>
               <span className={`state-chip state-chip--${investigationStateLabel(thread)}`}>
-                {investigationStateLabel(thread)}
+                {unfinishedAttempt ? "attempt open" : investigationStateLabel(thread)}
               </span>
             </header>
             <InvestigationResult thread={thread} onOpenLens={onOpenLens} />
@@ -369,12 +370,12 @@ function ThreadConversation({
         ) : null}
 
         {thread.pending_review ? (
-          <HumanReviewPanel detail={detail} enabled={enabled && !stale} />
+          <HumanReviewPanel detail={detail} enabled={enabled && !stale && !unfinishedAttempt} />
         ) : null}
       </div>
 
       <footer className="conversation-command">
-        {thread.execution_state === "completed" && enabled ? (
+        {thread.execution_state === "completed" && enabled && !unfinishedAttempt ? (
           <>
             <div className="follow-up-box">
               <label>
@@ -411,7 +412,9 @@ function ThreadConversation({
           </>
         ) : null}
 
-        {thread.execution_state === "resumable" ? (
+        {unfinishedAttempt ? <p className="command-hint">Attempt not finalized. A resumable checkpoint does not mean the worker has stopped. Inspect events or request cancellation; no second resume is sent.</p> : null}
+
+        {thread.execution_state === "resumable" && !unfinishedAttempt ? (
           <div className="resume-command">
             <div><RotateCcw size={18} /><span><strong>Checkpoint can resume</strong><small>Continue pending graph nodes with the same budgets and evidence boundary.</small></span></div>
             <button type="button" disabled={!enabled || stale || resumeCommand !== null || resumeMutation.isPending} onClick={resume}>

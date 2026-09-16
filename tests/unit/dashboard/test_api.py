@@ -457,6 +457,29 @@ def test_sse_is_cursor_bounded_and_reports_snapshot_completion() -> None:
     assert '"truncated":false' in remaining.text
 
 
+def test_follow_and_last_event_id_are_read_only_bounded_and_validated():
+    client = _client(_FakeDashboardService())
+    path = "/api/v1/runs/run-1/events"
+    response = client.get(path, params={"follow": True}, headers={"Last-Event-ID": "1"})
+    assert response.status_code == 200
+    assert response.text.count("event: trace") == 1
+    assert "id: 2\n" in response.text
+    assert '"reason": "terminal"' in response.text
+    assert (
+        client.get(
+            path, params={"after_sequence": 0}, headers={"Last-Event-ID": "1"}
+        ).status_code
+        == 409
+    )
+    assert (
+        client.get(path, headers={"Last-Event-ID": "9007199254740992"}).status_code
+        == 422
+    )
+    assert client.get(path, headers={"Last-Event-ID": "nan"}).status_code == 422
+    assert client.get(path, params={"after_sequence": 3}).status_code == 409
+    assert client.post(path).status_code == 405
+
+
 def test_sse_missing_trace_is_an_explicit_terminal_empty_state() -> None:
     response = _client(_FakeDashboardService()).get("/api/v1/runs/empty-run/events")
 

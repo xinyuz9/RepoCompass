@@ -87,6 +87,7 @@ class DashboardSystemInfo(_DashboardModel):
     lifecycle_mutations_enabled: bool
     memory_mutations_enabled: bool
     cancellation_enabled: bool = False
+    event_follow_enabled: bool = False
 
 
 class DashboardRunSummary(_DashboardModel):

@@ -37,10 +37,12 @@ from repocompass.dashboard.contracts import (
     PublicTraceEvent,
 )
 from repocompass.dashboard.trace_store import JsonlTraceStore, TraceStoreError
+from repocompass.dashboard.events import EventPage
 from repocompass.memory.contracts import MemoryScope
 from repocompass.memory.store import MemoryStore
 from repocompass.service.contracts import InvestigationOperationKind
 from repocompass.storage.raw_store import (
+    RawStoreConflictError,
     RawStoreError,
     AttemptExecutionMode,
     RawRunAttempt,
@@ -181,6 +183,7 @@ class DashboardQueryService:
             lifecycle_mutations_enabled=self._lifecycle_mutations_enabled,
             memory_mutations_enabled=self._memory_mutations_enabled,
             cancellation_enabled=self._cancellation_enabled,
+            event_follow_enabled=True,
         )
 
     def list_threads(self, *, max_results: int = 50) -> DashboardThreadCatalog:
@@ -296,6 +299,46 @@ class DashboardQueryService:
             raise DashboardServiceError(
                 "public conversation failed integrity validation"
             ) from None
+
+    def get_event_page(
+        self, run_id: str, *, after_sequence: int, limit: int
+    ) -> EventPage:
+        """Project a journal page without loading context packs, model I/O or cost."""
+        normalized = _validate_identifier(run_id, name="run_id")
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError("event page limit is invalid")
+        attempt = self._raw_run_store.get_attempt(normalized)
+        if attempt is None or attempt.repository_id != self._context.repository_id:
+            raise DashboardNotFoundError("run was not found")
+        try:
+            events = self._raw_run_store.page_trace_events(
+                normalized,
+                after_sequence=after_sequence,
+                limit=limit + 1,
+            )
+            if events is None:
+                legacy = self._trace_store.load(normalized)
+                if legacy is not None:
+                    if after_sequence >= len(legacy):
+                        raise RawStoreConflictError("trace cursor is ahead")
+                    events = tuple(e for e in legacy if e.sequence > after_sequence)
+        except RawStoreConflictError as error:
+            raise DashboardSnapshotConflictError(
+                "event cursor does not match persisted trace"
+            ) from error
+        except (TraceStoreError, RawStoreError) as error:
+            raise DashboardServiceError("run events could not be decoded") from error
+        return EventPage(
+            availability=DashboardAvailability.NOT_PERSISTED
+            if events is None
+            else DashboardAvailability.AVAILABLE,
+            status=attempt.status,
+            events=tuple(
+                _public_trace_event(e, repository_root=self._context.repository_root)
+                for e in (events or ())[:limit]
+            ),
+            truncated=events is not None and len(events) > limit,
+        )
 
     def get_run(self, run_id: str) -> DashboardRunDetail:
         """Return one attempt's safe trace, context lineage, calls, and cost."""

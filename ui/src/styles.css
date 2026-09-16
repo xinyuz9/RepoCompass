@@ -1,3 +1,14 @@
+.event-stream-status {
+  margin: 0;
+  padding: 10px 24px;
+  color: #b9dcd6;
+  background: #10201f;
+  border-bottom: 1px solid #29403d;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
 :root {
   color-scheme: dark;
   font-family: "Manrope Variable", "Segoe UI", sans-serif;

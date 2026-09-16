@@ -142,6 +142,16 @@ describe("ConversationWorkspace lifecycle commands", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("does not offer another resume while a resumable checkpoint has an open attempt", () => {
+    const detail = threadDetail({ executionState: "resumable", attemptCommitSha: commitSha });
+    detail.attempts[0]!.attempt.status = "running";
+    detail.attempts[0]!.attempt.finished_at_ms = null;
+    renderWorkspace({ detail });
+    expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Attempt not finalized/)).toBeVisible();
+    expect(screen.getByText("attempt open")).toBeVisible();
+  });
+
   it("blocks resume when the persisted attempt targets a stale repository snapshot", () => {
     const fetchMock = vi.fn();
     const onNewGoal = vi.fn();

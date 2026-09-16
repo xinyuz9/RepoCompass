@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from threading import BoundedSemaphore
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Annotated, Protocol
@@ -19,6 +20,7 @@ from fastapi import (
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -42,6 +44,7 @@ from repocompass.dashboard.contracts import (
 )
 from repocompass.agent.conversation import PublicConversationPage
 from repocompass.dashboard.cancellation import DashboardCancellationService
+from repocompass.dashboard.events import EventPage, follow_events
 from repocompass.storage.cancellation import (
     CancellationError,
     CancellationRecord,
@@ -156,6 +159,8 @@ def create_dashboard_app(
     static_directory: Path | None = None,
 ) -> FastAPI:
     """Create a local API with optional, explicitly injected command routes."""
+
+    follow_slots = BoundedSemaphore(8)
 
     required_methods = (
         "system_info",
@@ -446,6 +451,7 @@ def create_dashboard_app(
     @app.get(f"{DASHBOARD_API_PREFIX}/runs/{{run_id}}/events")
     def stream_run_events(
         run_id: str,
+        request: Request,
         after_sequence: Annotated[
             int,
             Query(ge=-1, le=MAX_SAFE_JSON_INTEGER),
@@ -454,19 +460,48 @@ def create_dashboard_app(
             int,
             Query(ge=1, le=MAX_EVENT_PAGE_SIZE),
         ] = DEFAULT_EVENT_PAGE_SIZE,
+        follow: bool = False,
+        last_event_id: Annotated[str | None, Header(max_length=16)] = None,
     ) -> StreamingResponse:
-        detail = service.get_run(run_id)
-        pending = tuple(
-            event for event in detail.trace_events if event.sequence > after_sequence
-        )
-        emitted = pending[:max_events]
+        if last_event_id is not None:
+            if (
+                not last_event_id.isascii()
+                or not last_event_id.isdecimal()
+                or int(last_event_id) > MAX_SAFE_JSON_INTEGER
+            ):
+                raise HTTPException(status_code=422, detail="invalid event cursor")
+            header_cursor = int(last_event_id)
+            if after_sequence != -1 and after_sequence != header_cursor:
+                raise HTTPException(status_code=409, detail="event cursors disagree")
+            after_sequence = header_cursor
+
+        def read_page(cursor: int, limit: int) -> EventPage:
+            reader = getattr(service, "get_event_page", None)
+            if callable(reader):
+                return reader(run_id, after_sequence=cursor, limit=limit)
+            # Compatibility for injected legacy read services. Production uses SQL pages.
+            detail = service.get_run(run_id)
+            if detail.trace_events and cursor > detail.trace_events[-1].sequence:
+                raise DashboardSnapshotConflictError("event cursor is ahead of trace")
+            pending = tuple(
+                event for event in detail.trace_events if event.sequence > cursor
+            )
+            return EventPage(
+                detail.trace_availability,
+                detail.attempt.status,
+                pending[:limit],
+                len(pending) > limit,
+            )
+
+        page = read_page(after_sequence, max_events)
+        emitted = page.events
         next_sequence = None if not emitted else emitted[-1].sequence
         cursor = DashboardEventStreamCursor(
-            availability=detail.trace_availability,
+            availability=page.availability,
             after_sequence=after_sequence,
             emitted_count=len(emitted),
             next_after_sequence=next_sequence,
-            truncated=len(pending) > len(emitted),
+            truncated=page.truncated,
         )
 
         async def event_stream() -> AsyncIterator[str]:
@@ -481,14 +516,39 @@ def create_dashboard_app(
                 data=cursor.model_dump_json(),
             )
 
+        if follow and not follow_slots.acquire(blocking=False):
+            raise HTTPException(status_code=429, detail="too many event subscriptions")
+
+        async def continuous_stream() -> AsyncIterator[str]:
+            try:
+                async for frame in follow_events(
+                    initial=page,
+                    read_page=read_page,
+                    disconnected=request.is_disconnected,
+                    after_sequence=after_sequence,
+                    max_events=max_events,
+                ):
+                    yield frame
+            finally:
+                release_slot()
+
+        released = False
+
+        def release_slot() -> None:
+            nonlocal released
+            if follow and not released:
+                released = True
+                follow_slots.release()
+
         return StreamingResponse(
-            event_stream(),
+            continuous_stream() if follow else event_stream(),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache, no-store",
                 "X-Accel-Buffering": "no",
-                "X-RepoCompass-Trace-Availability": detail.trace_availability.value,
+                "X-RepoCompass-Trace-Availability": page.availability.value,
             },
+            background=BackgroundTask(release_slot) if follow else None,
         )
 
     @app.get(

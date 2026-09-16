@@ -608,6 +608,79 @@ class RawRunStore:
             raise RawStoreCorruptionError("trace failed strict validation") from error
         return tuple(events)
 
+    def page_trace_events(
+        self, run_id: str, *, after_sequence: int = -1, limit: int = 250
+    ) -> tuple[TraceEvent, ...] | None:
+        """Decode only a cursor page plus its boundary, not the entire journal.
+
+        Aggregate size/sequence checks and the page use one SQLite snapshot.
+        Earlier JSON is validated when consumed, not reparsed on every poll.
+        None means no journal; an empty tuple means an existing cursor is at end.
+        """
+        if (
+            type(after_sequence) is not int
+            or not -1 <= after_sequence <= MAX_SAFE_JSON_INTEGER
+        ):
+            raise ValueError("trace cursor is invalid")
+        if type(limit) is not int or not 1 <= limit <= 1001:
+            raise ValueError("trace page limit is invalid")
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                WITH metadata AS (
+                    SELECT COUNT(*) AS n, MIN(sequence) AS first, MAX(sequence) AS last,
+                           COALESCE(SUM(length(CAST(event_json AS BLOB))), 0) AS bytes
+                    FROM trace_events WHERE run_id = ?
+                ), page AS (
+                    SELECT sequence, CASE WHEN length(CAST(event_json AS BLOB)) <= ?
+                        THEN event_json ELSE NULL END AS event_json
+                    FROM trace_events WHERE run_id = ? AND sequence >= ?
+                    ORDER BY sequence LIMIT ?
+                )
+                SELECT metadata.*, page.sequence, page.event_json
+                FROM metadata LEFT JOIN page ON 1=1 ORDER BY page.sequence
+                """,
+                (
+                    run_id,
+                    MAX_TRACE_EVENT_BYTES,
+                    run_id,
+                    max(after_sequence, 0),
+                    limit + int(after_sequence >= 0),
+                ),
+            ).fetchall()
+        meta = rows[0]
+        if meta["n"] == 0:
+            return None
+        if (
+            meta["n"] > MAX_TRACE_EVENTS
+            or meta["bytes"] > MAX_TRACE_BYTES
+            or meta["first"] != 0
+            or meta["last"] != meta["n"] - 1
+        ):
+            raise RawStoreCorruptionError("trace metadata failed validation")
+        if after_sequence > meta["last"]:
+            raise RawStoreConflictError("trace cursor is ahead of persisted events")
+        events = []
+        previous = None
+        try:
+            for row in rows:
+                json.loads(row["event_json"], object_pairs_hook=_unique_trace_keys)
+                event = TraceEvent.model_validate_json(row["event_json"])
+                if event.run_id != run_id or event.sequence != row["sequence"]:
+                    raise ValueError("trace identity")
+                if (event.sequence == 0) != (event.kind is TraceEventKind.RUN_STARTED):
+                    raise ValueError("trace start")
+                if previous is not None and previous.kind in _TRACE_TERMINALS.values():
+                    raise ValueError("trace after terminal")
+                if event.sequence > after_sequence:
+                    events.append(event)
+                previous = event
+        except (ValueError, TypeError, AttributeError) as error:
+            raise RawStoreCorruptionError(
+                "trace page failed strict validation"
+            ) from error
+        return tuple(events)
+
     def put_artifact(
         self,
         run_id: str,

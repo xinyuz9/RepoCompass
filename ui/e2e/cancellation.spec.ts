@@ -3,8 +3,10 @@ import axe from "axe-core";
 
 test("real lifecycle cancellation survives refresh without replaying the start", async ({ page, request }, testInfo) => {
   const posts: { url: string; body: Record<string, unknown> }[] = [];
+  const follows: string[] = [];
   page.on("request", (entry) => {
     if (entry.method() === "POST") posts.push({ url: entry.url(), body: entry.postDataJSON() });
+    if (entry.method() === "GET" && entry.url().includes("/events?follow=true")) follows.push(entry.url());
   });
   await page.goto("/?compose=1");
   await page.getByRole("textbox", { name: "What should RepoCompass investigate?" }).fill("Cancel a controlled in-flight repository investigation");
@@ -19,7 +21,7 @@ test("real lifecycle cancellation survives refresh without replaying the start",
   await expect(page.getByText("Cancellation requested · awaiting confirmation", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Request cancellation", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Check cancellation status", exact: true })).toBeInViewport({ ratio: 1 });
-  const limits = page.getByText("Cancellation limits", { exact: true });
+  const limits = page.getByRole("region", { name: "Lifecycle request recovery" }).getByText("Cancellation limits", { exact: true });
   await limits.focus();
   await limits.press("Enter");
   await expect(page.getByText("Cooperative stop at the next graph node; this does not kill a provider request or sandbox process.")).toBeVisible();
@@ -32,6 +34,14 @@ test("real lifecycle cancellation survives refresh without replaying the start",
   expect(scan.violations.map(({ id }) => id)).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
   await page.screenshot({ path: testInfo.outputPath("cancellation-requested.png"), fullPage: true, animations: "disabled" });
+  // Observe the same in-flight attempt via production SSE, without a second POST.
+  const threadId = String(cancellation!.body.thread_id);
+  await page.goto("/?thread=" + encodeURIComponent(threadId) + "&lens=chat");
+  await expect(page.getByText(/Live events: live/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+  expect(follows.length).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await page.screenshot({ path: testInfo.outputPath("live-events.png"), fullPage: true, animations: "disabled" });
   const release = await request.post("/__test__/release-node/" + encodeURIComponent(runId));
   expect(release.ok()).toBe(true);
   await expect(page.getByText("Cancellation confirmed", { exact: true }).last()).toBeVisible();

@@ -20,6 +20,7 @@ export interface DashboardSystemInfo {
   lifecycle_mutations_enabled: boolean;
   memory_mutations_enabled: boolean;
   cancellation_enabled?: boolean;
+  event_follow_enabled?: boolean;
 }
 
 export interface CancellationRequest {

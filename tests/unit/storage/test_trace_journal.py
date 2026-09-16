@@ -59,6 +59,57 @@ def test_committed_prefix_visible_to_other_connection_and_survives_reopen(tmp_pa
         assert reopened.list_trace_events("absent") is None
 
 
+def test_journal_pages_resume_without_decoding_prefix(tmp_path, monkeypatch):
+    with open_raw_run_store(tmp_path / "raw.sqlite") as store:
+        trace = _start(store)
+        for _ in range(6):
+            store.append_trace_event(
+                trace.record(TraceEventKind.NODE_COMPLETED, node="agent")
+            )
+        assert [e.sequence for e in store.page_trace_events("run-1", limit=2)] == [0, 1]
+        seen = []
+        original = TraceEvent.model_validate_json
+
+        def validate(value, **kwargs):
+            event = original(value, **kwargs)
+            seen.append(event.sequence)
+            return event
+
+        monkeypatch.setattr(TraceEvent, "model_validate_json", validate)
+        assert [
+            e.sequence
+            for e in store.page_trace_events("run-1", after_sequence=4, limit=1)
+        ] == [5]
+        assert seen == [4, 5]
+        assert store.page_trace_events("run-1", after_sequence=6) == ()
+        assert store.page_trace_events("missing") is None
+        with pytest.raises(RawStoreConflictError):
+            store.page_trace_events("run-1", after_sequence=7)
+        for cursor, limit in ((True, 1), (-2, 1), (0, 0), (0, 1002)):
+            with pytest.raises(ValueError):
+                store.page_trace_events("run-1", after_sequence=cursor, limit=limit)
+
+
+def test_journal_page_rejects_holes_and_corrupt_boundary(tmp_path):
+    path = tmp_path / "raw.sqlite"
+    with open_raw_run_store(path) as store:
+        trace = _start(store)
+        store.append_trace_event(
+            trace.record(TraceEventKind.NODE_COMPLETED, node="agent")
+        )
+        store.append_trace_event(
+            trace.record(TraceEventKind.NODE_COMPLETED, node="agent")
+        )
+        with sqlite3.connect(path) as edit:
+            edit.execute("UPDATE trace_events SET event_json='{}' WHERE sequence=1")
+        with pytest.raises(RawStoreCorruptionError):
+            store.page_trace_events("run-1", after_sequence=1)
+        with sqlite3.connect(path) as edit:
+            edit.execute("DELETE FROM trace_events WHERE sequence=1")
+        with pytest.raises(RawStoreCorruptionError):
+            store.page_trace_events("run-1", after_sequence=1)
+
+
 def test_abrupt_process_exit_keeps_committed_prefix(tmp_path):
     path = tmp_path / "abrupt.sqlite"
     script = """

@@ -18,6 +18,7 @@ interface ObservabilityPanelProps {
   lens: ObservabilityLens;
   detail: DashboardThreadDetail;
   memoryMutationsEnabled: boolean;
+  eventFollowEnabled?: boolean;
   requestedRunId: string | null;
   onRunSelected: (runId: string, replaceHistory: boolean) => void;
 }
@@ -26,6 +27,7 @@ export function ObservabilityPanel({
   lens,
   detail,
   memoryMutationsEnabled,
+  eventFollowEnabled,
   requestedRunId,
   onRunSelected,
 }: ObservabilityPanelProps) {
@@ -35,6 +37,7 @@ export function ObservabilityPanel({
       lens={lens}
       detail={detail}
       memoryMutationsEnabled={memoryMutationsEnabled}
+      eventFollowEnabled={eventFollowEnabled}
       requestedRunId={requestedRunId}
       onRunSelected={onRunSelected}
     />
@@ -45,6 +48,7 @@ function RunObservability({
   lens,
   detail,
   memoryMutationsEnabled,
+  eventFollowEnabled,
   requestedRunId,
   onRunSelected,
 }: Omit<ObservabilityPanelProps, "lens"> & {
@@ -60,7 +64,7 @@ function RunObservability({
     enabled: activeRunId !== null,
     staleTime: 30_000,
     retry: false,
-    refetchInterval: (query) => activeRefreshInterval(
+    refetchInterval: (query) => eventFollowEnabled ? false : activeRefreshInterval(
       query.state.data?.attempt.status,
       query.state.status === "error",
       query.state.dataUpdateCount,
@@ -106,7 +110,7 @@ function RunObservability({
         </section>
       ) : null}
       {run.data && lens === "trace" ? <TraceLens run={run.data} /> : null}
-      {run.data?.attempt.status === "running" ? <p className="muted">Read-only updates every 1.5s, up to 120 snapshots. Updates pause in the background or on error. Refresh manually if the attempt remains unfinished.</p> : null}
+      {run.data?.attempt.status === "running" ? <p className="muted">{eventFollowEnabled ? "Latest attempt updates follow durable events. Historical attempts are read-only snapshots; Refresh checks again without rerunning." : "Read-only updates every 1.5s, up to 120 snapshots. Updates pause in the background or on error. Refresh manually if the attempt remains unfinished."}</p> : null}
       {run.data && lens === "context" ? <ContextLens run={run.data} /> : null}
       {run.data && lens === "memory" ? (
         <MemoryLens run={run.data} mutationsEnabled={memoryMutationsEnabled} />

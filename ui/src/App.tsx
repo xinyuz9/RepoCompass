@@ -20,6 +20,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 
 import { DashboardApiError, dashboardQueries } from "./api";
 import { activeRefreshInterval } from "./active-refresh";
+import { useRunEvents } from "./use-run-events";
 import {
   ConversationWorkspace,
   type InspectorLens,
@@ -57,6 +58,8 @@ export function App() {
   const catalog = useQuery({ ...dashboardQueries.threads, staleTime: 20_000 });
   const [navigation, setNavigation] = useState(readDashboardNavigation);
   const [filter, setFilter] = useState("");
+  const [refreshEpoch, setRefreshEpoch] = useState(0);
+  const canFollow = system.data?.event_follow_enabled === true && typeof EventSource !== "undefined";
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     !window.matchMedia?.("(max-width: 930px)").matches);
   const sidebarToggle = useRef<HTMLButtonElement>(null);
@@ -89,12 +92,15 @@ export function App() {
     enabled: activeThreadId !== null,
     staleTime: 15_000,
     retry: false,
-    refetchInterval: (query) => activeRefreshInterval(
+    refetchInterval: (query) => canFollow ? false : activeRefreshInterval(
       query.state.data?.attempts[0]?.attempt.status,
       query.state.status === "error",
       query.state.dataUpdateCount,
     ),
   });
+  const latestAttempt = thread.data?.attempts[0]?.attempt;
+  const streamEnabled = canFollow && latestAttempt?.status === "running" && !thread.isError;
+  const streamState = useRunEvents(latestAttempt?.run_id ?? null, activeThreadId, streamEnabled, refreshEpoch);
   const visibleThreads = useMemo(() => {
     const normalized = filter.trim().toLocaleLowerCase();
     if (!normalized) return catalog.data?.threads ?? [];
@@ -119,7 +125,10 @@ export function App() {
     return () => window.removeEventListener("popstate", restoreNavigation);
   }, []);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  const refresh = () => {
+    setRefreshEpoch((value) => value + 1);
+    return queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  };
   const openNewGoal = useCallback(() => navigate({
     threadId: null,
     lens: "chat",
@@ -251,6 +260,8 @@ export function App() {
           </div>
         </header>
 
+        {streamEnabled ? <p className="event-stream-status" role="status">Live events: {streamState}. Read-only, at most 6 bounded sessions. Errors pause updates; Refresh reconnects without rerunning the goal.</p> : null}
+
         <LifecycleRecoveryCenter system={system.data} onThreadActivated={activateThread} />
 
         {rootError ? <ErrorState error={rootError} onRetry={refresh} /> : null}
@@ -282,6 +293,7 @@ export function App() {
             lifecycleMutationsEnabled={system.data?.lifecycle_mutations_enabled ?? false}
             memoryMutationsEnabled={system.data?.memory_mutations_enabled ?? false}
             requestedRunId={requestedRunId}
+            eventFollowEnabled={canFollow}
             onRunSelected={selectRun}
           />
         ) : null}
@@ -305,6 +317,7 @@ function InvestigationStage({
   lifecycleMutationsEnabled,
   memoryMutationsEnabled,
   requestedRunId,
+  eventFollowEnabled,
   onRunSelected,
 }: {
   lens: InspectorLens;
@@ -312,6 +325,7 @@ function InvestigationStage({
   lifecycleMutationsEnabled: boolean;
   memoryMutationsEnabled: boolean;
   requestedRunId: string | null;
+  eventFollowEnabled: boolean;
   onRunSelected: (runId: string, replaceHistory: boolean) => void;
 }) {
   const { thread, attempts } = detail;
@@ -364,6 +378,7 @@ function InvestigationStage({
         ) : <StructureEmpty />
       ) : (
         <ObservabilityPanel
+          eventFollowEnabled={eventFollowEnabled}
           lens={lens}
           detail={detail}
           memoryMutationsEnabled={memoryMutationsEnabled}
