@@ -68,7 +68,7 @@ from repocompass.agent.lifecycle import (
     decode_human_review_interrupt,
     encode_human_review_interrupt,
 )
-from repocompass.agent.planning import InvestigationPlan, PlanStep
+from repocompass.agent.planning import InvestigationPlan, PlanStep, PlanProposal
 from repocompass.agent.prompts import (
     CANDIDATE_BUILDING_SYSTEM_PROMPT,
     CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT,
@@ -313,7 +313,7 @@ def create_plan_investigation_node(
     """Create the node that generates the initial investigation plan."""
 
     structured_model = model.with_structured_output(
-        InvestigationPlan,
+        PlanProposal,
         method="function_calling",
         include_raw=True,
     )
@@ -343,11 +343,7 @@ def create_plan_investigation_node(
             messages=messages,
             plan_step_id=None,
             invoke=structured_model.invoke,
-            parse=lambda value: _parse_structured_response(
-                value,
-                expected_type=InvestigationPlan,
-                error_message="Planner model did not return InvestigationPlan",
-            ),
+            parse=_parse_initial_plan,
         )
         if isinstance(response, _ModelCostBudgetDenied):
             return _cost_budget_denied_update(
@@ -1411,7 +1407,7 @@ def create_revise_plan_node(
     """Create the model node that revises only unfinished plan work."""
 
     structured_model = model.with_structured_output(
-        InvestigationPlan,
+        PlanProposal,
         method="function_calling",
         include_raw=True,
     )
@@ -1525,10 +1521,50 @@ class PlanRevisionIntegrityError(ValueError):
     """A well-formed model plan violated controller-owned completion history."""
 
 
+def _proposal_from_response(value: object) -> PlanProposal | None:
+    parsed = value.get("parsed") if isinstance(value, dict) else value
+    if isinstance(parsed, PlanProposal):
+        return _parse_structured_response(
+            value,
+            expected_type=PlanProposal,
+            error_message="Planner model did not return PlanProposal",
+        )
+    return None
+
+
+def _parse_initial_plan(value: object) -> InvestigationPlan:
+    proposal = _proposal_from_response(value)
+    if proposal is not None:
+        return proposal.materialize()
+    # Typed custom-model compatibility; production provider schema has no status.
+    plan = _parse_structured_response(
+        value,
+        expected_type=InvestigationPlan,
+        error_message="Planner model did not return InvestigationPlan or PlanProposal",
+    )
+    if [step.status for step in plan.steps] != [
+        "active",
+        *["pending"] * (len(plan.steps) - 1),
+    ]:
+        raise ValueError("initial plan cannot contain completed or reordered work")
+    return plan
+
+
 def _parse_plan_revision(
     value: object, current: InvestigationPlan
 ) -> InvestigationPlan:
     """Validate completion provenance inside recorded response parsing."""
+
+    proposal = _proposal_from_response(value)
+    if proposal is not None:
+        try:
+            return proposal.materialize(
+                [step for step in current.steps if step.status == "completed"]
+            )
+        except ValueError as error:
+            raise PlanRevisionIntegrityError(
+                "Replanner reused completed IDs or exceeded the plan bound"
+            ) from error
 
     revised = _parse_structured_response(
         value,

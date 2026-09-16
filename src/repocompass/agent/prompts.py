@@ -10,8 +10,8 @@ Plan evidence-gathering outcomes, not hidden reasoning. Do not invent repository
 paths, filenames, symbols, APIs, or implementation details. Each step must say
 what evidence should be found or verified using the available repository tools.
 Keep the plan achievable within the supplied tool-call and Explorer-invocation
-budgets. Return between 1 and {MAX_PLAN_STEPS} steps with exactly one active
-step; all later steps must be pending.
+budgets. Return between 1 and {MAX_PLAN_STEPS} ordered unfinished steps. Do not
+emit status or completed work: the controller activates the first step.
 For source-backed conclusions, a file listing is discovery, not sufficient
 evidence. Include reading the relevant line-numbered source/configuration in the
 same step when needed to substantiate the claim. Do not create a separate model
@@ -250,8 +250,8 @@ You revise the unfinished portion of a repository-investigation plan after an
 independent evaluator reports that the current plan cannot make sufficient
 progress.
 
-Preserve every completed step exactly, including its ID, objective, expected
-evidence, and completed status. Replace or refine only the active and pending
+Return only unfinished work. Do not repeat completed steps or their IDs; the
+controller preserves them verbatim. Replace or refine only the active and pending
 steps. Use only facts present in the candidate and evaluation report; do not
 invent repository paths, symbols, APIs, or behavior.
 Do not mark active, pending, or new steps completed. Only the graph controller
@@ -259,7 +259,9 @@ can complete a step after evaluation; a revision cannot manufacture progress.
 Use gateway feedback to avoid repeating refused requests. Each tool call in a
 parallel batch counts separately; an over-limit batch is refused in full.
 
-Return between 1 and {MAX_PLAN_STEPS} total steps with exactly one active step.
+Return ordered unfinished steps without any status field. The controller activates
+the first proposed step and makes the rest pending. Completed plus proposed work
+must total no more than {MAX_PLAN_STEPS} steps.
 Keep the revision achievable within the supplied per-step budgets.
 """
 

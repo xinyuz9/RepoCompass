@@ -69,8 +69,10 @@ DEFAULT_VARIANTS = (
     "evaluator_loop_context_builder_memory",
 )
 WARMUP_OBJECTIVE = (
-    "Identify the repository's package public entrypoints and test configuration. "
-    "Use only repository evidence. Do not diagnose or solve any issue."
+    "Identify one top-level Python package entry module and one supported test invocation "
+    "from this Python repository. Cite the module's actual source and the test command's "
+    "configuration or documentation with line numbers. This is a small orientation task, "
+    "not a complete public-API or test-configuration audit. Do not diagnose or solve any issue."
 )
 
 
@@ -654,7 +656,7 @@ def execute(args) -> dict:
     )
     variants = tuple(v for v in LocalizationVariant if v.value in args.variants)
     config = {
-        "schema_version": 13,
+        "schema_version": 14,
         "provenance": "live_provider",
         "manifest_id": manifest.manifest_id,
         "budget_profile": budget.model_dump(mode="json"),
@@ -670,11 +672,11 @@ def execute(args) -> dict:
         "memory_store_schema_version": MEMORY_STORE_SCHEMA_VERSION,
         "structure_resolution_policy": "self_import_placeholder_exact_path_v2",
         "candidate_evidence_policy": "source_occurrence_discovery_separation_v2",
-        "workflow_prompt_policy": "required_outcomes_no_speculative_branches_v7",
+        "workflow_prompt_policy": "status_free_unfinished_proposals_v8",
         "candidate_output_policy": "selected_ast_or_unbound_source_observations_v2",
         "plan_coverage_policy": "unresolved_empty_excerpts_identity_bound_v2",
         "gateway_feedback_policy": "last_batch_body_free_pinned_v1",
-        "plan_revision_policy": "controller_owned_completion_v1",
+        "plan_revision_policy": "status_free_proposal_preserved_prefix_v2",
         "step_completion_policy": "deterministic_and_semantic_gate_v2",
         "revision_rejection_policy": "terminal_exhausted_preserve_history_v1",
         "validation_feedback_policy": "bounded_pinned_defects_v1",

@@ -24,7 +24,7 @@ from repocompass.agent.nodes import (
     mark_investigation_accepted,
     mark_investigation_exhausted,
 )
-from repocompass.agent.planning import InvestigationPlan, PlanStep
+from repocompass.agent.planning import InvestigationPlan, PlanStep, PlanProposal
 
 
 def _plan(*, include_pending: bool = True) -> InvestigationPlan:
@@ -429,7 +429,7 @@ def test_replanner_rejects_exhausted_revision_budget_before_model_call() -> None
         create_revise_plan_node(model)(state)
 
     model.with_structured_output.assert_called_once_with(
-        InvestigationPlan,
+        PlanProposal,
         method="function_calling",
         include_raw=True,
     )

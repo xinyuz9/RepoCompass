@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from repocompass.agent.candidate_output import EvidenceOnlyCandidateResult
 from repocompass.agent.evaluation import SemanticAssessment
-from repocompass.agent.planning import InvestigationPlan, PlanStep
+from repocompass.agent.planning import InvestigationPlan, PlanStep, PlanProposal
 from repocompass.agent.runner import AgentRunner, ResumeRequest, RunRequest
 from repocompass.agent.thread_view import ThreadExecutionState
 from repocompass.agent.trace import TraceEventKind
@@ -54,7 +54,7 @@ def _models(*, provider_failure=False):
     def structured(schema, **_):
         def invoke(_messages):
             calls.append(schema.__name__)
-            if schema is InvestigationPlan:
+            if schema is PlanProposal:
                 value = next(responses)
                 if value == rejected and provider_failure:
                     raise ValueError("provider fault must not become a successful stop")
@@ -107,11 +107,11 @@ def test_rejected_revision_finishes_checkpoint_and_preserves_failed_usage(tmp_pa
         assert view.plan == original_plan
         assert view.evaluation_report is not None and not view.evaluation_report.passed
         assert calls == [
-            "InvestigationPlan",
+            "PlanProposal",
             "explorer",
             "EvidenceOnlyCandidateResult",
             "SemanticAssessment",
-            "InvestigationPlan",
+            "PlanProposal",
         ]
         invocations = store.list_model_invocations(outcome.trace.run_id)
         assert len(invocations) == 5

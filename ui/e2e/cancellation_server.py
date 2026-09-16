@@ -13,7 +13,7 @@ from langchain_core.runnables import RunnableConfig, RunnableLambda
 import uvicorn
 
 from repocompass.agent.checkpoint import open_sqlite_checkpointer
-from repocompass.agent.planning import InvestigationPlan, PlanStep
+from repocompass.agent.planning import InvestigationPlan, PlanStep, PlanProposal
 from repocompass.agent.runner import AgentRunner
 from repocompass.dashboard.api import create_dashboard_app
 from repocompass.dashboard.cancellation import DashboardCancellationService
@@ -32,9 +32,7 @@ class ControlledModel:
         self.lock = Lock()
 
     def with_structured_output(self, schema, **_):
-        return RunnableLambda(
-            self.plan if schema is InvestigationPlan else self.forbidden
-        )
+        return RunnableLambda(self.plan if schema is PlanProposal else self.forbidden)
 
     def bind_tools(self, *_args, **_kwargs):
         return RunnableLambda(self.forbidden)

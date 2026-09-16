@@ -28,7 +28,7 @@ from repocompass.agent.cost import (
 )
 from repocompass.agent.evaluation import SemanticAssessment
 from repocompass.agent.lifecycle import ContinueRequest, HumanReviewPolicy
-from repocompass.agent.planning import InvestigationPlan, PlanStep
+from repocompass.agent.planning import InvestigationPlan, PlanStep, PlanProposal
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.trace_sink import JsonlTraceSink
 from repocompass.memory.contracts import (
@@ -375,7 +375,7 @@ class _DemoModelBase:
 
 class _DemoPlanner(_DemoModelBase):
     def with_structured_output(self, schema: object, *_: object, **__: object):
-        if schema is not InvestigationPlan:
+        if schema is not PlanProposal:
             raise DashboardDemoError("demo planner received an unexpected schema")
         return RunnableLambda(lambda _: _envelope(_demo_plan(), 48, 18))
 

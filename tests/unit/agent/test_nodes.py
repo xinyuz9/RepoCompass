@@ -29,7 +29,7 @@ from repocompass.agent.nodes import (
     create_plan_investigation_node,
     finalize_candidate,
 )
-from repocompass.agent.planning import InvestigationPlan, PlanStep
+from repocompass.agent.planning import InvestigationPlan, PlanStep, PlanProposal
 from repocompass.agent.prompts import (
     EVALUATION_SYSTEM_PROMPT,
     CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT,
@@ -582,7 +582,7 @@ def test_planner_node_returns_plan_and_active_context() -> None:
     assert received_messages[0][0].content == PLANNING_SYSTEM_PROMPT
     assert state["objective"] in str(received_messages[0][1].content)
     model.with_structured_output.assert_called_once_with(
-        InvestigationPlan,
+        PlanProposal,
         method="function_calling",
         include_raw=True,
     )

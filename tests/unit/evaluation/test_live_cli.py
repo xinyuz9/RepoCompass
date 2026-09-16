@@ -176,7 +176,7 @@ def test_immutable_artifacts_cannot_be_relabelled(tmp_path):
 
 
 @pytest.mark.parametrize("provider", ["deepseek", "openai"])
-@pytest.mark.parametrize("legacy_version", [3, 4, 5, 6, 7, 8, 9, 10])
+@pytest.mark.parametrize("legacy_version", [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
 def test_memory_policy_changes_protocol_before_any_network_or_spend(
     tmp_path, monkeypatch, provider, legacy_version
 ):
@@ -221,7 +221,7 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         live_cli.execute(args)
     path = args.output / "config.json"
     config = json.loads(path.read_text())
-    assert config["schema_version"] == 13
+    assert config["schema_version"] == 14
     assert (
         config["revision_rejection_policy"] == "terminal_exhausted_preserve_history_v1"
     )
@@ -235,10 +235,7 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         config["candidate_evidence_policy"]
         == "source_occurrence_discovery_separation_v2"
     )
-    assert (
-        config["workflow_prompt_policy"]
-        == "required_outcomes_no_speculative_branches_v7"
-    )
+    assert config["workflow_prompt_policy"] == "status_free_unfinished_proposals_v8"
     assert (
         config["candidate_output_policy"]
         == "selected_ast_or_unbound_source_observations_v2"
@@ -249,7 +246,7 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
     assert config["step_completion_policy"] == "deterministic_and_semantic_gate_v2"
     assert config["validation_feedback_policy"] == "bounded_pinned_defects_v1"
     assert config["gateway_feedback_policy"] == "last_batch_body_free_pinned_v1"
-    assert config["plan_revision_policy"] == "controller_owned_completion_v1"
+    assert config["plan_revision_policy"] == "status_free_proposal_preserved_prefix_v2"
     assert config["trace_persistence_policy"] == "transactional_node_events_v1"
     assert config["raw_store_schema_version"] == 2
     assert config["context_snapshot_policy"] == "content_dedup_per_invocation_usage_v2"

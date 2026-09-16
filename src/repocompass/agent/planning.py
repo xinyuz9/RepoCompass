@@ -71,3 +71,38 @@ class InvestigationPlan(CheckpointSafeModel):
             raise ValueError("Investigation plan must contain exactly one active step")
 
         return self
+
+
+class ProposedPlanStep(BaseModel):
+    """Model-authored work only: execution status is intentionally absent."""
+
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, strict=True, str_strip_whitespace=True
+    )
+    id: str = Field(min_length=1, max_length=128)
+    objective: str = Field(min_length=1, max_length=8192)
+    expected_evidence: list[str] = Field(min_length=1, max_length=16)
+
+
+class PlanProposal(BaseModel):
+    """Ordered unfinished work; never an authority for completion history."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    steps: list[ProposedPlanStep] = Field(min_length=1, max_length=MAX_PLAN_STEPS)
+
+    def materialize(self, completed: list[PlanStep] | None = None) -> InvestigationPlan:
+        prefix = completed or []
+        if any(step.status != "completed" for step in prefix):
+            raise ValueError("preserved history must contain completed steps only")
+        return InvestigationPlan(
+            steps=[
+                *prefix,
+                *[
+                    PlanStep(
+                        **step.model_dump(),
+                        status="active" if index == 0 else "pending",
+                    )
+                    for index, step in enumerate(self.steps)
+                ],
+            ]
+        )

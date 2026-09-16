@@ -19,7 +19,7 @@ from repocompass.agent.plan_coverage import (
     selected_evidence_indices,
     StepCoverage,
 )
-from repocompass.agent.planning import InvestigationPlan, PlanStep
+from repocompass.agent.planning import InvestigationPlan, PlanStep, PlanProposal
 
 
 def _plan():
@@ -323,8 +323,10 @@ def test_covered_plan_finalizes_runner_memory_without_extra_step_calls(tmp_path)
     def structured(schema, **_):
         def invoke(_):
             calls.append(schema.__name__)
-            if schema is InvestigationPlan:
-                return _plan()
+            if schema is PlanProposal:
+                return PlanProposal.model_validate(
+                    _plan().model_dump(exclude={"steps": {"__all__": {"status"}}})
+                )
             if schema is EvidenceOnlyCandidateResult:
                 return EvidenceOnlyCandidateResult.model_validate_json(
                     _candidate().model_dump_json(exclude={"relations"})
@@ -357,7 +359,7 @@ def test_covered_plan_finalizes_runner_memory_without_extra_step_calls(tmp_path)
         assert outcome.termination_status == "accepted"
         assert prewarm_readiness(outcome, memory, repo)["ready"]
         assert calls == [
-            "InvestigationPlan",
+            "PlanProposal",
             "explorer",
             "explorer",
             "EvidenceOnlyCandidateResult",
