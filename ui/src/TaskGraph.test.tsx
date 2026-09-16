@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TaskGraph } from "./TaskGraph";
@@ -90,6 +90,44 @@ afterEach(() => {
 });
 
 describe("TaskGraph source inspector", () => {
+  it("never requests a source for an unknown linked node", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}><TaskGraph threadId="thread-1" structure={structure} requestedEntityId={"9".repeat(64)} /></QueryClientProvider>);
+    expect(screen.getByRole("alert")).toHaveTextContent("not in this saved evidence slice");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("paginates entity tables and reports keyboard selections", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify(source)))));
+    const many = structuredClone(structure);
+    many.reading_path.graph_slice.nodes = Array.from({ length: 41 }, (_, index) => ({ ...structure.reading_path.graph_slice.nodes[0]!, entity_id: index.toString(16).padStart(64, "0"), canonical_name: `node${index}` }));
+    const onSelect = vi.fn();
+    render(<QueryClientProvider client={new QueryClient()}><TaskGraph threadId="thread-1" structure={many} onEntitySelected={onSelect} /></QueryClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Evidence table" }));
+    expect(screen.getAllByRole("button", { name: /^Inspect node/ })).toHaveLength(20);
+    fireEvent.click(screen.getByRole("button", { name: "Next entities" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next entities" }));
+    expect(screen.getAllByRole("button", { name: /^Inspect node/ })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect node40" }));
+    expect(onSelect).toHaveBeenCalledWith((40).toString(16).padStart(64, "0"));
+  });
+
+  it("isolates source caches by evidence artifact and rejects snapshot mismatches", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(source))));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new QueryClient();
+    const first = renderGraph(client);
+    await screen.findByLabelText("Source preview for src/auth.py");
+    first.unmount();
+    const changed = { ...structure, artifact_id: "8".repeat(64), commit_sha: "7".repeat(40) };
+    render(<QueryClientProvider client={client}><TaskGraph threadId="thread-1" structure={changed} /></QueryClientProvider>);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("source snapshot changed"));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByLabelText("Source preview for src/auth.py")).not.toBeInTheDocument();
+  });
+
   it("loads one evidence-bound window and reuses it across remounts", async () => {
     const requestedPaths: string[] = [];
     const fetchMock = vi.fn((input: string | URL | Request) => {

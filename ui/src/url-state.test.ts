@@ -9,6 +9,17 @@ import {
 afterEach(() => window.history.replaceState(null, "", "/"));
 
 describe("dashboard URL state", () => {
+  it("bounds node links to one thread's topology and preserves split view", () => {
+    const nodeId = "a".repeat(64);
+    const state = readDashboardNavigation(`?thread=t1&lens=topology&split=1&node=${nodeId}`);
+    expect(state.nodeId).toBe(nodeId);
+    expect(state.splitView).toBe(true);
+    expect(readDashboardNavigation(dashboardNavigationHref(state, "http://localhost/").slice(1))).toEqual(state);
+    for (const search of [`?lens=topology&node=${nodeId}`, `?thread=t&lens=cost&node=${nodeId}`, "?thread=t&lens=topology&node=../../secret"]) {
+      expect(readDashboardNavigation(search).nodeId).toBeUndefined();
+    }
+    expect(readDashboardNavigation("?thread=t&lens=chat&split=1").splitView).toBeUndefined();
+  });
   it("parses a safe thread, inspector, and persisted run deep link", () => {
     expect(readDashboardNavigation(
       "?thread=thread-1&lens=context&run=run-2",

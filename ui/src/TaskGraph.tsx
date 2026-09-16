@@ -23,6 +23,8 @@ import { useMemo, useState } from "react";
 
 import { DashboardApiError, dashboardQueries } from "./api";
 import EvidenceNodeCard from "./EvidenceNode";
+import { EvidenceTable } from "./EvidenceTable";
+import "./workspace-review.css";
 import { buildTaskGraph, type EvidenceNodeData } from "./graph-model";
 import type {
   DashboardSourceSnippet,
@@ -36,15 +38,25 @@ const NODE_TYPES = { evidence: EvidenceNodeCard };
 interface TaskGraphProps {
   threadId: string;
   structure: InvestigationStructure;
+  requestedEntityId?: string;
+  onEntitySelected?: (id: string) => void;
 }
 
-export function TaskGraph({ threadId, structure }: TaskGraphProps) {
+export function TaskGraph({ threadId, structure, requestedEntityId, onEntitySelected }: TaskGraphProps) {
   const [readingPathOnly, setReadingPathOnly] = useState(true);
-  const model = useMemo(() => buildTaskGraph(structure, readingPathOnly), [structure, readingPathOnly]);
+  const [tableView, setTableView] = useState(false);
+  const showReadingRoute = readingPathOnly && (!requestedEntityId || structure.reading_path.steps.some((step) => step.entity_id === requestedEntityId));
+  const model = useMemo(() => buildTaskGraph(structure, showReadingRoute), [structure, showReadingRoute]);
   const firstEntity = model.readingSteps[0]?.entity_id ?? model.nodes[0]?.id ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(firstEntity);
-  const selectedExists = model.nodes.some((node) => node.id === selectedId);
-  const activeSelectedId = selectedExists ? selectedId : firstEntity;
+  const desiredId = requestedEntityId ?? selectedId;
+  const selectedExists = structure.reading_path.graph_slice.nodes.some((node) => node.entity_id === desiredId);
+  const invalidLink = requestedEntityId !== undefined && !selectedExists;
+  const activeSelectedId = selectedExists ? desiredId : invalidLink ? null : firstEntity;
+  const selectEntity = (id: string) => {
+    setSelectedId(id);
+    onEntitySelected?.(id);
+  };
 
   const selectedNode = structure.reading_path.graph_slice.nodes.find(
     (node) => node.entity_id === activeSelectedId,
@@ -57,6 +69,7 @@ export function TaskGraph({ threadId, structure }: TaskGraphProps) {
   );
   const source = useQuery({
     ...dashboardQueries.source(threadId, activeSelectedId ?? ""),
+    queryKey: [...dashboardQueries.source(threadId, activeSelectedId ?? "").queryKey, structure.artifact_id],
     enabled: sourceEnabled,
     retry: false,
     staleTime: Infinity,
@@ -65,22 +78,25 @@ export function TaskGraph({ threadId, structure }: TaskGraphProps) {
     ...node,
     selected: node.id === activeSelectedId,
   }));
-  const onNodeClick: NodeMouseHandler = (_, node) => setSelectedId(node.id);
+  const onNodeClick: NodeMouseHandler = (_, node) => selectEntity(node.id);
+  const snapshotMatches = !source.data || (source.data.repository_id === structure.repository_id && source.data.commit_sha === structure.commit_sha);
 
   return (
     <section className="graph-workspace" aria-label="Task-specific evidence graph">
       <div className="graph-canvas">
         <div className="graph-scope" role="group" aria-label="Graph scope">
-          <button type="button" aria-pressed={readingPathOnly} onClick={() => setReadingPathOnly(true)}>Reading route</button>
-          <button type="button" aria-pressed={!readingPathOnly} onClick={() => setReadingPathOnly(false)}>All evidence ({structure.reading_path.graph_slice.nodes.length})</button>
+          <button type="button" aria-pressed={showReadingRoute && !tableView} onClick={() => { setReadingPathOnly(true); setTableView(false); if (firstEntity) selectEntity(firstEntity); }}>Reading route</button>
+          <button type="button" aria-pressed={!showReadingRoute && !tableView} onClick={() => { setReadingPathOnly(false); setTableView(false); }}>All evidence ({structure.reading_path.graph_slice.nodes.length})</button>
+          <button type="button" aria-pressed={tableView} onClick={() => setTableView(true)}>Evidence table</button>
         </div>
+        {tableView ? <EvidenceTable key={structure.artifact_id} structure={structure} selectedId={activeSelectedId} onSelect={selectEntity} /> : <>
         <div className="graph-canvas__legend" aria-label="Graph legend">
           <span><i className="legend-line legend-line--verified" />verified</span>
           <span><i className="legend-line legend-line--inferred" />inferred</span>
           <span><i className="legend-seed" />seed</span>
         </div>
         <ReactFlow
-          key={readingPathOnly ? "reading-route" : "all-evidence"}
+          key={showReadingRoute ? "reading-route" : "all-evidence"}
           nodes={flowNodes}
           edges={model.edges}
           nodeTypes={NODE_TYPES}
@@ -103,7 +119,7 @@ export function TaskGraph({ threadId, structure }: TaskGraphProps) {
             color="rgba(151, 177, 166, 0.13)"
           />
           <Controls showInteractive={false} position="bottom-left" />
-          {!readingPathOnly ? <MiniMap
+          {!showReadingRoute ? <MiniMap
             pannable
             zoomable
             position="bottom-right"
@@ -111,11 +127,13 @@ export function TaskGraph({ threadId, structure }: TaskGraphProps) {
             maskColor="rgba(8, 13, 16, 0.72)"
           /> : null}
         </ReactFlow>
+        </>}
       </div>
 
       <aside className="graph-inspector" aria-label="Reading path and provenance">
         <div className="inspector-section inspector-section--entity">
           <p className="eyebrow"><ShieldCheck size={13} /> evidence identity</p>
+          {invalidLink ? <p role="alert">The linked entity is not in this saved evidence slice. No source was requested for that ID.</p> : null}
           {selectedNode ? (
             <EntityDetails entity={selectedNode} step={selectedStep} />
           ) : (
@@ -133,7 +151,7 @@ export function TaskGraph({ threadId, structure }: TaskGraphProps) {
               <span className="count-pill">{source.data.lines.length} lines</span>
             ) : null}
           </div>
-          {sourceEnabled ? (
+          {!snapshotMatches ? <p role="alert">The source snapshot changed. Refresh the investigation before inspecting this evidence.</p> : sourceEnabled ? (
             <SourcePreview
               snippet={source.data ?? null}
               pending={source.isPending}
@@ -159,7 +177,7 @@ export function TaskGraph({ threadId, structure }: TaskGraphProps) {
                 <button
                   type="button"
                   className={step.entity_id === activeSelectedId ? "is-active" : ""}
-                  onClick={() => setSelectedId(step.entity_id)}
+                  onClick={() => selectEntity(step.entity_id)}
                 >
                   <span className="reading-path__ordinal">{step.ordinal}</span>
                   <span className="reading-path__copy">

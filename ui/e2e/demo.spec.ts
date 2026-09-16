@@ -1,6 +1,46 @@
 import { expect, test } from "@playwright/test";
 import axe from "axe-core";
 
+test("shares selected evidence and keeps chat beside keyboard-readable inspectors", async ({ page }, testInfo) => {
+  const writes: string[] = [];
+  page.on("request", (request) => { if (!["GET", "HEAD"].includes(request.method())) writes.push(request.url()); });
+  await page.goto("/?lens=topology");
+  await page.getByRole("button", { name: "Chat + inspector", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Conversation beside evidence" })).toBeVisible();
+  await page.getByRole("button", { name: "Evidence table", exact: true }).click();
+  const inspect = page.getByRole("button", { name: /^Inspect / }).first();
+  await inspect.focus();
+  await page.keyboard.press("Enter");
+  const nodeId = new URL(page.url()).searchParams.get("node");
+  expect(nodeId).toMatch(/^[a-f0-9]{64}$/);
+  await expect(inspect).toHaveAttribute("aria-pressed", "true");
+  expect(new URL(page.url()).searchParams.get("split")).toBe("1");
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Conversation beside evidence" })).toBeVisible();
+  await page.getByRole("button", { name: "Evidence table", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^Inspect / }).first()).toHaveAttribute("aria-pressed", "true");
+  await page.getByText("中文 / English · terminology", { exact: true }).click();
+  await expect(page.getByText("Goal · 当前目标", { exact: true })).toBeVisible();
+  await page.evaluate(axe.source);
+  const violations = await page.evaluate(async () => (await (window as unknown as { axe: typeof import("axe-core") }).axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations.map((v) => ({ id: v.id, targets: v.nodes.map((node) => node.target) })));
+  expect(violations).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await page.getByText("中文 / English · terminology", { exact: true }).click();
+  const sourcePanel = page.locator(".inspector-section--source");
+  const preview = page.locator(".source-preview");
+  await expect(preview).toBeVisible();
+  const sourceBounds = (await sourcePanel.boundingBox())!;
+  const previewBounds = (await preview.boundingBox())!;
+  expect(previewBounds.y + previewBounds.height).toBeLessThanOrEqual(sourceBounds.y + sourceBounds.height);
+  await page.screenshot({ path: testInfo.outputPath("split-review.png"), fullPage: true });
+  const nav = page.getByRole("navigation", { name: "Primary lenses" });
+  await nav.getByRole("button", { name: "Cost", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Conversation beside evidence" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cost analysis", exact: true })).toBeVisible();
+  expect(new URL(page.url()).searchParams.has("node")).toBe(false);
+  expect(writes).toEqual([]);
+});
+
 test("compares real saved evidence on demand with accessible drift tables", async ({ page }, testInfo) => {
   const reads: string[] = [], writes: string[] = [];
   page.on("request", (request) => {

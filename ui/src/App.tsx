@@ -15,6 +15,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Columns2,
 } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -40,6 +41,7 @@ import {
   type DashboardNavigationMode,
   type DashboardNavigationState,
 } from "./url-state";
+import "./workspace-review.css";
 
 const LENSES: { id: DashboardLens; label: string; icon: typeof Network }[] = [
   { id: "chat", label: "Chat", icon: MessageSquareText },
@@ -62,7 +64,7 @@ export function App() {
   const [refreshEpoch, setRefreshEpoch] = useState(0);
   const canFollow = system.data?.event_follow_enabled === true && typeof EventSource !== "undefined";
   const [sidebarOpen, setSidebarOpen] = useState(() =>
-    !window.matchMedia?.("(max-width: 930px)").matches);
+    !readDashboardNavigation().splitView && !window.matchMedia?.("(max-width: 930px)").matches);
   const sidebarToggle = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
@@ -154,7 +156,8 @@ export function App() {
     lens: nextLens,
     runId: null,
     composingNew: false,
-  }), [activeThreadId, navigate]);
+    splitView: navigation.splitView,
+  }), [activeThreadId, navigate, navigation.splitView]);
   const selectLens = useCallback((nextLens: DashboardLens) => {
     const keepComposing = nextLens === "chat" && composingNew;
     const threadId = keepComposing ? null : defaultThreadId;
@@ -165,8 +168,10 @@ export function App() {
         ? requestedRunId
         : null,
       composingNew: keepComposing,
+      splitView: nextLens !== "chat" && !keepComposing ? navigation.splitView : undefined,
+      nodeId: nextLens === "topology" ? navigation.nodeId : undefined,
     });
-  }, [composingNew, defaultThreadId, navigate, requestedRunId, selectedThreadId]);
+  }, [composingNew, defaultThreadId, navigate, requestedRunId, selectedThreadId, navigation.splitView, navigation.nodeId]);
   const selectRun = useCallback((runId: string, replaceHistory: boolean) => {
     if (!defaultThreadId) return;
     navigate({
@@ -174,8 +179,14 @@ export function App() {
       lens,
       runId,
       composingNew: false,
+      splitView: navigation.splitView,
     }, replaceHistory ? "replace" : "push");
-  }, [defaultThreadId, lens, navigate]);
+  }, [defaultThreadId, lens, navigate, navigation.splitView]);
+  const selectEntity = (nodeId: string) => navigate({ ...navigation, threadId: activeThreadId, nodeId });
+  const toggleSplit = () => {
+    if (!navigation.splitView) setSidebarOpen(false);
+    navigate({ ...navigation, threadId: activeThreadId, splitView: !navigation.splitView });
+  };
   const rootError = system.error ?? catalog.error;
 
   return (
@@ -289,6 +300,17 @@ export function App() {
         ) : null}
 
         {!rootError && lens !== "chat" && thread.data ? (
+          <>
+          <div className="workspace-tools">
+            <button type="button" aria-pressed={navigation.splitView === true} onClick={toggleSplit}><Columns2 size={15} />Chat + inspector</button>
+            <TerminologyGuide />
+          </div>
+          <div className={navigation.splitView ? "review-layout review-layout--split" : "review-layout"}>
+          {navigation.splitView && system.data ? <section className="split-conversation" aria-label="Conversation beside evidence">
+            <ConversationWorkspace key={thread.data.thread.thread_id} system={system.data} detail={thread.data}
+              lifecycleMutationsEnabled={system.data.lifecycle_mutations_enabled} onThreadActivated={activateThread}
+              onOpenLens={openInspector} onNewGoal={openNewGoal} />
+          </section> : null}
           <InvestigationStage
             lens={lens}
             detail={thread.data}
@@ -297,7 +319,12 @@ export function App() {
             requestedRunId={requestedRunId}
             eventFollowEnabled={canFollow}
             onRunSelected={selectRun}
+            requestedEntityId={navigation.nodeId}
+            onEntitySelected={selectEntity}
+            showReview={!navigation.splitView}
           />
+          </div>
+          </>
         ) : null}
 
         {!rootError && lens !== "chat" && !activeThreadId && !catalog.isPending ? (
@@ -321,6 +348,9 @@ function InvestigationStage({
   requestedRunId,
   eventFollowEnabled,
   onRunSelected,
+  requestedEntityId,
+  onEntitySelected,
+  showReview,
 }: {
   lens: InspectorLens;
   detail: DashboardThreadDetail;
@@ -329,6 +359,9 @@ function InvestigationStage({
   requestedRunId: string | null;
   eventFollowEnabled: boolean;
   onRunSelected: (runId: string, replaceHistory: boolean) => void;
+  requestedEntityId?: string;
+  onEntitySelected: (id: string) => void;
+  showReview: boolean;
 }) {
   const { thread, attempts } = detail;
   const slice = thread.structure?.reading_path.graph_slice;
@@ -364,7 +397,7 @@ function InvestigationStage({
         <Metric label="Verified links" value={verifiedEdges} detail={`${slice?.edges.length ?? 0} total relations`} />
       </section>
 
-      {thread.pending_review ? (
+      {thread.pending_review && showReview ? (
         <HumanReviewPanel
           key={thread.interrupt_id ?? "pending-review"}
           detail={detail}
@@ -377,7 +410,7 @@ function InvestigationStage({
           <>
           <DriftPanel key={thread.structure.artifact_id} threadId={thread.thread_id} artifactId={thread.structure.artifact_id} />
           <Suspense fallback={<LoadingState compact />}>
-            <TaskGraph threadId={thread.thread_id} structure={thread.structure} />
+            <TaskGraph key={thread.structure.artifact_id} threadId={thread.thread_id} structure={thread.structure} requestedEntityId={requestedEntityId} onEntitySelected={onEntitySelected} />
           </Suspense>
           </>
         ) : <StructureEmpty />
@@ -397,6 +430,20 @@ function InvestigationStage({
 
 function Metric({ label, value, detail }: { label: string; value: number; detail: string }) {
   return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>;
+}
+
+function TerminologyGuide() {
+  return <details className="terminology-guide"><summary>中文 / English · terminology</summary>
+    <dl lang="zh-CN" tabIndex={0} aria-label="Chinese and English terminology">
+      <dt>Goal · 当前目标</dt><dd>用户声明的问题。任务绑定启动服务时选择的仓库；Focus path 仅缩小仓库内范围。</dd>
+      <dt>Plan · 执行计划</dt><dd>步骤由控制器推进。Accepted 是评估通过，Completed 是运行结束；不代表人工批准。</dd>
+      <dt>Path / Evidence · 证据路径</dt><dd>基于源码快照的阅读路线。Verified 表示确定性校验，Inferred 仍是推断，不能等同真实调用。</dd>
+      <dt>Trace / Context · 轨迹与上下文</dt><dd>Trace 记录发生的动作；Context 显示每次模型调用实际入选的信息及被排除的原因。</dd>
+      <dt>Memory · 记忆</dt><dd>持久化事实与历史经验仍需范围匹配和重检。被召回不代表进入上下文，也不代表提升效果。</dd>
+      <dt>Cost · 费用分析</dt><dd>按用量与定价估算，不是供应商账单。未知用量不是免费；预算预留不等于已结算支出。</dd>
+      <dt>Drift · 证据漂移</dt><dd>对比已保存来源与当前 HEAD；指纹相同不证明行为相同，不会自动重跑或修改记忆。</dd>
+    </dl>
+  </details>;
 }
 
 function StructureEmpty() {

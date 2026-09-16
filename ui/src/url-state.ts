@@ -7,6 +7,8 @@ export interface DashboardNavigationState {
   lens: DashboardLens;
   runId: string | null;
   composingNew: boolean;
+  nodeId?: string;
+  splitView?: boolean;
 }
 
 export type DashboardNavigationMode = "push" | "replace";
@@ -41,7 +43,12 @@ export function readDashboardNavigation(
   const runId = threadId !== null && isRunLens(lens)
     ? safeId(params.get("run"))
     : null;
-  return { threadId, lens, runId, composingNew: false };
+  const nodeId = params.get("node");
+  return {
+    threadId, lens, runId, composingNew: false,
+    ...(threadId && lens === "topology" && nodeId && /^[a-f0-9]{64}$/.test(nodeId) ? { nodeId } : {}),
+    ...(threadId && lens !== "chat" && params.get("split") === "1" ? { splitView: true } : {}),
+  };
 }
 
 export function writeDashboardNavigation(
@@ -68,6 +75,8 @@ export function dashboardNavigationHref(
   url.searchParams.delete("lens");
   url.searchParams.delete("run");
   url.searchParams.delete("compose");
+  url.searchParams.delete("node");
+  url.searchParams.delete("split");
 
   if (state.composingNew) {
     url.searchParams.set("compose", "1");
@@ -78,6 +87,12 @@ export function dashboardNavigationHref(
     if (state.lens !== "chat") url.searchParams.set("lens", state.lens);
     if (state.runId && isRunLens(state.lens) && SAFE_ID.test(state.runId)) {
       url.searchParams.set("run", state.runId);
+    }
+    if (state.threadId && SAFE_ID.test(state.threadId) && state.lens !== "chat") {
+      if (state.splitView) url.searchParams.set("split", "1");
+      if (state.lens === "topology" && state.nodeId && /^[a-f0-9]{64}$/.test(state.nodeId)) {
+        url.searchParams.set("node", state.nodeId);
+      }
     }
   }
   return `${url.pathname}${url.search}${url.hash}`;
