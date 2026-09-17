@@ -286,7 +286,7 @@ def main() -> int:
     if not args.budget_db.is_file():
         parser.error("an existing shared budget ledger is required")
     from langchain_core.messages import SystemMessage, HumanMessage
-    from repocompass.agent.cost import PricingTable
+    from repocompass.pricing import load_pricing_table_file
     from repocompass.evaluation.live_budget import (
         SQLiteSpendLedger,
         BudgetCallback,
@@ -294,7 +294,7 @@ def main() -> int:
     )
     from repocompass.evaluation.live_cli import pilot_settings, bounded_model, persist
 
-    prices = PricingTable.model_validate_json(args.pricing.read_text())
+    prices = load_pricing_table_file(args.pricing)
     price = next(
         p
         for p in prices.entries
