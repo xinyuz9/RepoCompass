@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -32,6 +32,22 @@ afterEach(() => {
 });
 
 describe("App query shell", () => {
+  it("does not mount a disposable goal composer while the thread catalog is pending", async () => {
+    window.history.replaceState({}, "", "/?lens=chat");
+    let release!: (response: Response) => void;
+    const pendingCatalog = new Promise<Response>((resolve) => { release = resolve; });
+    vi.stubGlobal("fetch", vi.fn((input: string | URL | Request) => String(input).endsWith("/system")
+      ? Promise.resolve(new Response(JSON.stringify(system), { headers: { "content-type": "application/json" } }))
+      : pendingCatalog));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><App /></QueryClientProvider>);
+    await waitFor(() => expect(client.getQueriesData({ queryKey: ["dashboard"] }).some(([, data]) => Boolean(data))).toBe(true));
+    expect(screen.queryByRole("heading", { name: "Declare the current goal" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "What should RepoCompass investigate?" })).not.toBeInTheDocument();
+    await act(async () => { release(new Response(JSON.stringify(catalog), { headers: { "content-type": "application/json" } })); });
+    expect(await screen.findByRole("heading", { name: "Declare the current goal" })).toBeVisible();
+  });
+
   it("deduplicates cached bootstrap reads and renders the first-run empty state", async () => {
     const fetchMock = vi.fn((input: string | URL | Request) => {
       const url = String(input);

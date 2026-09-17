@@ -45,9 +45,12 @@ from repocompass.agent.state import RepoCompassState
 from repocompass.agent.tool_adapters import (
     LEXICAL_REPOSITORY_TOOLS,
     REPOSITORY_TOOLS,
+    create_browser_tool,
 )
 from repocompass.models import WorkflowModels
 from repocompass.tools.gateway import ToolGateway, create_repository_tool_registry
+from repocompass.tools.browser import BrowserPolicy
+from repocompass.tools.contracts import ToolCapability
 
 if TYPE_CHECKING:
     from repocompass.memory.store import MemoryStore
@@ -77,6 +80,7 @@ def create_agent_graph(
     memory_store: MemoryStore | None = None,
     memory_clock: Callable[[], int] = lambda: 0,
     cancellation_check: Callable[[RunnableConfig], None] | None = None,
+    browser_policy: BrowserPolicy | None = None,
 ):
     """Compile the graph with optional checkpoint and Raw Run persistence."""
 
@@ -87,10 +91,19 @@ def create_agent_graph(
         if architecture_profile.structural_tools_enabled
         else LEXICAL_REPOSITORY_TOOLS
     )
+    if browser_policy is not None:
+        if not isinstance(browser_policy, BrowserPolicy):
+            raise TypeError("browser_policy must be a BrowserPolicy or None")
+        repository_tools = (*repository_tools, create_browser_tool(browser_policy))
+    allowed_capabilities = {ToolCapability.FILESYSTEM_READ}
+    if browser_policy is not None:
+        allowed_capabilities.update({ToolCapability.NETWORK, ToolCapability.PROCESS})
     gateway = ToolGateway(
         create_repository_tool_registry(
-            include_structural=architecture_profile.structural_tools_enabled
-        )
+            include_structural=architecture_profile.structural_tools_enabled,
+            browser_policy=browser_policy,
+        ),
+        allowed_capabilities=frozenset(allowed_capabilities),
     )
     context_strategy = architecture_profile.context_selection_strategy
     builder = StateGraph(RepoCompassState)

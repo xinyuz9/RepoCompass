@@ -33,6 +33,11 @@ from repocompass.service import (
     open_service_operation_store,
 )
 from repocompass.storage.raw_store import RawStoreError, open_raw_run_store
+from repocompass.tools.browser import (
+    BrowserPolicy,
+    add_browser_arguments,
+    validate_browser_runtime,
+)
 
 DEFAULT_DASHBOARD_CHECKPOINT_DATABASE = Path(".repocompass/checkpoints.sqlite")
 DEFAULT_DASHBOARD_RAW_STORE_DATABASE = Path(".repocompass/raw_runs.sqlite")
@@ -55,6 +60,7 @@ _DEMO_CONFLICT_OPTIONS = frozenset(
         "--pricing-file",
         "--enable-lifecycle-mutations",
         "--enable-memory-mutations",
+        "--browser-page",
     }
 )
 
@@ -88,6 +94,7 @@ def create_parser() -> argparse.ArgumentParser:
             "and memory mutations are absent unless explicitly enabled."
         ),
     )
+    add_browser_arguments(parser)
     parser.add_argument(
         "--repo-path",
         type=Path,
@@ -175,6 +182,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = create_parser()
     argument_vector = list(sys.argv[1:] if argv is None else argv)
     arguments = parser.parse_args(argument_vector)
+    if arguments.browser_page and not arguments.enable_lifecycle_mutations:
+        parser.error("--browser-page requires --enable-lifecycle-mutations")
+    try:
+        browser_policy = (
+            BrowserPolicy(tuple(arguments.browser_page))
+            if arguments.browser_page
+            else None
+        )
+    except ValueError as error:
+        parser.error(str(error))
     if not 1 <= arguments.port <= 65_535:
         parser.error("--port must be between 1 and 65535")
     if arguments.demo_turns != 1 and not arguments.demo:
@@ -192,6 +209,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         with ExitStack() as stack:
+            if browser_policy is not None:
+                validate_browser_runtime()
             if arguments.demo:
                 demo_root = Path(
                     stack.enter_context(
@@ -249,6 +268,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if arguments.enable_lifecycle_mutations
                 else None
             )
+            browser_dependencies = (
+                {} if browser_policy is None else {"browser_policy": browser_policy}
+            )
             runner = AgentRunner(
                 models,
                 checkpointer=checkpointer,
@@ -256,6 +278,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 memory_store=memory_store,
                 pricing_table=pricing_table,
                 cancellation_store=cancellation_store,
+                **browser_dependencies,
             )
             query_service = DashboardQueryService(
                 runner,
@@ -268,6 +291,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 cancellation_enabled=cancellation_store is not None,
                 memory_mutations_enabled=arguments.enable_memory_mutations,
                 demo_mode=arguments.demo,
+                static_browser_page_ids=(
+                    ()
+                    if browser_policy is None
+                    else tuple(page.page_id for page in browser_policy.pages)
+                ),
             )
             lifecycle_service = (
                 InvestigationService(

@@ -88,6 +88,26 @@ class DashboardSystemInfo(_DashboardModel):
     memory_mutations_enabled: bool
     cancellation_enabled: bool = False
     event_follow_enabled: bool = False
+    static_browser_page_ids: tuple[str, ...] = Field(default=(), max_length=8)
+
+    @field_validator("static_browser_page_ids")
+    @classmethod
+    def validate_browser_page_ids(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        from repocompass.tools.browser import BrowserReadArguments
+
+        if len(value) != len(set(value)):
+            raise ValueError("browser page ids must be unique")
+        for page_id in value:
+            BrowserReadArguments(page_id=page_id)
+        return value
+
+    @model_validator(mode="after")
+    def browser_requires_execution_authority(self):
+        if self.static_browser_page_ids and (
+            not self.lifecycle_mutations_enabled or self.demo_mode
+        ):
+            raise ValueError("static browser requires non-demo lifecycle execution")
+        return self
 
 
 class DashboardRunSummary(_DashboardModel):

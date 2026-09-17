@@ -18,6 +18,45 @@ def test_inspection_models_fail_closed_without_provider_credentials() -> None:
         models.explorer.invoke([])
 
 
+def test_operator_browser_catalog_reaches_api_without_urls_or_new_http_authority(
+    tmp_path, monkeypatch
+):
+    state = tmp_path / "state"
+    monkeypatch.setattr(runtime, "validate_browser_runtime", lambda: None)
+    monkeypatch.setattr(
+        runtime, "create_workflow_models", runtime.create_inspection_models
+    )
+
+    def inspect(app, **_):
+        client = TestClient(app)
+        response = client.get("/api/v1/system")
+        assert response.status_code == 200
+        assert response.json()["static_browser_page_ids"] == ["docs"]
+        assert "8888" not in response.text
+        assert str(tmp_path) not in response.text
+        document = client.get("/api/v1/openapi.json").json()
+        assert not any("browser" in path for path in document["paths"])
+
+    monkeypatch.setattr(runtime.uvicorn, "run", inspect)
+    arguments = [
+        "--repo-path",
+        str(tmp_path),
+        "--enable-lifecycle-mutations",
+        "--browser-page",
+        "docs=http://127.0.0.1:8888/docs",
+    ]
+    for flag, filename in (
+        ("--checkpoint-db", "checkpoint"),
+        ("--raw-store-db", "raw"),
+        ("--memory-db", "memory"),
+        ("--operation-db", "operations"),
+        ("--cancellation-db", "cancellation"),
+    ):
+        arguments += [flag, str(state / f"{filename}.sqlite")]
+    arguments += ["--trace-dir", str(state / "traces")]
+    assert runtime.main(arguments) == 0
+
+
 def test_runtime_serves_loopback_read_api_without_provider_credentials(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -37,6 +76,7 @@ def test_runtime_serves_loopback_read_api_without_provider_credentials(
         assert response.json()["pricing_configured"] is False
         assert response.json()["lifecycle_mutations_enabled"] is False
         assert response.json()["cancellation_enabled"] is False
+        assert response.json()["static_browser_page_ids"] == []
         assert response.json()["memory_mutations_enabled"] is False
         assert threads.json()["threads"] == []
         assert "/api/v1/threads/{thread_id}/responses" not in document["paths"]

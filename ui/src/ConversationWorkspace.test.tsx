@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ConversationWorkspace, InvestigationResult } from "./ConversationWorkspace";
+import { BrowserBoundary, ConversationWorkspace, InvestigationResult } from "./ConversationWorkspace";
 import type {
   DashboardSystemInfo,
   DashboardThreadDetail,
@@ -31,6 +31,23 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace lifecycle commands", () => {
+  it("reports browser default-off without an editable URL or permission switch", () => {
+    render(<BrowserBoundary system={system} />);
+    expect(screen.getByText("Agent browser disabled")).toBeVisible();
+    fireEvent.click(screen.getByText("Agent browser disabled"));
+    expect(screen.getByText(/Chat messages cannot grant access/)).toBeVisible();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("shows only the operator-approved static page catalog and its limits", () => {
+    render(<BrowserBoundary system={{ ...system, static_browser_page_ids: ["docs", "guide"] }} />);
+    fireEvent.click(screen.getByText("Static browser · 2 operator-approved pages"));
+    expect(screen.getByRole("list", { name: "Operator-approved page IDs" })).toBeVisible();
+    expect(screen.getByText("docs")).toBeVisible();
+    expect(screen.getByText(/No site scripts, login state/)).toBeVisible();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
   it("distinguishes exhausted completion from an accepted result and retains open questions", () => {
     const detail = threadDetail({ executionState: "completed", attemptCommitSha: commitSha });
     detail.thread.termination_status = "exhausted";

@@ -38,6 +38,25 @@
 
 * { box-sizing: border-box; }
 
+.browser-boundary {
+  min-width: 0;
+  margin: 12px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.browser-boundary summary { cursor: pointer; color: var(--teal); }
+.browser-boundary summary svg { vertical-align: text-bottom; margin-right: 8px; }
+.browser-boundary summary:focus-visible { outline: 2px solid var(--acid); outline-offset: 4px; }
+.browser-boundary p { margin: 10px 0 0; }
+.browser-boundary ul { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; }
+.browser-boundary li { max-width: 100%; padding: 3px 8px; border: 1px solid var(--line-strong); border-radius: 6px; }
+
 html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
 
 body {

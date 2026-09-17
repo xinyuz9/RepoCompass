@@ -74,6 +74,7 @@ from repocompass.tools.contracts import (
     decode_tool_audit_record,
 )
 from repocompass.tools.gateway import ToolExecutionContext
+from repocompass.tools.browser import BrowserPolicy
 from repocompass.storage.cancellation import (
     CancellationIdentity,
     CancellationStore,
@@ -761,6 +762,7 @@ class AgentRunner:
         pricing_table: PricingTable | None = None,
         memory_store: MemoryStore | None = None,
         cancellation_store: CancellationStore | None = None,
+        browser_policy: BrowserPolicy | None = None,
         episode_clock_factory: EpisodeClockFactory = current_time_ms,
         run_id_factory: RunIdFactory = generate_run_id,
         thread_id_factory: ThreadIdFactory = generate_thread_id,
@@ -792,6 +794,9 @@ class AgentRunner:
         """
 
         self._models = models
+        if browser_policy is not None and not isinstance(browser_policy, BrowserPolicy):
+            raise TypeError("browser_policy must be a BrowserPolicy or None")
+        self._browser_policy = browser_policy
         self._checkpointer = checkpointer
         if not isinstance(architecture_profile, AgentArchitectureProfile):
             raise TypeError("architecture_profile must be an AgentArchitectureProfile")
@@ -848,6 +853,7 @@ class AgentRunner:
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
             cancellation_check=self._cancellation_check,
+            browser_policy=self._browser_policy,
         )
         snapshot = graph.get_state(_thread_config(thread_id))
         if not snapshot.values:
@@ -880,6 +886,7 @@ class AgentRunner:
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
             cancellation_check=self._cancellation_check,
+            browser_policy=self._browser_policy,
         )
         snapshot = graph.get_state(_thread_config(thread_id))
         if (
@@ -959,6 +966,7 @@ class AgentRunner:
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
             cancellation_check=self._cancellation_check,
+            browser_policy=self._browser_policy,
         )
         return build_public_conversation(
             thread_id=thread_id,
@@ -1038,6 +1046,7 @@ class AgentRunner:
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
             cancellation_check=self._cancellation_check,
+            browser_policy=self._browser_policy,
         )
         config = _thread_config(thread_id)
         if graph.get_state(config).values:
@@ -1067,6 +1076,7 @@ class AgentRunner:
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
             cancellation_check=self._cancellation_check,
+            browser_policy=self._browser_policy,
         )
 
         config = _thread_config(thread_id)
@@ -1096,6 +1106,7 @@ class AgentRunner:
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
             cancellation_check=self._cancellation_check,
+            browser_policy=self._browser_policy,
         )
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)
@@ -1154,6 +1165,7 @@ class AgentRunner:
             memory_store=self._memory_store,
             memory_clock=self._episode_clock_factory,
             cancellation_check=self._cancellation_check,
+            browser_policy=self._browser_policy,
         )
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)

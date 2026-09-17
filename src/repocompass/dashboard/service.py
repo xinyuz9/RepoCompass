@@ -124,6 +124,7 @@ class DashboardQueryService:
         memory_mutations_enabled: bool = False,
         cancellation_enabled: bool = False,
         demo_mode: bool = False,
+        static_browser_page_ids: tuple[str, ...] = (),
     ) -> None:
         if not callable(getattr(runner, "inspect_thread", None)):
             raise TypeError("runner must implement inspect_thread")
@@ -161,6 +162,7 @@ class DashboardQueryService:
             raise ValueError("cancellation requires lifecycle mutations")
         self._cancellation_enabled = cancellation_enabled
         self._demo_mode = demo_mode
+        self._static_browser_page_ids = static_browser_page_ids
 
     @property
     def repository_context(self) -> ToolExecutionContext:
@@ -184,6 +186,7 @@ class DashboardQueryService:
             memory_mutations_enabled=self._memory_mutations_enabled,
             cancellation_enabled=self._cancellation_enabled,
             event_follow_enabled=True,
+            static_browser_page_ids=self._static_browser_page_ids,
         )
 
     def list_threads(self, *, max_results: int = 50) -> DashboardThreadCatalog:

@@ -1,6 +1,32 @@
 import { expect, test } from "@playwright/test";
 import axe from "axe-core";
 
+test("operator browser catalog is bounded, keyboard readable and never grants permissions", async ({ page }, testInfo) => {
+  // UI-only metadata fixture; the separate Python integration suite executes the real browser.
+  const writes: string[] = [];
+  page.on("request", request => { if (!["GET", "HEAD"].includes(request.method())) writes.push(request.url()); });
+  const ids = Array.from({ length: 8 }, (_, i) => `page_${i}_` + "x".repeat(25));
+  await page.route("**/api/v1/system", async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...await response.json(), static_browser_page_ids: ids } });
+  });
+  await page.goto("/?lens=chat");
+  await expect(page.getByLabel("Investigation conversation", { exact: true })).toBeVisible();
+  if (await page.getByRole("button", { name: "Hide investigations", exact: true }).count()) await page.getByRole("button", { name: "Hide investigations", exact: true }).click();
+  const summary = page.getByText("Static browser · 8 operator-approved pages", { exact: true });
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  const boundary = page.locator(".browser-boundary");
+  await expect(boundary.getByRole("list")).toBeVisible();
+  await expect(boundary.getByRole("listitem")).toHaveCount(8);
+  expect(await boundary.getByRole("textbox").count()).toBe(0);
+  expect(await boundary.getByRole("checkbox").count()).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await boundary.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("browser-catalog.png") });
+  expect(writes).toEqual([]);
+});
+
 test("long goals stay readable without displacing memory and cost inspectors", async ({ page }, testInfo) => {
   // UI-only response fixture. No model quality or persisted-run claim.
   const objective = "Trace the nested modeling issue and its evidence\n" + "公开问题详情与源码 <script>not executable</script>\n".repeat(180);

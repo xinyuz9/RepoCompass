@@ -21,6 +21,7 @@ export interface DashboardSystemInfo {
   memory_mutations_enabled: boolean;
   cancellation_enabled?: boolean;
   event_follow_enabled?: boolean;
+  static_browser_page_ids?: string[];
 }
 
 export interface CancellationRequest {

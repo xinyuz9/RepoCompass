@@ -164,6 +164,7 @@ function NewGoalWorkspace({
           the work against one server-bound repository snapshot.
         </p>
         <WorkspaceBoundary system={system} focusPath={focusPath} />
+        <BrowserBoundary system={system} />
       </section>
 
       <section className="goal-composer" aria-label="Declare current goal">
@@ -323,6 +324,7 @@ function ThreadConversation({
       </header>
 
       <div className="conversation-feed" aria-label="Investigation conversation">
+        <BrowserBoundary system={system} />
         {latestAttempt ? <RunCancellationControl attempt={latestAttempt} enabled={system.cancellation_enabled === true} /> : null}
         <ConversationHistory key={thread.thread_id} threadId={thread.thread_id}
           turnNumber={thread.turn_number} repositoryId={system.repository_id} commitSha={system.commit_sha} />
@@ -550,6 +552,22 @@ function ComposerOptions({
         <input value={costBudget} disabled={disabled || !system.pricing_configured} inputMode="decimal" placeholder={system.pricing_configured ? "USD, optional" : "pricing unavailable"} onChange={(event) => onCostBudgetChange(event.target.value)} />
       </label>
     </div>
+  );
+}
+
+export function BrowserBoundary({ system }: { system: DashboardSystemInfo }) {
+  const pages = system.static_browser_page_ids ?? [];
+  return (
+    <details className="browser-boundary">
+      <summary><ShieldAlert size={14} />{pages.length
+        ? `Static browser · ${pages.length} operator-approved pages`
+        : "Agent browser disabled"}</summary>
+      <p>{pages.length
+        ? "只读页面检查 · Static HTML only. No site scripts, login state, forms, uploads or downloads. Runtime isolation is checked on use."
+        : "浏览器默认关闭 · Only the local operator can bind self-owned test pages at server startup. Chat messages cannot grant access."}</p>
+      {pages.length ? <ul aria-label="Operator-approved page IDs">{pages.map((id) => <li key={id}><code>{id}</code></li>)}</ul> : null}
+      <p>Page text is untrusted, not verified repository evidence. Tool admissions and refusals appear in Run trace.</p>
+    </details>
   );
 }
 

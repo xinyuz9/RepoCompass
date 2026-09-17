@@ -287,8 +287,9 @@ export function App() {
 
         {!rootError
         && system.data
+        && !catalog.isPending
         && lens === "chat"
-        && (activeThreadId === null || !thread.isPending) ? (
+        && (activeThreadId === null || thread.data !== undefined) ? (
           <ConversationWorkspace
             key={thread.data?.thread.thread_id ?? "new-goal"}
             system={system.data}

@@ -48,6 +48,14 @@ jobs:
           -q
       - name: Build package
         run: uv build
+      - name: Install optional static browser runtime
+        run: |
+          uv sync --locked --all-groups --extra browser
+          uv run --extra browser playwright install --with-deps --only-shell chromium
+      - name: Verify actual isolated browser (no provider credentials)
+        env:
+          REPOCOMPASS_BROWSER_TESTS: "1"
+        run: uv run --extra browser pytest -q tests/integration/test_static_browser.py
       - name: Smoke installed entry points
         run: |
           uv venv .wheel-smoke

@@ -70,6 +70,7 @@ class ToolRegistration:
     arguments_model: type[BaseModel]
     executor: ToolExecutor
     repository_path_field: str | None = None
+    deduplicate_per_attempt: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.descriptor, ToolDescriptor):
@@ -81,6 +82,8 @@ class ToolRegistration:
             raise TypeError("arguments_model must be a Pydantic model type")
         if not callable(self.executor):
             raise TypeError("executor must be callable")
+        if type(self.deduplicate_per_attempt) is not bool:
+            raise TypeError("deduplicate_per_attempt must be a bool")
         if (
             self.repository_path_field is not None
             and self.repository_path_field not in self.arguments_model.model_fields
@@ -595,6 +598,24 @@ class ToolGateway:
                 allow_deduplication=reuse_allowed,
             )
 
+        # Volatile external observations cannot be cached under a Git identity.
+        # An opt-in tool may instead be admitted at most once per attempt, even
+        # in dirty/non-Git repositories and across plan-step windows.
+        if registration.deduplicate_per_attempt and any(
+            record.fingerprint == fingerprint
+            and (
+                record.decision.outcome is ToolDecisionOutcome.ALLOWED
+                or record.decision.reason in _EXECUTION_FAILURE_REASONS
+            )
+            for record in audit_log.records
+        ):
+            return self._deduplicate(
+                request,
+                fingerprint=fingerprint,
+                started_ns=started_ns,
+                audit_log=audit_log,
+            )
+
         if reuse_allowed and descriptor.cacheable:
             cached_entry = self._result_cache.get(fingerprint)
             if cached_entry is not None:
@@ -817,6 +838,7 @@ class ToolGateway:
 def create_repository_tool_registry(
     *,
     include_structural: bool = True,
+    browser_policy=None,
 ) -> ToolRegistry:
     """Build the immutable registry for every model-visible repository tool."""
 
@@ -866,6 +888,12 @@ def create_repository_tool_registry(
     )
     if not include_structural:
         registrations = registrations[:3]
+    if browser_policy is not None:
+        from repocompass.tools.browser import BrowserPolicy, browser_registration
+
+        if not isinstance(browser_policy, BrowserPolicy):
+            raise TypeError("browser_policy must be a BrowserPolicy or None")
+        registrations = (*registrations, browser_registration(browser_policy))
     return ToolRegistry(registrations)
 
 

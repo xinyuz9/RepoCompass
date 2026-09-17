@@ -45,6 +45,11 @@ from repocompass.memory.store import MemoryStoreError, open_memory_store
 from repocompass.pricing import load_pricing_table_file
 from repocompass.storage.raw_store import RawStoreError, open_raw_run_store
 from repocompass.tools.gateway import ToolExecutionContext
+from repocompass.tools.browser import (
+    BrowserPolicy,
+    add_browser_arguments,
+    validate_browser_runtime,
+)
 
 DEFAULT_TRACE_DIRECTORY = Path(".repocompass/traces")
 DEFAULT_CHECKPOINT_DATABASE = Path(".repocompass/checkpoints.sqlite")
@@ -136,6 +141,7 @@ def create_parser() -> argparse.ArgumentParser:
             "local trace and raw provenance records."
         ),
     )
+    add_browser_arguments(parser)
     parser.add_argument(
         "repo_path",
         nargs="?",
@@ -373,6 +379,8 @@ def _validate_lifecycle_arguments(
         "memory_delete",
         "memory_retain",
     }
+    if arguments.browser_page and mode in {*memory_management_modes, "usage_report"}:
+        parser.error("--browser-page is only valid for investigation execution")
     if mode in memory_management_modes:
         mode_option = {
             "memory_list": "--memory-list",
@@ -678,6 +686,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     lifecycle_mode = _validate_lifecycle_arguments(parser, arguments)
 
     try:
+        browser_policy = (
+            BrowserPolicy(tuple(arguments.browser_page))
+            if arguments.browser_page
+            else None
+        )
+        if browser_policy is not None:
+            validate_browser_runtime()
         if lifecycle_mode in {
             "memory_list",
             "memory_list_deleted",
@@ -715,6 +730,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             memory_context as memory_store,
         ):
             optional_runner_dependencies: dict[str, object] = {}
+            if browser_policy is not None:
+                optional_runner_dependencies["browser_policy"] = browser_policy
             if pricing_table is not None:
                 optional_runner_dependencies["pricing_table"] = pricing_table
             if memory_store is not None:
