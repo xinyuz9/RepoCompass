@@ -55,7 +55,9 @@ def test_paired_fixture_and_independent_oracle(tmp_path: Path, case: str):
         # Explicit scripted unit-test oracle, never live performance evidence.
         return {"answer": answer("unchanged" if label.endswith("baseline") else case)}
 
-    result = benchmark.run_case(tmp_path / "fixture", case, 0, query)
+    result = benchmark.run_case(
+        tmp_path / "fixture", case, 0, query, source_backed=False
+    )
     assert len(calls) == 3
     assert result["baseline"]["quality"]["all_correct"]
     assert all(r["quality"]["all_correct"] for r in result["results"].values())
@@ -86,6 +88,26 @@ def test_wrong_baseline_is_retained_and_measured_not_silently_corrected(tmp_path
     assert not result["baseline"]["quality"]["all_correct"]
     assert not result["results"]["selective"]["quality"]["all_correct"]
     assert result["results"]["selective"]["cached_claims_sent"] == 3
+
+
+@pytest.mark.parametrize("case", benchmark.CASES)
+def test_v2_retained_claims_carry_current_source_without_new_scope(tmp_path, case):
+    calls = []
+
+    def query(label, payload):
+        calls.append(payload)
+        return {"answer": answer("unchanged" if label.endswith("baseline") else case)}
+
+    result = benchmark.run_case(tmp_path / "fixture", case, 0, query)
+    payload = calls[-1]
+    for claim in payload["prior_claims_with_unchanged_sources"]:
+        for ref in claim["evidence"]:
+            path, line = ref.rsplit(":", 1)
+            assert line in payload["current_sources"][path]["lines"]
+    assert set(payload["current_sources"]) <= set(result["drift"]["full_recheck_paths"])
+    if case not in {"deleted_source", "outside_source"}:
+        assert len(payload["current_sources"]) < 12
+    assert result["source_backed_claims"]
 
 
 def test_invalid_baseline_falls_back_without_filtering_failure(tmp_path: Path):
@@ -237,3 +259,27 @@ def test_full_cli_uses_authoring_prices_and_stops_after_provider_failure(
     if http_status != 200:
         assert report["shared_ledger_after"]["unsettled_invocations"] == 1
         assert report["cases"][0]["baseline"]["error"] == "AuthenticationError"
+
+
+def test_empty_existing_file_cannot_create_another_budget(tmp_path, monkeypatch):
+    empty = tmp_path / "empty.sqlite"
+    empty.touch()
+    output = tmp_path / "output"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "drift-answer",
+            "--live",
+            "--output",
+            str(output),
+            "--budget-db",
+            str(empty),
+            "--pricing",
+            "absent.json",
+        ],
+    )
+    with pytest.raises(ValueError, match="initialized spending ledger"):
+        benchmark.main()
+    assert empty.stat().st_size == 0
+    assert not output.exists()

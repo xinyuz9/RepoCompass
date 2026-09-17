@@ -14,6 +14,7 @@ import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -44,7 +45,10 @@ SYSTEM = (
     "Use null when missing or invalid source prevents a supported static answer. "
     "Do not infer behavior of unavailable imports. Cached answers are prior model "
     "claims whose cited source fingerprints are unchanged; they can be wrong. "
-    "Current source takes precedence. No prose, markdown fences, or extra keys."
+    "Current source takes precedence. Cite only numeric lines actually supplied "
+    "in current_sources; error metadata is not a source line. For a missing/invalid "
+    "import, cite the available import line, never filename:missing or fabricated "
+    "line numbers. No prose, markdown fences, or extra keys."
 )
 
 
@@ -215,7 +219,12 @@ def retained_claims(
 
 
 def run_case(
-    root: Path, case: str, repetition: int, query: Callable[[str, dict], dict]
+    root: Path,
+    case: str,
+    repetition: int,
+    query: Callable[[str, dict], dict],
+    *,
+    source_backed: bool = True,
 ) -> dict:
     baseline = make_fixture(root)
     full_paths = tuple(a.path for a in baseline.anchors)
@@ -232,8 +241,15 @@ def run_case(
     # Malformed baseline is not deleted or treated as a free, successful warmup.
     paths = report.recheck_paths if cached is not None else report.full_recheck_paths
     after = source_pack(root, full_paths)
-    partial = source_pack(root, paths)
     retained = retained_claims(cached, report) if cached is not None else []
+    supporting_paths = (
+        {ref.rsplit(":", 1)[0] for claim in retained for ref in claim["evidence"]}
+        if source_backed
+        else set()
+    )
+    # Fingerprint equality is not enough to make a prior answer trustworthy.
+    # Re-read its bounded, in-scope supporting source before asking for a new answer.
+    partial = source_pack(root, set(paths) | supporting_paths)
     results = {}
     order = ("full", "selective") if repetition % 2 == 0 else ("selective", "full")
     for variant in order:
@@ -261,6 +277,7 @@ def run_case(
         "drift": report.model_dump(mode="json"),
         "drift_elapsed_ns": drift_ns,
         "baseline_parse_fallback": cached is None,
+        "source_backed_claims": source_backed,
         "results": results,
     }
 
@@ -292,8 +309,18 @@ def main() -> int:
         BudgetCallback,
         BudgetAdmissionError,
     )
-    from repocompass.evaluation.live_cli import pilot_settings, bounded_model, persist
+    from repocompass.evaluation.live_cli import (
+        pilot_settings,
+        bounded_model,
+        persist,
+        budget_path,
+    )
 
+    ledger_path = budget_path(
+        SimpleNamespace(budget_db=args.budget_db, allow_pricing_extension=False),
+        root=args.output,
+        cache=args.output.resolve(),
+    )
     prices = load_pricing_table_file(args.pricing)
     price = next(
         p
@@ -304,11 +331,12 @@ def main() -> int:
     args.output.mkdir(parents=True)
     experiment = "drift-answer-" + str(uuid.uuid4())
     with SQLiteSpendLedger(
-        args.budget_db, limit_usd="5", pricing_id=prices.table_id
+        ledger_path, limit_usd="5", pricing_id=prices.table_id
     ) as ledger:
         ledger.begin_attempt(experiment, limit_usd="0.45")
         config = {
-            "schema_version": 1,
+            "schema_version": 2,
+            "selective_policy": "current_source_backed_claims_v2",
             "provenance": "synthetic_sources_real_provider_not_agent_runner",
             "experiment_id": experiment,
             "cases": CASES,
