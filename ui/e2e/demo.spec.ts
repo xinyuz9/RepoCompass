@@ -1,6 +1,48 @@
 import { expect, test } from "@playwright/test";
 import axe from "axe-core";
 
+test("long goals stay readable without displacing memory and cost inspectors", async ({ page }, testInfo) => {
+  // UI-only response fixture. No model quality or persisted-run claim.
+  const objective = "Trace the nested modeling issue and its evidence\n" + "公开问题详情与源码 <script>not executable</script>\n".repeat(180);
+  await page.route(/\/api\/v1\/threads\/[^/?]+$/, async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    await route.fulfill({ response, json: { ...payload, thread: { ...payload.thread, objective } } });
+  });
+  await page.route(/\/api\/v1\/runs\/[^/?]+$/, async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    payload.usage_cost_report.pricing_version = "openai-standard-ceiling-observed-2026-09-05";
+    await route.fulfill({ response, json: payload });
+  });
+  await page.goto("/?lens=memory");
+  if (await page.getByRole("button", { name: "Hide investigations", exact: true }).count()) await page.getByRole("button", { name: "Hide investigations", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Trace the nested modeling issue and its evidence");
+  const memory = page.getByRole("heading", { name: "Repository memory", exact: true });
+  await expect(memory).toBeVisible();
+  expect((await page.locator(".investigation-hero").boundingBox())!.height).toBeLessThan(400);
+  const disclosure = page.getByText("Read full goal · 完整目标", { exact: true });
+  await disclosure.focus();
+  await page.keyboard.press("Enter");
+  const full = page.getByLabel("Full investigation goal", { exact: true });
+  await expect(full).toHaveText(objective.trim());
+  expect((await full.boundingBox())!.height).toBeLessThanOrEqual(240.5); // subpixel layout rounding
+  expect(await full.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+  expect(await full.locator("script").count()).toBe(0);
+  await full.focus();
+  await page.keyboard.press("End");
+  await disclosure.click();
+  await memory.scrollIntoViewIfNeeded();
+  expect((await memory.boundingBox())!.y).toBeLessThan(page.viewportSize()!.height);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await page.screenshot({ path: testInfo.outputPath("long-goal-memory.png") });
+  await page.getByRole("navigation", { name: "Primary lenses" }).getByRole("button", { name: "Cost", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Cost analysis", exact: true })).toBeVisible();
+  // Font size differs by viewport: assert un-clipped text, not an arbitrary width.
+  const costHeading = page.getByRole("heading", { name: "Cost analysis", exact: true });
+  expect(await costHeading.evaluate((node) => node.clientWidth > 0 && node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+});
+
 test("shares selected evidence and keeps chat beside keyboard-readable inspectors", async ({ page }, testInfo) => {
   const writes: string[] = [];
   page.on("request", (request) => { if (!["GET", "HEAD"].includes(request.method())) writes.push(request.url()); });

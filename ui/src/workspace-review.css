@@ -10,6 +10,13 @@
 .evidence-tables nav { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 .evidence-tables button:disabled { opacity: .5; cursor: default; }
 .graph-scope { flex-wrap: wrap; max-width: calc(100% - 24px); }
+.full-goal { margin: 12px 0; font-size: 12px; color: var(--text-soft); }
+.full-goal summary { cursor: pointer; color: var(--teal); }
+.full-goal pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font: 12px/1.7 "JetBrains Mono Variable", "Noto Sans CJK SC", sans-serif; }
+.full-goal pre:focus-visible { outline: 2px solid var(--acid); }
+.panel-heading { flex-wrap: wrap; }
+.panel-heading > div { flex: 1 1 150px; }
+.panel-heading small { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .workspace-tools { position: relative; z-index: 2; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; padding: 12px 25px 0; }
 .workspace-tools > button, .terminology-guide summary { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: #10191d; color: var(--text); font-size: 12px; cursor: pointer; }
 .workspace-tools > button[aria-pressed="true"] { border-color: var(--teal); color: var(--teal); }

@@ -27,6 +27,7 @@ import { HumanReviewPanel } from "./HumanReviewPanel";
 import { ConversationHistory } from "./ConversationHistory";
 import { CurrentReviewHistory } from "./ReviewHistory";
 import { RunCancellationControl } from "./RunCancellationControl";
+import { GoalTitle } from "./GoalTitle";
 import { investigationStateLabel } from "./format";
 import {
   forgetLifecycleRequest,
@@ -313,7 +314,7 @@ function ThreadConversation({
       <header className="conversation-goal">
         <div>
           <p className="eyebrow">current goal</p>
-          <h1>{firstLine(thread.objective)}</h1>
+          <GoalTitle objective={thread.objective} />
           <span>turn {thread.turn_number} · thread/{shortId(thread.thread_id)}</span>
         </div>
         <button type="button" className="new-goal-link" onClick={onNewGoal}>
@@ -643,8 +644,4 @@ function mutationMessage(error: Error): string {
 
 function shortId(value: string): string {
   return value.length <= 10 ? value : value.slice(0, 8);
-}
-
-function firstLine(value: string): string {
-  return value.split("\n", 1)[0] ?? value;
 }

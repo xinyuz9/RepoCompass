@@ -28,6 +28,7 @@ import {
 } from "./ConversationWorkspace";
 import { HumanReviewPanel } from "./HumanReviewPanel";
 import { DriftPanel } from "./DriftPanel";
+import { GoalTitle } from "./GoalTitle";
 import { LifecycleRecoveryCenter } from "./lifecycle-recovery";
 import { ObservabilityPanel } from "./ObservabilityPanel";
 import { ThreadList } from "./ThreadList";
@@ -379,7 +380,7 @@ function InvestigationStage({
             </span>
             <code>thread/{shortHash(thread.thread_id)}</code>
           </div>
-          <h1>{thread.objective}</h1>
+          <GoalTitle objective={thread.objective} />
           <p>
             Task-bounded repository evidence · turn {thread.turn_number} · {attempts.length} persisted attempt{attempts.length === 1 ? "" : "s"}
           </p>
