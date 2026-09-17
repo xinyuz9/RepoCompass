@@ -1,5 +1,7 @@
 """Deterministic terminal lifecycle to episodic-memory consolidation tests."""
 
+import hashlib
+import json
 import sqlite3
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
@@ -7,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.candidate import CandidateResult, EvidenceItem
 from repocompass.agent.evaluation import EvaluationReport, SemanticAssessment
 from repocompass.agent.lifecycle import (
     ExecutionStatus,
@@ -16,6 +18,8 @@ from repocompass.agent.lifecycle import (
 from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import RunOutcome
 from repocompass.agent.trace import RunTrace
+from repocompass.agent.structural_artifacts import build_investigation_structure
+from repocompass.memory import consolidation
 from repocompass.memory.consolidation import (
     EpisodeConsolidationDisposition,
     EpisodeConsolidationError,
@@ -455,3 +459,119 @@ def test_concurrent_terminal_retries_create_one_logical_episode(
             connection.execute("SELECT count(*) FROM memory_episodes").fetchone()[0]
             == 1
         )
+
+
+def _canonical_result_bytes(result: FinalResult) -> bytes:
+    return json.dumps(
+        result.model_dump(mode="json", exclude_computed_fields=True, warnings=False),
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+@pytest.mark.parametrize("summary", ["Plain text", '定位函数\n雪 ☃ "quoted"'])
+def test_streaming_digest_preserves_v1_identity(summary: str) -> None:
+    result = _final_result(summary=summary)
+    expected = hashlib.sha256(
+        b"repocompass:episode-final-result:v1\0" + _canonical_result_bytes(result)
+    ).hexdigest()
+    assert consolidation._final_result_digest(result) == expected
+
+
+def test_digest_limit_counts_utf8_bytes_including_json_framing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = _final_result(summary="中文结果 ☃")
+    size = len(_canonical_result_bytes(result))
+    monkeypatch.setattr(consolidation, "MAX_CONSOLIDATION_FINAL_RESULT_BYTES", size)
+    assert consolidation._final_result_digest(result)
+    monkeypatch.setattr(consolidation, "MAX_CONSOLIDATION_FINAL_RESULT_BYTES", size - 1)
+    with pytest.raises(EpisodeConsolidationError, match="size limit"):
+        consolidation._final_result_digest(result)
+
+
+def test_large_valid_graph_consolidates_idempotently_without_relaxing_prose(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, _ = _create_repository(tmp_path)
+    (repository / "auth.py").write_text(
+        "\n".join(
+            f"def authenticate_{i:04d}_{'x' * 450}(user):\n    return user is not None\n"
+            for i in range(250)
+        ),
+        encoding="utf-8",
+    )
+    _git(repository, "add", "auth.py")
+    _git(repository, "commit", "--quiet", "-m", "large source fixture")
+    context = ToolExecutionContext(repository)
+    built = build_investigation_structure(
+        repo_path=repository,
+        objective="Find authentication.",
+        candidate=CandidateResult(
+            evidence=[
+                EvidenceItem(
+                    path="auth.py",
+                    line_start=1,
+                    line_end=2,
+                    symbol="auth.authenticate_0000_" + "x" * 450,
+                    claim="Checks the user.",
+                )
+            ],
+            summary="Authentication functions.",
+            unresolved_questions=[],
+        ),
+        valid_evidence_indices=frozenset({0}),
+    )
+    assert built.artifact is not None
+    result = _final_result().model_copy(update={"structure": built.artifact})
+    encoded = _canonical_result_bytes(result)
+    assert len(encoded) > consolidation.MAX_CONSOLIDATION_FINAL_RESULT_BYTES
+    assert (
+        consolidation._final_result_digest(result)
+        == hashlib.sha256(
+            b"repocompass:episode-final-result:v1\0" + encoded
+        ).hexdigest()
+    )
+    with open_memory_store(tmp_path / "memory.sqlite") as store:
+
+        def save(final: FinalResult):
+            return consolidate_terminal_episode(
+                store,
+                context=context,
+                outcome=_completed_outcome(context, final_result=final),
+                objective="Find authentication.",
+                turn_number=1,
+                created_at_ms=1_000,
+            )
+
+        first = save(result)
+        assert first.disposition is EpisodeConsolidationDisposition.CREATED
+        assert (
+            save(result).disposition
+            is EpisodeConsolidationDisposition.ALREADY_CONSOLIDATED
+        )
+        assert first.episode is not None
+        assert len(first.episode.model_dump_json()) < 10_000
+        with pytest.raises(MemoryStoreConflictError, match="terminal result"):
+            save(result.model_copy(update={"summary": "Changed answer"}))
+        with pytest.raises(EpisodeConsolidationError, match="size limit"):
+            save(result.model_copy(update={"summary": "x" * 1_000_000}))
+        corrupt = built.artifact.model_copy(update={"artifact_id": "0" * 64})
+        with pytest.raises(ValueError, match="artifact"):
+            save(result.model_copy(update={"structure": corrupt}))
+        monkeypatch.setattr(
+            consolidation,
+            "MAX_CONSOLIDATION_STRUCTURED_RESULT_BYTES",
+            len(encoded),
+        )
+        assert save(result).episode == first.episode
+        monkeypatch.setattr(
+            consolidation,
+            "MAX_CONSOLIDATION_STRUCTURED_RESULT_BYTES",
+            len(encoded) - 1,
+        )
+        with pytest.raises(EpisodeConsolidationError, match="size limit"):
+            save(result)

@@ -656,7 +656,7 @@ def execute(args) -> dict:
     )
     variants = tuple(v for v in LocalizationVariant if v.value in args.variants)
     config = {
-        "schema_version": 15,
+        "schema_version": 16,
         "provenance": "live_provider",
         "manifest_id": manifest.manifest_id,
         "budget_profile": budget.model_dump(mode="json"),
@@ -669,6 +669,8 @@ def execute(args) -> dict:
         "warmup_objective": WARMUP_OBJECTIVE if args.warm_memory else None,
         "memory_isolation": "fresh-per-case-variant-repeat; no target-answer reuse",
         "repository_memory_policy": "accepted_static_python_v1",
+        "episode_digest_policy": "v1_streamed_prose_1mb_structured_16mib",
+        "python_index_policy": "bounded_record_validation_v2",
         "memory_store_schema_version": MEMORY_STORE_SCHEMA_VERSION,
         "structure_resolution_policy": "self_import_placeholder_exact_path_v2",
         "candidate_evidence_policy": "source_occurrence_discovery_separation_v2",

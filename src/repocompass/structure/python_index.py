@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
+from pydantic import ValidationError
+
 from repocompass.structure.contracts import (
     MAX_INDEXED_SOURCE_BYTES,
     MAX_STRUCTURE_RECORDS,
@@ -115,8 +117,14 @@ def build_python_file_index(
         source_line_count=source_line_count,
         module_name=_module_name(path),
     )
-    collector = _PythonStructureCollector(identity, source)
-    collector.collect(tree)
+    try:
+        collector = _PythonStructureCollector(identity, source)
+        collector.collect(tree)
+    except (ValidationError, RecursionError) as error:
+        # Valid Python can exceed our bounded record schema (e.g. a 600-character
+        # identifier). Return a body-free indexing failure, not a source-bearing
+        # Pydantic exception that aborts candidate evaluation.
+        raise PythonIndexError(PythonIndexErrorReason.AST_LIMIT) from error
     if (
         len(collector.symbols) + len(collector.imports) + len(collector.references)
         > MAX_STRUCTURE_RECORDS

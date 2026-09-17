@@ -36,6 +36,9 @@ from repocompass.tools.gateway import ToolExecutionContext
 EPISODE_CONSOLIDATION_SCHEMA_VERSION = 1
 MAX_CONSOLIDATION_OBJECTIVE_CHARACTERS = 65_536
 MAX_CONSOLIDATION_FINAL_RESULT_BYTES = 1_000_000
+# A validated AST graph is not model-authored prose. Keep the original prose
+# admission bound while allowing production-sized structural evidence to hash.
+MAX_CONSOLIDATION_STRUCTURED_RESULT_BYTES = 16 * 1_024 * 1_024
 MAX_CONSOLIDATION_TOOL_AUDITS = 1_024
 MAX_CONSOLIDATION_PATH_CHARACTERS = 4_096
 
@@ -374,18 +377,42 @@ def _final_result_digest(final_result: FinalResult) -> str:
         exclude_computed_fields=True,
         warnings=False,
     )
-    encoded = json.dumps(
+    if final_result.structure is not None:
+        _bounded_final_result_hash(
+            {**payload, "structure": None},
+            max_bytes=MAX_CONSOLIDATION_FINAL_RESULT_BYTES,
+        )
+    return _bounded_final_result_hash(
         payload,
+        max_bytes=(
+            MAX_CONSOLIDATION_STRUCTURED_RESULT_BYTES
+            if final_result.structure is not None
+            else MAX_CONSOLIDATION_FINAL_RESULT_BYTES
+        ),
+    )
+
+
+def _bounded_final_result_hash(payload: dict[str, object], *, max_bytes: int) -> str:
+    # Preserve the v1 byte-for-byte identity used by existing episodes and orphan
+    # reconciliation. Streaming avoids one aggregate JSON bytes allocation; model
+    # validation/dumping and individual encoder chunks still allocate in memory.
+    digest = hashlib.sha256(b"repocompass:episode-final-result:v1\0")
+    size = 0
+    encoder = json.JSONEncoder(
         ensure_ascii=False,
         allow_nan=False,
         sort_keys=True,
         separators=(",", ":"),
-    ).encode("utf-8")
-    if len(encoded) > MAX_CONSOLIDATION_FINAL_RESULT_BYTES:
-        raise EpisodeConsolidationError(
-            "terminal result exceeds the consolidation size limit"
-        )
-    return _namespaced_digest(b"repocompass:episode-final-result:v1", encoded)
+    )
+    for chunk in encoder.iterencode(payload):
+        encoded = chunk.encode("utf-8")
+        size += len(encoded)
+        if size > max_bytes:
+            raise EpisodeConsolidationError(
+                "terminal result exceeds the consolidation size limit"
+            )
+        digest.update(encoded)
+    return digest.hexdigest()
 
 
 def _namespaced_digest(namespace: bytes, value: bytes) -> str:

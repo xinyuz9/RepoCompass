@@ -31,6 +31,25 @@ def _build(root: Path, relative_path: str) -> PythonFileIndex:
     )
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "def " + "private_name_" * 60 + "():\n    pass\n",
+        "class " + "private_name_" * 60 + ":\n    pass\n",
+        "import " + "private_name_" * 60 + "\n",
+    ],
+)
+def test_python_valid_oversized_record_becomes_bounded_index_error(
+    tmp_path: Path,
+    source: str,
+) -> None:
+    (tmp_path / "large_name.py").write_text(source, encoding="utf-8")
+    with pytest.raises(PythonIndexError) as raised:
+        _build(tmp_path, "large_name.py")
+    assert raised.value.reason is PythonIndexErrorReason.AST_LIMIT
+    assert "private_name" not in str(raised.value)
+
+
 def test_indexes_nested_symbols_imports_decorators_and_references(
     tmp_path: Path,
 ) -> None:
