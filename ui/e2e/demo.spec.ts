@@ -20,6 +20,7 @@ test("long goals stay readable without displacing memory and cost inspectors", a
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Trace the nested modeling issue and its evidence");
   const memory = page.getByRole("heading", { name: "Repository memory", exact: true });
   await expect(memory).toBeVisible();
+  expect((await page.locator(".panel--memory-catalog .panel-heading").boundingBox())!.height).toBeLessThan(100);
   expect((await page.locator(".investigation-hero").boundingBox())!.height).toBeLessThan(400);
   const disclosure = page.getByText("Read full goal · 完整目标", { exact: true });
   await disclosure.focus();
@@ -41,6 +42,7 @@ test("long goals stay readable without displacing memory and cost inspectors", a
   // Font size differs by viewport: assert un-clipped text, not an arbitrary width.
   const costHeading = page.getByRole("heading", { name: "Cost analysis", exact: true });
   expect(await costHeading.evaluate((node) => node.clientWidth > 0 && node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  expect((await page.locator(".panel--cost-summary .panel-heading").boundingBox())!.height).toBeLessThan(120);
 });
 
 test("shares selected evidence and keeps chat beside keyboard-readable inspectors", async ({ page }, testInfo) => {

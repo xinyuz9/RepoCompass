@@ -59,3 +59,4 @@
 }
 @media (max-width: 930px) { .review-layout { min-height: 600px; } .review-layout:not(.review-layout--split) { display: block; } .review-layout--split { overflow: visible; } }
 @media (max-width: 680px) { .workspace-tools { padding: 12px 14px 0; } .review-layout--split .investigation-stage { padding: 18px 14px 84px; } }
+@media (max-width: 680px) { .panel-heading > div { flex: 0 1 auto; width: 100%; } }
