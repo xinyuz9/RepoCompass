@@ -40,7 +40,7 @@ export function PlanLens({ detail }: { detail: DashboardThreadDetail }) {
         )}
       </div>
 
-      <div className="panel panel--plan-board">
+      <div className="panel panel--plan-board" role="region" aria-label="Recorded plan steps" tabIndex={0}>
         <PanelHeading
           eyebrow="active contract"
           title={selected ? `Turn ${selected.turn_number} · revision ${selected.revision_count}` : "Current plan"}
@@ -111,6 +111,15 @@ function EvaluatorTimeline({ frames }: { frames: EvaluatorReplayFrame[] }) {
                       {frame.report.deterministic_issues.map((issue, index) => <li key={`${issue.code}:${index}`}><strong>{issue.code}</strong>{issue.message}</li>)}
                     </ul>
                   </>
+                ) : null}
+                {frame.report.structural_warnings?.length ? (
+                  <details className="focus-box">
+                    <summary>Limited structural enrichment ({frame.report.structural_warnings.length})</summary>
+                    <p>Source excerpts were checked independently. Some optional graph data was omitted by resource limits; this does not verify missing symbols or relations.</p>
+                    <ul className="structural-warnings">
+                      {frame.report.structural_warnings.map((issue, index) => <li key={`${issue.code}:${index}`}><strong>{issue.code}</strong>{issue.path ? <code>{issue.path}</code> : null}<p>{issue.message}</p></li>)}
+                    </ul>
+                  </details>
                 ) : null}
                 {assessment.missing_evidence.length ? (
                   <div className="focus-box"><span>Missing evidence</span>{assessment.missing_evidence.map((item) => <p key={item}>{item}</p>)}</div>

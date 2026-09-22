@@ -431,6 +431,7 @@ export interface EvaluationReport {
     reason: "all_pending_covered" | "not_requested" | "incomplete" | "invalid_references" | "evaluation_failed";
   } | null;
   deterministic_issues: ValidationIssue[];
+  structural_warnings?: ValidationIssue[];
   semantic_assessment: SemanticAssessment;
   passed: boolean;
 }

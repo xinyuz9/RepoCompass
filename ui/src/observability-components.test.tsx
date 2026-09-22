@@ -59,6 +59,27 @@ describe("investigation observability lenses", () => {
     expect(screen.getByText("Inspect authentication entry points.")).toBeVisible();
     expect(screen.getByText("One critical link is still missing.")).toBeVisible();
     expect(screen.getByText("Authentication middleware registration.")).toBeVisible();
+    expect(screen.getByRole("region", { name: "Recorded plan steps" })).toHaveAttribute("tabindex", "0");
+  });
+
+  it("discloses optional graph limits without implying source validation failed", () => {
+    const detail = {
+      thread: { plan: null }, plan_timeline: [],
+      evaluator_timeline: [{ run_id: "run-1", turn_number: 1, sequence: 8, report: {
+        passed: true, deterministic_issues: [],
+        structural_warnings: [{ code: "structure_record_limit_exceeded", message: "AST record limit reached.", path: "large.py" }],
+        semantic_assessment: { active_step_completed: true, answers_objective: true, evidence_supports_summary: true, has_critical_omissions: false, missing_evidence: [], recommended_focus: [], summary: "Source evidence supports the answer." },
+      } }],
+    } as unknown as DashboardThreadDetail;
+    render(<PlanLens detail={detail} />);
+    expect(screen.getByText("✓ source validation")).toBeVisible();
+    expect(screen.queryByText(/Source validation failed/)).not.toBeInTheDocument();
+    const summary = screen.getByText("Limited structural enrichment (1)");
+    expect(summary.closest("details")).not.toHaveAttribute("open");
+    fireEvent.click(summary);
+    expect(screen.getByText("structure_record_limit_exceeded")).toBeVisible();
+    expect(screen.getByText("large.py")).toBeVisible();
+    expect(screen.getByText(/does not verify missing symbols or relations/)).toBeVisible();
   });
 
   it("shows a sanitized trace payload with its ordered sequence", () => {
