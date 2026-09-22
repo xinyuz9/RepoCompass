@@ -12,6 +12,7 @@ import {
   MessageSquareText,
   RotateCcw,
   ShieldAlert,
+  Settings2,
   Sparkles,
   UserRound,
 } from "lucide-react";
@@ -160,11 +161,10 @@ function NewGoalWorkspace({
         <p className="eyebrow">repository agent workspace</p>
         <h1 id="new-goal-title">Declare the current goal</h1>
         <p>
-          Declare a goal and RepoCompass will plan, trace, remember, and account for
-          the work against one server-bound repository snapshot.
+          Ask a question about this repository. Follow the answer back to source,
+          then decide what to investigate next.
         </p>
         <WorkspaceBoundary system={system} focusPath={focusPath} />
-        <BrowserBoundary system={system} />
       </section>
 
       <section className="goal-composer" aria-label="Declare current goal">
@@ -194,7 +194,15 @@ function NewGoalWorkspace({
               onClick={() => setGoal(objective ?? "")}>{label}</button>
           ))}
         </div>
-        <ComposerOptions
+        <details className="task-settings">
+          <summary>
+            <Settings2 size={15} /><strong>Task settings</strong>
+            <span className="task-settings__preview">
+              {reviewEnabled ? "Review on" : "Review off"} · Memory {memoryEnabled && system.memory_available ? "on" : "off"} · {costBudget.trim() ? `USD ${costBudget.trim()} cap` : "No task cost cap"}
+            </span>
+          </summary>
+          <p>Optional for this new goal. Submitted requests keep their original settings.</p>
+          <ComposerOptions
           system={system}
           focusPath={focusPath}
           onFocusPathChange={setFocusPath}
@@ -205,7 +213,9 @@ function NewGoalWorkspace({
           costBudget={costBudget}
           onCostBudgetChange={setCostBudget}
           disabled={lockedCommand !== null || mutation.isPending || mutation.isSuccess}
-        />
+          />
+          <BrowserBoundary system={system} />
+        </details>
         <MutationFooter
           enabled={enabled}
           pending={mutation.isPending}
@@ -324,7 +334,6 @@ function ThreadConversation({
       </header>
 
       <div className="conversation-feed" aria-label="Investigation conversation">
-        <BrowserBoundary system={system} />
         {latestAttempt ? <RunCancellationControl attempt={latestAttempt} enabled={system.cancellation_enabled === true} /> : null}
         <ConversationHistory key={thread.thread_id} threadId={thread.thread_id}
           turnNumber={thread.turn_number} repositoryId={system.repository_id} commitSha={system.commit_sha} />
@@ -350,14 +359,18 @@ function ThreadConversation({
               </span>
             </header>
             <InvestigationResult thread={thread} onOpenLens={onOpenLens} />
-            <AttemptRail attempts={attempts.map((item) => item.attempt)} />
-            <div className="inspector-shortcuts" aria-label="Open investigation inspector">
-              {INSPECTORS.map((item) => (
-                <button key={item.id} type="button" onClick={() => onOpenLens(item.id)}>
-                  {item.label}
-                </button>
-              ))}
-            </div>
+            <details className="conversation-inspection">
+              <summary>Inspect this investigation</summary>
+              <div className="inspector-shortcuts" aria-label="Open investigation inspector">
+                {INSPECTORS.map((item) => (
+                  <button key={item.id} type="button" onClick={() => onOpenLens(item.id)}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <AttemptRail attempts={attempts.map((item) => item.attempt)} />
+              <BrowserBoundary system={system} />
+            </details>
           </div>
         </article>
 
@@ -393,7 +406,11 @@ function ThreadConversation({
                 />
               </label>
               <div className="follow-up-box__bar">
-                <label className="compact-path"><FileCode2 size={13} /><span>Focus</span><input value={focusPath} disabled={!enabled || stale || continueCommand !== null} onChange={(event) => setFocusPath(event.target.value)} /></label>
+                <details className="follow-up-scope">
+                  <summary>Follow-up scope · <code>{focusPath.trim() || "."}</code></summary>
+                  <label className="compact-path"><FileCode2 size={13} /><span>Focus</span><input value={focusPath} maxLength={2048} disabled={!enabled || stale || continueCommand !== null} onChange={(event) => setFocusPath(event.target.value)} /></label>
+                  <small>Repository-relative path; applies to the next turn.</small>
+                </details>
                 <button type="button" aria-label="Send follow-up" disabled={!prompt.trim() || !enabled || stale || continueCommand !== null || continueMutation.isPending} onClick={submitFollowUp}>
                   {continueMutation.isPending ? <LoaderCircle className="is-spinning" size={16} /> : <ArrowUp size={16} />}
                 </button>
@@ -540,7 +557,7 @@ function ComposerOptions({
     <div className="composer-options">
       <label className="path-option">
         <span><FileCode2 size={13} />Focus path</span>
-        <input value={focusPath} disabled={disabled} placeholder="." onChange={(event) => onFocusPathChange(event.target.value)} />
+        <input value={focusPath} maxLength={2048} disabled={disabled} placeholder="." onChange={(event) => onFocusPathChange(event.target.value)} />
         <small>repository-relative; validated by the server</small>
       </label>
       <div className="toggle-options">
@@ -604,7 +621,7 @@ function MutationFooter({
 }) {
   return (
     <div className="composer-submit-row">
-      <span><ShieldAlert size={13} />No browser-provided repository root · one idempotent request</span>
+      <span><ShieldAlert size={13} />Read-only investigation · repository fixed by server</span>
       <button type="button" disabled={!enabled || disabled || pending || result !== null} onClick={onSubmit}>
         {pending ? <LoaderCircle className="is-spinning" size={15} /> : <CirclePlay size={15} />}{pending ? "Running…" : actionLabel}
       </button>

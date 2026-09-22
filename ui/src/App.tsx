@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Sparkles,
   Columns2,
+  SlidersHorizontal,
 } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -54,6 +55,10 @@ const LENSES: { id: DashboardLens; label: string; icon: typeof Network }[] = [
   { id: "cost", label: "Cost", icon: CircleDollarSign },
 ];
 
+const isInspectorLens = (lens: DashboardLens) => !["chat", "topology", "plan"].includes(lens);
+const showInspectorNavigation = (lens: DashboardLens) => isInspectorLens(lens)
+  && !window.matchMedia?.("(max-width: 680px)").matches;
+
 const TaskGraph = lazy(() => import("./TaskGraph").then((module) => ({ default: module.TaskGraph })));
 
 export function App() {
@@ -61,6 +66,8 @@ export function App() {
   const system = useQuery({ ...dashboardQueries.system, staleTime: 60_000 });
   const catalog = useQuery({ ...dashboardQueries.threads, staleTime: 20_000 });
   const [navigation, setNavigation] = useState(readDashboardNavigation);
+  const [inspectorsOpen, setInspectorsOpen] = useState(() => showInspectorNavigation(readDashboardNavigation().lens));
+  const inspectorToggle = useRef<HTMLButtonElement>(null);
   const [filter, setFilter] = useState("");
   const [refreshEpoch, setRefreshEpoch] = useState(0);
   const canFollow = system.data?.event_follow_enabled === true && typeof EventSource !== "undefined";
@@ -119,12 +126,17 @@ export function App() {
     next: DashboardNavigationState,
     mode: DashboardNavigationMode = "push",
   ) => {
+    setInspectorsOpen(showInspectorNavigation(next.lens));
     setNavigation(next);
     writeDashboardNavigation(next, mode);
   }, []);
 
   useEffect(() => {
-    const restoreNavigation = () => setNavigation(readDashboardNavigation());
+    const restoreNavigation = () => {
+      const next = readDashboardNavigation();
+      setInspectorsOpen(showInspectorNavigation(next.lens));
+      setNavigation(next);
+    };
     window.addEventListener("popstate", restoreNavigation);
     return () => window.removeEventListener("popstate", restoreNavigation);
   }, []);
@@ -152,13 +164,16 @@ export function App() {
     }
     navigate({ threadId, lens: "chat", runId: null, composingNew: false });
   }, [navigate]);
-  const openInspector = useCallback((nextLens: InspectorLens) => navigate({
-    threadId: activeThreadId,
-    lens: nextLens,
-    runId: null,
-    composingNew: false,
-    splitView: navigation.splitView,
-  }), [activeThreadId, navigate, navigation.splitView]);
+  const openInspector = useCallback((nextLens: InspectorLens) => {
+    setSidebarOpen(false);
+    navigate({
+      threadId: activeThreadId,
+      lens: nextLens,
+      runId: null,
+      composingNew: false,
+      splitView: true,
+    });
+  }, [activeThreadId, navigate]);
   const selectLens = useCallback((nextLens: DashboardLens) => {
     const keepComposing = nextLens === "chat" && composingNew;
     const threadId = keepComposing ? null : defaultThreadId;
@@ -198,7 +213,7 @@ export function App() {
           <Compass size={23} strokeWidth={1.7} />
         </div>
         <nav aria-label="Primary lenses">
-          {LENSES.map(({ id, label, icon: Icon }) => (
+          {LENSES.filter(({ id }) => !isInspectorLens(id)).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -212,6 +227,28 @@ export function App() {
               <span>{label}</span>
             </button>
           ))}
+          <button ref={inspectorToggle} type="button" aria-label="Inspect"
+            aria-expanded={inspectorsOpen} aria-controls="inspection-lenses"
+            className={isInspectorLens(lens) ? "is-active" : ""}
+            title="Trace, Context, Memory and Cost"
+            onClick={() => setInspectorsOpen((open) => !open)}>
+            <SlidersHorizontal size={19} /><span>Inspect</span>
+          </button>
+          <div id="inspection-lenses" className="inspection-lenses" hidden={!inspectorsOpen}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setInspectorsOpen(false);
+                inspectorToggle.current?.focus();
+              }
+            }}>
+            {LENSES.filter(({ id }) => isInspectorLens(id)).map(({ id, label, icon: Icon }) => (
+              <button key={id} type="button" className={lens === id ? "is-active" : ""}
+                onClick={() => selectLens(id)} aria-label={label}
+                aria-current={lens === id ? "page" : undefined} title={label}>
+                <Icon size={19} /><span>{label}</span>
+              </button>
+            ))}
+          </div>
         </nav>
         <div className="rail-trust" title="Local-only, repository-bound">
           <ShieldCheck size={18} />

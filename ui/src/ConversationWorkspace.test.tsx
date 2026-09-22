@@ -31,6 +31,47 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace lifecycle commands", () => {
+  it("keeps settings optional and preserves edits when the panel is collapsed", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWorkspace({ detail: null });
+    const focus = screen.getByLabelText(/Focus path/);
+    expect(focus).not.toBeVisible();
+    expect(screen.getByText(/Review on · Memory on · No task cost cap/)).toBeVisible();
+    fireEvent.click(screen.getByText("Task settings"));
+    expect(focus).toBeVisible();
+    fireEvent.change(focus, { target: { value: "src" } });
+    fireEvent.click(screen.getByLabelText("Recall memory"));
+    fireEvent.click(screen.getByLabelText("Review before finalize"));
+    fireEvent.change(screen.getByLabelText(/Attempt cap/), { target: { value: "0.25" } });
+    fireEvent.click(screen.getByText("Task settings"));
+    expect(focus).not.toBeVisible();
+    expect(screen.getByText(/Review off · Memory off · USD 0.25 cap/)).toBeVisible();
+    fireEvent.click(screen.getByText("Task settings"));
+    expect(focus).toHaveValue("src");
+    expect(screen.getByLabelText("Recall memory")).not.toBeChecked();
+    expect(screen.getByLabelText("Review before finalize")).not.toBeChecked();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("starts with safe existing defaults without requiring settings to be opened", async () => {
+    const onThreadActivated = vi.fn();
+    const fetchMock = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+      const command = JSON.parse(String(init?.body)) as { request_id: string };
+      return Promise.resolve(operationResponse(command.request_id, "thread-new", "start-run"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderWorkspace({ detail: null, onThreadActivated });
+    fireEvent.change(screen.getByLabelText("What should RepoCompass investigate?"), { target: { value: "Trace the entry point." } });
+    fireEvent.click(screen.getByRole("button", { name: "Start investigation" }));
+    await waitFor(() => expect(onThreadActivated).toHaveBeenCalledWith("thread-new"));
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      focus_path: ".", human_review_policy: "before_finalize",
+      memory_retrieval_enabled: true, max_attempt_cost_usd: null,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("reports browser default-off without an editable URL or permission switch", () => {
     render(<BrowserBoundary system={system} />);
     expect(screen.getByText("Agent browser disabled")).toBeVisible();
@@ -99,6 +140,7 @@ describe("ConversationWorkspace lifecycle commands", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderWorkspace({ detail: null, onThreadActivated });
+    fireEvent.click(screen.getByText("Task settings"));
     fireEvent.change(screen.getByLabelText("What should RepoCompass investigate?"), {
       target: { value: " Trace the proposal verifier. " },
     });
@@ -150,6 +192,10 @@ describe("ConversationWorkspace lifecycle commands", () => {
 
     expect(await screen.findByRole("button", { name: "Retry same request" })).toBeVisible();
     expect(goal).toBeDisabled();
+    fireEvent.click(screen.getByText("Task settings"));
+    expect(screen.getByLabelText(/Focus path/)).toBeDisabled();
+    expect(screen.getByLabelText("Recall memory")).toBeDisabled();
+    expect(screen.getByLabelText(/Attempt cap/)).toBeDisabled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Edit request" }));
@@ -204,9 +250,13 @@ describe("ConversationWorkspace lifecycle commands", () => {
     fireEvent.change(screen.getByPlaceholderText("Ask a follow-up about this repository…"), {
       target: { value: " Show the exact verification call path. " },
     });
+    expect(screen.getByLabelText("Focus")).not.toBeVisible();
+    fireEvent.click(screen.getByText(/Follow-up scope/));
     fireEvent.change(screen.getByLabelText("Focus"), {
       target: { value: "src/repocompass/agent" },
     });
+    fireEvent.click(screen.getByText(/Follow-up scope/));
+    expect(screen.getByLabelText("Focus")).not.toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Send follow-up" }));
 
     await waitFor(() => expect(onThreadActivated).toHaveBeenCalledWith("thread-1"));

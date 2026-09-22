@@ -177,6 +177,15 @@ describe("App query shell", () => {
     expect(requestedPaths.filter((path) => path.includes("/runs/")).length).toBe(0);
     const lensNavigation = screen.getByRole("navigation", { name: "Primary lenses" });
 
+    expect(within(lensNavigation).queryByRole("button", { name: "Memory" })).not.toBeInTheDocument();
+    fireEvent.click(within(lensNavigation).getByRole("button", { name: "Inspect" }));
+    expect(requestedPaths.filter((path) => path.includes("/runs/") || path.endsWith("/memory"))).toEqual([]);
+    within(lensNavigation).getByRole("button", { name: "Memory" }).focus();
+    fireEvent.keyDown(within(lensNavigation).getByRole("button", { name: "Memory" }), { key: "Escape" });
+    expect(within(lensNavigation).getByRole("button", { name: "Inspect" })).toHaveFocus();
+    expect(within(lensNavigation).queryByRole("button", { name: "Memory" })).not.toBeInTheDocument();
+    fireEvent.click(within(lensNavigation).getByRole("button", { name: "Inspect" }));
+
     fireEvent.click(within(lensNavigation).getByRole("button", { name: "Context" }));
     expect(await screen.findByRole("heading", { name: "No ContextPack persisted" })).toBeVisible();
     expect(requestedPaths.filter((path) => path.endsWith("/runs/run-1")).length).toBe(1);

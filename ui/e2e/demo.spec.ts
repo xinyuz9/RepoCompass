@@ -1,5 +1,83 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import axe from "axe-core";
+
+async function selectLens(page: Page, label: string) {
+  const nav = page.getByRole("navigation", { name: "Primary lenses" });
+  const button = nav.getByRole("button", { name: label, exact: true });
+  if (!await button.isVisible()) await nav.getByRole("button", { name: "Inspect", exact: true }).click();
+  await button.click();
+}
+
+test("starts from a goal and edits task settings on demand without granting capabilities", async ({ page }, testInfo) => {
+  // UI contract fixture: the real demo remains read-only. Every POST is intercepted.
+  const posts: Record<string, unknown>[] = [];
+  const reads: string[] = [];
+  page.on("request", request => { if (request.method() === "GET") reads.push(request.url()); });
+  await page.route("**/api/v1/system", async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...await response.json(), demo_mode: false, lifecycle_mutations_enabled: true } });
+  });
+  await page.route("**/api/v1/investigations", async route => {
+    posts.push(route.request().postDataJSON());
+    await route.fulfill({ status: 503, contentType: "application/problem+json", json: {
+      schema_version: 1, type: "urn:repocompass:problem:lifecycle-failed", title: "Fixture refusal",
+      status: 503, detail: "Test-only failure; no Agent run was started.", instance: "/api/v1/investigations",
+    } });
+  });
+  await page.goto("/?compose=1");
+  await expect(page.getByRole("textbox", { name: "What should RepoCompass investigate?" })).toBeVisible();
+  if (await page.getByRole("button", { name: "Hide investigations", exact: true }).count()) await page.getByRole("button", { name: "Hide investigations", exact: true }).click();
+  await expect(page.getByLabel("Focus path", { exact: false })).toBeHidden();
+  await expect(page.getByLabel("Recall memory")).toBeHidden();
+  await expect(page.getByText(/No task cost cap/)).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "Primary lenses" });
+  await expect(nav.getByRole("button", { name: "Memory", exact: true })).toHaveCount(0);
+  await nav.getByRole("button", { name: "Inspect", exact: true }).click();
+  await nav.getByRole("button", { name: "Memory", exact: true }).focus();
+  await page.keyboard.press("Escape");
+  await expect(nav.getByRole("button", { name: "Inspect", exact: true })).toBeFocused();
+  expect(reads.filter(url => url.includes("/runs/") || url.includes("/memory"))).toEqual([]);
+  const composer = page.locator(".goal-composer");
+  const workspace = page.locator(".goal-welcome .workspace-boundary");
+  const initialBoundary = (await workspace.boundingBox())!;
+  expect(initialBoundary.y + initialBoundary.height).toBeLessThanOrEqual((await composer.boundingBox())!.y);
+  const start = (await page.getByRole("button", { name: "Start investigation", exact: true }).boundingBox())!;
+  const visibleBottom = page.viewportSize()!.width <= 680
+    ? (await page.getByRole("complementary", { name: "Investigation lenses" }).boundingBox())!.y
+    : page.viewportSize()!.height;
+  expect(start.y + start.height).toBeLessThanOrEqual(visibleBottom);
+  await page.screenshot({ path: testInfo.outputPath("goal-first.png"), fullPage: true, animations: "disabled" });
+
+  const settings = page.locator(".task-settings > summary");
+  await settings.focus();
+  await page.keyboard.press("Enter");
+  await page.getByLabel(/Focus path/).fill("src");
+  await page.getByLabel("Recall memory").uncheck();
+  await page.getByLabel("Review before finalize").uncheck();
+  await page.getByLabel("Attempt cap", { exact: true }).fill("0.25");
+  const expandedBoundary = (await workspace.boundingBox())!;
+  expect(expandedBoundary.y + expandedBoundary.height).toBeLessThanOrEqual((await composer.boundingBox())!.y);
+  expect(await page.getByRole("textbox", { name: /URL|repository root|API key/i }).count()).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath("task-settings.png"), fullPage: true, animations: "disabled" });
+  await settings.click();
+  await expect(page.getByText(/Review off · Memory off · USD 0.25 cap/)).toBeVisible();
+  await page.getByRole("textbox", { name: "What should RepoCompass investigate?" }).fill("Trace the verification boundary.");
+  await page.getByRole("button", { name: "Start investigation", exact: true }).click();
+  await expect(page.getByText("Test-only failure; no Agent run was started.", { exact: false })).toBeVisible();
+  expect(posts).toHaveLength(1);
+  expect(posts[0]).toMatchObject({ focus_path: "src", memory_retrieval_enabled: false, human_review_policy: "never", max_attempt_cost_usd: "0.25" });
+  expect(posts[0]).not.toHaveProperty("repo_path");
+  await settings.click();
+  await expect(page.getByLabel(/Focus path/)).toBeDisabled();
+  await expect(page.getByLabel("Attempt cap", { exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Retry same request", exact: true }).click();
+  await expect.poll(() => posts.length).toBe(2);
+  expect(posts[1]).toEqual(posts[0]);
+  await page.evaluate(axe.source);
+  const violations = await page.evaluate(async () => (await (window as unknown as { axe: typeof import("axe-core") }).axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations.map(v => v.id));
+  expect(violations).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+});
 
 test("operator browser catalog is bounded, keyboard readable and never grants permissions", async ({ page }, testInfo) => {
   // UI-only metadata fixture; the separate Python integration suite executes the real browser.
@@ -13,6 +91,7 @@ test("operator browser catalog is bounded, keyboard readable and never grants pe
   await page.goto("/?lens=chat");
   await expect(page.getByLabel("Investigation conversation", { exact: true })).toBeVisible();
   if (await page.getByRole("button", { name: "Hide investigations", exact: true }).count()) await page.getByRole("button", { name: "Hide investigations", exact: true }).click();
+  await page.getByText("Inspect this investigation", { exact: true }).click();
   const summary = page.getByText("Static browser · 8 operator-approved pages", { exact: true });
   await summary.focus();
   await page.keyboard.press("Enter");
@@ -63,7 +142,7 @@ test("long goals stay readable without displacing memory and cost inspectors", a
   expect((await memory.boundingBox())!.y).toBeLessThan(page.viewportSize()!.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
   await page.screenshot({ path: testInfo.outputPath("long-goal-memory.png") });
-  await page.getByRole("navigation", { name: "Primary lenses" }).getByRole("button", { name: "Cost", exact: true }).click();
+  await selectLens(page, "Cost");
   await expect(page.getByRole("heading", { name: "Cost analysis", exact: true })).toBeVisible();
   // Font size differs by viewport: assert un-clipped text, not an arbitrary width.
   const costHeading = page.getByRole("heading", { name: "Cost analysis", exact: true });
@@ -103,8 +182,7 @@ test("shares selected evidence and keeps chat beside keyboard-readable inspector
   const previewBounds = (await preview.boundingBox())!;
   expect(previewBounds.y + previewBounds.height).toBeLessThanOrEqual(sourceBounds.y + sourceBounds.height);
   await page.screenshot({ path: testInfo.outputPath("split-review.png"), fullPage: true });
-  const nav = page.getByRole("navigation", { name: "Primary lenses" });
-  await nav.getByRole("button", { name: "Cost", exact: true }).click();
+  await selectLens(page, "Cost");
   await expect(page.getByRole("region", { name: "Conversation beside evidence" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Cost analysis", exact: true })).toBeVisible();
   expect(new URL(page.url()).searchParams.has("node")).toBe(false);
@@ -336,6 +414,10 @@ test("replays real demo evidence, navigates inspectors, and keeps a readable wor
   await expect(page.getByRole("complementary", { name: "Investigation threads" })).toHaveCount(0);
 
   await result.getByRole("button", { name: "Explore source evidence" }).click();
+  await expect(page.getByRole("region", { name: "Conversation beside evidence" })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("split")).toBe("1");
+  // The shortcut opens chat + evidence by default; keep the full-inspector tour separate.
+  await page.getByRole("button", { name: "Chat + inspector", exact: true }).click();
   await expect(page.getByText(/snapshot matched/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Reading path", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Reading route", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -354,10 +436,10 @@ test("replays real demo evidence, navigates inspectors, and keeps a readable wor
     ["Context", "context", "Context inspector"],
     ["Memory", "memory", "Repository memory"],
     ["Cost", "cost", "Cost analysis"],
-  ]) {
-    await nav.getByRole("button", { name: label, exact: true }).click();
+  ] as const) {
+    await selectLens(page, label);
     await expect(page).toHaveURL(new RegExp("lens=" + lens));
-    await expect(nav.getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(nav.getByRole("button", { name: label, exact: true, includeHidden: true })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
     if (lens === "trace") {
