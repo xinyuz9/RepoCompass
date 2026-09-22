@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "manifest_id": "c991fbb555620b3c4d118953cbedfcd85d32015dc839752e00634dc105b6d354",
+  "name": "internship-cross-repo-4",
+  "version": "v1",
+  "kind": "swe_bench_lite_derived",
+  "cases": [
+    {
+      "schema_version": 1,
+      "case_id": "b57194dc27d280e11bd350f5728ce6344d751ae3cd532b3a1add30e345ad2f5f",
+      "task": {
+        "schema_version": 1,
+        "task_id": "74c11f48c2c50d877b5e5f74fa9ac4b2e1c25af0c0ddb1e90060556bb7ea3c92",
+        "dataset_kind": "swe_bench_lite_derived",
+        "instance_id": "astropy__astropy-14995",
+        "repository": "astropy/astropy",
+        "base_commit": "b16c7d12ccbc7b2d20364b89fb44285bcbfede54",
+        "objective": "In v5.3, NDDataRef mask propagation fails when one of the operand does not have a mask\n### Description\n\nThis applies to v5.3. \r\n\r\nIt looks like when one of the operand does not have a mask, the mask propagation when doing arithmetic, in particular with `handle_mask=np.bitwise_or` fails.  This is not a problem in v5.2.\r\n\r\nI don't know enough about how all that works, but it seems from the error that the operand without a mask is set as a mask of None's and then the bitwise_or tries to operate on an integer and a None and fails.\n\n### Expected behavior\n\nWhen one of the operand does not have mask, the mask that exists should just be copied over to the output.  Or whatever was done in that situation in v5.2 where there's no problem.\n\n### How to Reproduce\n\nThis is with v5.3.   With v5.2, there are no errors.\r\n\r\n```\r\n>>> import numpy as np\r\n>>> from astropy.nddata import NDDataRef\r\n\r\n>>> array = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])\r\n>>> mask = np.array([[0, 1, 64], [8, 0, 1], [2, 1, 0]])\r\n\r\n>>> nref_nomask = NDDataRef(array)\r\n>>> nref_mask = NDDataRef(array, mask=mask)\r\n\r\n# multiply no mask by constant (no mask * no mask)\r\n>>> nref_nomask.multiply(1., handle_mask=np.bitwise_or).mask   # returns nothing, no mask,  OK\r\n\r\n# multiply no mask by itself (no mask * no mask)\r\n>>> nref_nomask.multiply(nref_nomask, handle_mask=np.bitwise_or).mask # return nothing, no mask, OK\r\n\r\n# multiply mask by constant (mask * no mask)\r\n>>> nref_mask.multiply(1., handle_mask=np.bitwise_or).mask\r\n...\r\nTypeError: unsupported operand type(s) for |: 'int' and 'NoneType'\r\n\r\n# multiply mask by itself (mask * mask)\r\n>>> nref_mask.multiply(nref_mask, handle_mask=np.bitwise_or).mask\r\narray([[ 0,  1, 64],\r\n       [ 8,  0,  1],\r\n       [ 2,  1,  0]])\r\n\r\n# multiply mask by no mask (mask * no mask)\r\n>>> nref_mask.multiply(nref_nomask, handle_mask=np.bitwise_or).mask\r\n...\r\nTypeError: unsupported operand type(s) for |: 'int' and 'NoneType'\r\n```\r\n\n\n### Versions\n\n>>> import sys; print(\"Python\", sys.version)\r\nPython 3.10.11 | packaged by conda-forge | (main, May 10 2023, 19:07:22) [Clang 14.0.6 ]\r\n>>> import astropy; print(\"astropy\", astropy.__version__)\r\nastropy 5.3\r\n>>> import numpy; print(\"Numpy\", numpy.__version__)\r\nNumpy 1.24.3\r\n>>> import erfa; print(\"pyerfa\", erfa.__version__)\r\npyerfa 2.0.0.3\r\n>>> import scipy; print(\"Scipy\", scipy.__version__)\r\nScipy 1.10.1\r\n>>> import matplotlib; print(\"Matplotlib\", matplotlib.__version__)\r\nMatplotlib 3.7.1",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "7a36883b202b649662b69c1c3e84eea4961f75c8f5f245e583834dfc3445dce8",
+        "task_id": "74c11f48c2c50d877b5e5f74fa9ac4b2e1c25af0c0ddb1e90060556bb7ea3c92",
+        "source": "swe_bench_gold_patch",
+        "source_artifact_digest": "370b3ff97b3a0627c29b74cf0b60bae46fe75edcd35a8d121c2dbe0f0421899a",
+        "gold_files": [
+          "astropy/nddata/mixins/ndarithmetic.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "astropy/nddata/mixins/ndarithmetic.py",
+            "qualified_name": "astropy.nddata.mixins.ndarithmetic.NDArithmeticMixin._arithmetic_mask"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "51abc21b892dbef0942c85ec76c3ef54b4cb9d3959689b28980fa26292ba81c8",
+      "task": {
+        "schema_version": 1,
+        "task_id": "58a93035be5fe6e5243eee1dfed990e54d50dad5a59adfba585880a6f24d58c0",
+        "dataset_kind": "swe_bench_lite_derived",
+        "instance_id": "astropy__astropy-6938",
+        "repository": "astropy/astropy",
+        "base_commit": "c76af9ed6bb89bfba45b9f5bc1e635188278e2fa",
+        "objective": "Possible bug in io.fits related to D exponents\nI came across the following code in ``fitsrec.py``:\r\n\r\n```python\r\n        # Replace exponent separator in floating point numbers\r\n        if 'D' in format:\r\n            output_field.replace(encode_ascii('E'), encode_ascii('D'))\r\n```\r\n\r\nI think this may be incorrect because as far as I can tell ``replace`` is not an in-place operation for ``chararray`` (it returns a copy). Commenting out this code doesn't cause any tests to fail so I think this code isn't being tested anyway.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "41eb61242751efdb763e392e417130bf647c91b29b9589d94406d929ba48705b",
+        "task_id": "58a93035be5fe6e5243eee1dfed990e54d50dad5a59adfba585880a6f24d58c0",
+        "source": "swe_bench_gold_patch",
+        "source_artifact_digest": "6dd13f2861daf8aa453fe1145b77bd80fdb9109e531047afb1ce107471579a98",
+        "gold_files": [
+          "astropy/io/fits/fitsrec.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "astropy/io/fits/fitsrec.py",
+            "qualified_name": "astropy.io.fits.fitsrec.FITS_rec._scale_back_ascii"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "23c8a10f209582f648739606b5057a26996732a81e83b191d2fdb66403442b30",
+      "task": {
+        "schema_version": 1,
+        "task_id": "5adad457d61fd7164019038941d486148f95ca22bc23656b854bbae177b90353",
+        "dataset_kind": "swe_bench_lite_derived",
+        "instance_id": "django__django-10914",
+        "repository": "django/django",
+        "base_commit": "e7fd69d051eaa67cb17f172a39b57253e9cb831a",
+        "objective": "Set default FILE_UPLOAD_PERMISSION to 0o644.\nDescription\n\t\nHello,\nAs far as I can see, the ​File Uploads documentation page does not mention any permission issues.\nWhat I would like to see is a warning that in absence of explicitly configured FILE_UPLOAD_PERMISSIONS, the permissions for a file uploaded to FileSystemStorage might not be consistent depending on whether a MemoryUploadedFile or a TemporaryUploadedFile was used for temporary storage of the uploaded data (which, with the default FILE_UPLOAD_HANDLERS, in turn depends on the uploaded data size).\nThe tempfile.NamedTemporaryFile + os.rename sequence causes the resulting file permissions to be 0o0600 on some systems (I experience it here on CentOS 7.4.1708 and Python 3.6.5). In all probability, the implementation of Python's built-in tempfile module explicitly sets such permissions for temporary files due to security considerations.\nI found mentions of this issue ​on GitHub, but did not manage to find any existing bug report in Django's bug tracker.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "fc811a961de34cba950ad4876b689a305532640e385f93c48c1f9c78d36c3be5",
+        "task_id": "5adad457d61fd7164019038941d486148f95ca22bc23656b854bbae177b90353",
+        "source": "swe_bench_gold_patch",
+        "source_artifact_digest": "00d87c8dceb745fb6e4d5b9a7ed128cfc97054d46eb4ba23e82f0d9768eae56f",
+        "gold_files": [
+          "django/conf/global_settings.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "django/conf/global_settings.py",
+            "qualified_name": "django.conf.global_settings.gettext_noop"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    },
+    {
+      "schema_version": 1,
+      "case_id": "b87bfcd0eb7af693f109d973796c25c5d1fd147eb3570959b023529c4dd45daf",
+      "task": {
+        "schema_version": 1,
+        "task_id": "39c087d20b2e1fcff6af6067518516d34ae58c4284d03afd3b6c7ae42d5e182d",
+        "dataset_kind": "swe_bench_lite_derived",
+        "instance_id": "django__django-10924",
+        "repository": "django/django",
+        "base_commit": "bceadd2788dc2dad53eba0caae172bd8522fd483",
+        "objective": "Allow FilePathField path to accept a callable.\nDescription\n\t\nI have a special case where I want to create a model containing the path to some local files on the server/dev machine. Seeing as the place where these files are stored is different on different machines I have the following:\nimport os\nfrom django.conf import settings\nfrom django.db import models\nclass LocalFiles(models.Model):\n\tname = models.CharField(max_length=255)\n\tfile = models.FilePathField(path=os.path.join(settings.LOCAL_FILE_DIR, 'example_dir'))\nNow when running manage.py makemigrations it will resolve the path based on the machine it is being run on. Eg: /home/<username>/server_files/example_dir\nI had to manually change the migration to include the os.path.join() part to not break this when running the migration on production/other machine.",
+        "evaluation_scope": "localization_only"
+      },
+      "labels": {
+        "schema_version": 1,
+        "label_id": "cb2dcd75522ed4a18d8dcd672c066229f16b50e631637e12a67e17fa38d7cd7c",
+        "task_id": "39c087d20b2e1fcff6af6067518516d34ae58c4284d03afd3b6c7ae42d5e182d",
+        "source": "swe_bench_gold_patch",
+        "source_artifact_digest": "c15a336f335509fea0aa33a77e41b88e9ab95359f344a31fa7fa68eaa97165ac",
+        "gold_files": [
+          "django/db/models/fields/__init__.py"
+        ],
+        "gold_symbols": [
+          {
+            "schema_version": 1,
+            "path": "django/db/models/fields/__init__.py",
+            "qualified_name": "django.db.models.fields.FilePathField.formfield"
+          }
+        ],
+        "evaluation_scope_disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+      }
+    }
+  ],
+  "evaluation_scope": "localization_only",
+  "disclaimer": "swe_bench_derived_localization_not_resolved_rate"
+}

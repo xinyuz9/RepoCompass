@@ -9,6 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:recording": "node --test scripts/recording-contract.test.mjs",
+    "record:core": "node scripts/record-core-case.mjs",
     "test:e2e": "playwright test",
     "test:e2e:cancellation": "playwright test --config playwright.cancellation.config.ts",
     "test:e2e:recovery": "playwright test --config playwright.recovery.config.ts",

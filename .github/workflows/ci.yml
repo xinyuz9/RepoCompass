@@ -84,6 +84,8 @@ jobs:
         run: npm audit --audit-level=high
       - name: Test UI and accessibility contracts
         run: npm test
+      - name: Test recording safety and evidence contracts
+        run: npm run test:recording
       - name: Lint UI
         run: npm run lint
       - name: Build packaged SPA
