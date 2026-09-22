@@ -115,10 +115,10 @@ def assess_tool_progress(
     evaluator_digest = _evaluator_request_digest(state["evaluation_report"])
     if evaluator_digest is None and same_scope:
         evaluator_digest = previous_evaluator_digest
-    evaluator_progress = (
-        evaluator_digest is not None and evaluator_digest != previous_evaluator_digest
-    )
-    progress_observed = new_tool_progress_observed or evaluator_progress
+    # Keep evaluator requests in the snapshot for diagnosis, but their wording
+    # is model-controlled, not observed evidence. Rephrasing the next focus must
+    # not renew the budget for rejected, cached or identical-result tool calls.
+    progress_observed = new_tool_progress_observed
 
     snapshot = ProgressSnapshot(
         active_step_id=active_step_id,

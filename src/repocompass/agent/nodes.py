@@ -1160,6 +1160,16 @@ def create_evaluate_candidate_node(
         report = EvaluationReport(
             deterministic_issues=list(deterministic_issues),
             semantic_assessment=response,
+            structural_warnings=[
+                ValidationIssue(
+                    code=issue.code,
+                    message=issue.message,
+                    path=issue.path,
+                    evidence_index=issue.evidence_index,
+                    relation_index=issue.relation_index,
+                )
+                for issue in structure_result.warnings
+            ],
         )
         coverage = assess_plan_coverage(
             objective=state["objective"],

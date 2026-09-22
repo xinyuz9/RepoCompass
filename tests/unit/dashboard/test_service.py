@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from repocompass.agent.evaluation import EvaluationReport, SemanticAssessment
+from repocompass.agent.evaluation import (
+    EvaluationReport,
+    SemanticAssessment,
+    ValidationIssue,
+)
 from repocompass.agent.conversation import PublicConversationPage
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.runner import ResumeRequest
@@ -147,7 +151,9 @@ def _evaluation() -> EvaluationReport:
     )
 
 
-def _write_trace(trace_directory: Path, repository_root: Path) -> None:
+def _write_trace(
+    trace_directory: Path, repository_root: Path, *, structural_warning: bool = False
+) -> None:
     trace = RunTrace("run-1")
     trace.record(
         TraceEventKind.RUN_STARTED,
@@ -166,10 +172,24 @@ def _write_trace(trace_directory: Path, repository_root: Path) -> None:
         node="plan_investigation",
         payload={"investigation_plan": _plan().model_dump(mode="json")},
     )
+    evaluation = _evaluation()
+    if structural_warning:
+        evaluation = evaluation.model_copy(
+            update={
+                "structural_warnings": [
+                    ValidationIssue(
+                        code="structure_record_limit_exceeded",
+                        message="Optional AST record cap reached.",
+                        path="src/auth.py",
+                        evidence_index=0,
+                    )
+                ]
+            }
+        )
     trace.record(
         TraceEventKind.NODE_COMPLETED,
         node="evaluate_candidate",
-        payload={"evaluation_report": _evaluation().model_dump(mode="json")},
+        payload={"evaluation_report": evaluation.model_dump(mode="json")},
     )
     JsonlTraceSink().write(trace, trace_directory / "run-1.jsonl")
 
@@ -215,12 +235,16 @@ def test_dashboard_catalog_is_repository_bound_and_has_explicit_empty_states(
     assert memory.availability is DashboardAvailability.NOT_CONFIGURED
 
 
+@pytest.mark.parametrize("structural_warning", [False, True])
 def test_dashboard_run_redacts_roots_and_replays_plan_and_evaluator(
     tmp_path: Path,
+    structural_warning: bool,
 ) -> None:
     context = ToolExecutionContext(tmp_path)
     trace_directory = tmp_path / "traces"
-    _write_trace(trace_directory, tmp_path.resolve())
+    _write_trace(
+        trace_directory, tmp_path.resolve(), structural_warning=structural_warning
+    )
     runner = _FakeRunner({"thread-1": _view()})
 
     with open_raw_run_store(tmp_path / "raw.sqlite") as store:
@@ -241,6 +265,9 @@ def test_dashboard_run_redacts_roots_and_replays_plan_and_evaluator(
     assert run.trace_events[0].payload["nested"] == {"path": "<repository>/src/auth.py"}
     assert run.plan_timeline[0].plan == _plan()
     assert run.evaluator_timeline[0].report.passed is True
+    assert (
+        bool(run.evaluator_timeline[0].report.structural_warnings) is structural_warning
+    )
     assert thread.plan_timeline == run.plan_timeline
     assert thread.evaluator_timeline == run.evaluator_timeline
 

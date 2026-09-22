@@ -121,6 +121,13 @@ class EvaluationReport(CheckpointSafeModel):
     semantic_assessment: SemanticAssessment = Field(
         description="Independent model assessment of the validated candidate."
     )
+    structural_warnings: list[ValidationIssue] = Field(
+        default_factory=list,
+        description=(
+            "Nonfatal resource limits on optional structural enrichment for a "
+            "source-only candidate. Not evidence of verified symbols or relations."
+        ),
+    )
     plan_coverage: PlanCoverageDecision | None = None
 
     @computed_field(

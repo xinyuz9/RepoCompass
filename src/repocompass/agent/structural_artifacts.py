@@ -214,6 +214,7 @@ class StructureBuildIssue:
 class StructureBuildResult:
     artifact: InvestigationStructure | None
     issues: tuple[StructureBuildIssue, ...]
+    warnings: tuple[StructureBuildIssue, ...] = ()
 
 
 def build_investigation_structure(
@@ -308,7 +309,7 @@ def build_investigation_structure(
                     relation_index=0,
                 )
             )
-        return StructureBuildResult(artifact=None, issues=tuple(issues))
+        return _structure_build_result(candidate, None, issues)
 
     try:
         graph = build_evidence_graph(tuple(indexes))
@@ -319,7 +320,7 @@ def build_investigation_structure(
                 message="Validated Python indexes could not form an unambiguous graph.",
             )
         )
-        return StructureBuildResult(artifact=None, issues=tuple(issues))
+        return _structure_build_result(candidate, None, issues)
     if (
         len(graph.nodes) > MAX_GRAPH_SLICE_NODES
         or len(graph.edges) > MAX_GRAPH_SLICE_EDGES
@@ -330,7 +331,7 @@ def build_investigation_structure(
                 message="Candidate graph exceeds the bounded reading-path limits.",
             )
         )
-        return StructureBuildResult(artifact=None, issues=tuple(issues))
+        return _structure_build_result(candidate, None, issues)
 
     indexed_paths = tuple(
         index.path for index in sorted(indexes, key=lambda item: item.path)
@@ -545,7 +546,7 @@ def build_investigation_structure(
                 ),
             )
         )
-        return StructureBuildResult(artifact=None, issues=tuple(issues))
+        return _structure_build_result(candidate, None, issues)
     try:
         reading_path = build_traceable_reading_path(
             graph,
@@ -568,7 +569,7 @@ def build_investigation_structure(
                 message="Candidate relations could not form a complete bounded lineage.",
             )
         )
-        return StructureBuildResult(artifact=None, issues=tuple(issues))
+        return _structure_build_result(candidate, None, issues)
 
     ordered_assertions = tuple(sorted(relation_assertions))
     artifact_id = _investigation_structure_id(
@@ -590,7 +591,43 @@ def build_investigation_structure(
         relevant_symbols=relevant_symbols,
         candidate_relation_assertion_ids=ordered_assertions,
     )
-    return StructureBuildResult(artifact=artifact, issues=tuple(issues))
+    return _structure_build_result(candidate, artifact, issues)
+
+
+def _structure_build_result(
+    candidate: CandidateResult,
+    artifact: InvestigationStructure | None,
+    issues: list[StructureBuildIssue],
+) -> StructureBuildResult:
+    """Separate optional enrichment limits from authoritative evidence defects.
+
+    Only a wholly source-only candidate may degrade. A mixed candidate still
+    needs structural validation; parser, provenance and claim failures remain
+    fatal. The caller independently validates every source range and semantics.
+    No skipped file, symbol or relation is added to the artifact.
+    """
+
+    source_only = not candidate.relations and all(
+        evidence.symbol is None for evidence in candidate.evidence
+    )
+    optional_limits = {
+        "structure_path_limit_exceeded",
+        "structure_record_limit_exceeded",
+        "structure_graph_limit_exceeded",
+        "structure_seed_limit_exceeded",
+    }
+    warnings = tuple(
+        issue for issue in issues if source_only and issue.code in optional_limits
+    )
+    return StructureBuildResult(
+        artifact=artifact,
+        issues=tuple(
+            issue
+            for issue in issues
+            if not (source_only and issue.code in optional_limits)
+        ),
+        warnings=warnings,
+    )
 
 
 def _resolve_symbol_on_path(

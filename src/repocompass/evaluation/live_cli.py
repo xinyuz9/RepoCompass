@@ -656,7 +656,7 @@ def execute(args) -> dict:
     )
     variants = tuple(v for v in LocalizationVariant if v.value in args.variants)
     config = {
-        "schema_version": 17,
+        "schema_version": 18,
         "provenance": "live_provider",
         "manifest_id": manifest.manifest_id,
         "budget_profile": budget.model_dump(mode="json"),
@@ -674,6 +674,7 @@ def execute(args) -> dict:
         "memory_store_schema_version": MEMORY_STORE_SCHEMA_VERSION,
         "structure_resolution_policy": "self_import_placeholder_exact_path_v2",
         "candidate_evidence_policy": "source_occurrence_discovery_separation_v2",
+        "structural_enrichment_policy": "source_only_resource_warnings_v1",
         "workflow_prompt_policy": "status_free_unfinished_proposals_v8",
         "candidate_output_policy": "selected_ast_or_unbound_source_observations_v2",
         "plan_coverage_policy": "incomplete_diagnostic_denies_approval_v3",
@@ -691,7 +692,7 @@ def execute(args) -> dict:
         "admission_policy": "atomic_batch_and_attempt_v1",
         "prewarm_validation": "accepted_nonempty_episode_v1",
         "warmup_limit_usd": args.warmup_limit_usd,
-        "progress_policy": "observed_result_novelty_v2",
+        "progress_policy": "observed_results_not_evaluator_wording_v3",
     }
     if args.provider == "openai" or args.budget_db is not None:
         config.update(

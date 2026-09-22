@@ -257,7 +257,7 @@ def test_new_allowed_call_resets_stalled_rounds() -> None:
     assert decision.reason is NoProgressReason.PROGRESS_OBSERVED
 
 
-def test_new_evaluator_request_is_progress_once() -> None:
+def test_new_evaluator_request_is_audited_but_not_observed_progress() -> None:
     denied = _audit(
         fingerprint="3" * 64,
         outcome=ToolDecisionOutcome.DENIED,
@@ -273,8 +273,57 @@ def test_new_evaluator_request_is_progress_once() -> None:
         _next_state(focused_state, focused_update, [denied])
     )
 
-    assert focused_update["consecutive_no_progress_rounds"] == 0
-    assert repeated_update["consecutive_no_progress_rounds"] == 1
+    assert focused_update["consecutive_no_progress_rounds"] == 2
+    assert focused_update["step_stop_reason"] is None
+    assert repeated_update["consecutive_no_progress_rounds"] == 3
+    assert repeated_update["step_stop_reason"] == STEP_NO_PROGRESS_REASON
+    assert (
+        decode_progress_snapshot(
+            focused_update["progress_snapshot"]
+        ).evaluator_request_digest
+        is not None
+    )
+
+
+@pytest.mark.parametrize(
+    "outcome,reason",
+    [
+        (ToolDecisionOutcome.ALLOWED, ToolDecisionReason.ALLOWED),
+        (ToolDecisionOutcome.CACHED, ToolDecisionReason.CACHE_HIT),
+        (ToolDecisionOutcome.DENIED, ToolDecisionReason.INVALID_ARGUMENTS),
+    ],
+)
+def test_changing_evaluator_wording_cannot_extend_a_stalled_tool_loop(outcome, reason):
+    first = _audit(
+        fingerprint="1" * 64,
+        outcome=ToolDecisionOutcome.ALLOWED,
+        reason=ToolDecisionReason.ALLOWED,
+        result_digest="f" * 64,
+    )
+    state = _state([first], threshold=2)
+    update = assess_tool_progress(state)
+    digests = []
+    for round_number in range(1, 3):
+        # Even a new allowed request is not new evidence when its result matches.
+        repeated = _audit(
+            fingerprint=str(round_number + 1) * 64,
+            outcome=outcome,
+            reason=reason,
+            result_digest="f" * 64,
+        )
+        state = _next_state(state, update, [repeated])
+        state["evaluation_report"] = _evaluation_report(
+            f"Reworded request {round_number}"
+        )
+        update = assess_tool_progress(state)
+        digests.append(
+            decode_progress_snapshot(
+                update["progress_snapshot"]
+            ).evaluator_request_digest
+        )
+        assert update["consecutive_no_progress_rounds"] == round_number
+    assert digests[0] != digests[1]
+    assert update["step_stop_reason"] == STEP_NO_PROGRESS_REASON
 
 
 def test_new_step_scope_does_not_carry_stalled_rounds() -> None:
