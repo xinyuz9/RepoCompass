@@ -1,6 +1,7 @@
 """Model proposals cannot manufacture execution state or rewrite completed work."""
 
 import pytest
+from langchain_core.messages import AIMessage
 from pydantic import ValidationError
 
 from repocompass.agent.nodes import (
@@ -96,3 +97,40 @@ def test_custom_model_legacy_initial_plan_cannot_pretend_completion():
                 ]
             )
         )
+
+
+def _raw_proposal(*, status=None, name="PlanProposal", count=1):
+    args = proposal("next").model_dump(mode="json")
+    if status is not None:
+        args["steps"][0]["status"] = status
+    return {
+        "parsed": None,
+        "parsing_error": ValueError("strict transport validation"),
+        "raw": AIMessage(
+            content="",
+            tool_calls=[
+                {"id": f"call-{index}", "name": name, "args": args, "type": "tool_call"}
+                for index in range(count)
+            ],
+        ),
+    }
+
+
+def test_valid_raw_status_free_proposal_is_strictly_revalidated():
+    value = _raw_proposal()
+    assert _parse_initial_plan(value) == proposal("next").materialize()
+    assert _parse_plan_revision(value, current()) == proposal("next").materialize(
+        [current().steps[0]]
+    )
+
+
+@pytest.mark.parametrize("status", ["active", "pending", "completed"])
+def test_raw_revision_never_discards_model_owned_status(status):
+    with pytest.raises(PlanRevisionIntegrityError):
+        _parse_plan_revision(_raw_proposal(status=status), current())
+
+
+@pytest.mark.parametrize("options", [{"name": "OtherTool"}, {"count": 2}, {"count": 0}])
+def test_ambiguous_or_wrong_tool_revision_is_rejected(options):
+    with pytest.raises(PlanRevisionIntegrityError):
+        _parse_plan_revision(_raw_proposal(**options), current())

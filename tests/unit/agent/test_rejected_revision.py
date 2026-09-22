@@ -28,7 +28,12 @@ def _step(identifier, status):
     )
 
 
-def _models(*, provider_failure=False):
+def _models(
+    *,
+    provider_failure=False,
+    malformed_revision=False,
+    provider_failure_type=ValueError,
+):
     plan = InvestigationPlan(steps=[_step("inspect", "active")])
     rejected = InvestigationPlan(
         steps=[_step("inspect", "completed"), _step("retry", "active")]
@@ -57,7 +62,33 @@ def _models(*, provider_failure=False):
             if schema is PlanProposal:
                 value = next(responses)
                 if value == rejected and provider_failure:
-                    raise ValueError("provider fault must not become a successful stop")
+                    raise provider_failure_type(
+                        "provider fault must not become a successful stop"
+                    )
+                if value == rejected and malformed_revision:
+                    message = raw()
+                    message.tool_calls = [
+                        {
+                            "id": "invalid-revision",
+                            "name": "PlanProposal",
+                            "args": {
+                                "steps": [
+                                    {
+                                        "id": "retry",
+                                        "objective": "Inspect source.",
+                                        "expected_evidence": ["Source lines."],
+                                        "status": "pending",
+                                    }
+                                ]
+                            },
+                            "type": "tool_call",
+                        }
+                    ]
+                    return {
+                        "raw": message,
+                        "parsed": None,
+                        "parsing_error": ValueError("extra model-owned status"),
+                    }
             elif schema is EvidenceOnlyCandidateResult:
                 value = EvidenceOnlyCandidateResult(
                     evidence=[],
@@ -84,8 +115,11 @@ def _models(*, provider_failure=False):
     return WorkflowModels.from_single_model(model), calls, plan
 
 
-def test_rejected_revision_finishes_checkpoint_and_preserves_failed_usage(tmp_path):
-    models, calls, original_plan = _models()
+@pytest.mark.parametrize("malformed_revision", [False, True])
+def test_rejected_revision_finishes_checkpoint_and_preserves_failed_usage(
+    tmp_path, malformed_revision
+):
+    models, calls, original_plan = _models(malformed_revision=malformed_revision)
     with open_raw_run_store(tmp_path / "raw.sqlite") as store:
         runner = AgentRunner(models, checkpointer=InMemorySaver(), raw_run_store=store)
         outcome = runner.run(
@@ -132,8 +166,9 @@ def test_rejected_revision_finishes_checkpoint_and_preserves_failed_usage(tmp_pa
         assert store.list_model_invocations(resumed.trace.run_id) == ()
 
 
-def test_provider_value_error_is_not_swallowed_as_revision_rejection(tmp_path):
-    models, _, _ = _models(provider_failure=True)
+@pytest.mark.parametrize("failure_type", [ValueError, TypeError])
+def test_provider_error_is_not_swallowed_as_revision_rejection(tmp_path, failure_type):
+    models, _, _ = _models(provider_failure=True, provider_failure_type=failure_type)
     with open_raw_run_store(tmp_path / "raw.sqlite") as store:
         runner = AgentRunner(
             models,
@@ -141,7 +176,7 @@ def test_provider_value_error_is_not_swallowed_as_revision_rejection(tmp_path):
             raw_run_store=store,
             run_id_factory=lambda: "provider-failure",
         )
-        with pytest.raises(ValueError, match="provider fault"):
+        with pytest.raises(failure_type, match="provider fault"):
             runner.run(
                 RunRequest(
                     repo_path=tmp_path,

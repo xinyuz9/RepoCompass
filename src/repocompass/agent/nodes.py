@@ -1470,8 +1470,8 @@ def create_revise_plan_node(
             # implicitly. Preserve candidate/plan diagnostics, but do not publish
             # their unvalidated claims as a usable final answer.
             message = (
-                "Investigation stopped because the proposed plan revision added "
-                "or changed completed steps. The existing plan was preserved; "
+                "Investigation stopped because the proposed plan revision was "
+                "invalid or changed completed steps. The existing plan was preserved; "
                 "the candidate was not accepted. No automatic retry was made."
             )
             return {
@@ -1518,17 +1518,25 @@ def create_revise_plan_node(
 
 
 class PlanRevisionIntegrityError(ValueError):
-    """A well-formed model plan violated controller-owned completion history."""
+    """A model revision violated its schema or controller-owned history."""
 
 
 def _proposal_from_response(value: object) -> PlanProposal | None:
-    parsed = value.get("parsed") if isinstance(value, dict) else value
+    parsed = value.get("parsed") if isinstance(value, Mapping) else value
     if isinstance(parsed, PlanProposal):
         return _parse_structured_response(
             value,
             expected_type=PlanProposal,
             error_message="Planner model did not return PlanProposal",
         )
+    if isinstance(value, Mapping) and value.get("parsing_error") is not None:
+        # Some strict Python transports reject JSON arrays before validation.
+        # Revalidate the exact single proposal; never strip model-owned fields.
+        recovered = _parse_strict_json_tool_call(
+            value.get("raw"), expected_type=PlanProposal
+        )
+        if isinstance(recovered, PlanProposal):
+            return recovered
     return None
 
 
@@ -1566,11 +1574,18 @@ def _parse_plan_revision(
                 "Replanner reused completed IDs or exceeded the plan bound"
             ) from error
 
-    revised = _parse_structured_response(
-        value,
-        expected_type=InvestigationPlan,
-        error_message="Replanner model did not return InvestigationPlan",
-    )
+    try:
+        revised = _parse_structured_response(
+            value,
+            expected_type=InvestigationPlan,
+            error_message="Replanner model did not return InvestigationPlan",
+        )
+    except TypeError as error:
+        # This is only response parsing, not invocation: provider faults still
+        # propagate. The recorder keeps failed usage before the node terminates.
+        raise PlanRevisionIntegrityError(
+            "Replanner returned an invalid structured revision"
+        ) from error
     completed = [step for step in current.steps if step.status == "completed"]
     revised_completed = [step for step in revised.steps if step.status == "completed"]
     if revised_completed != completed:
