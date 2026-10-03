@@ -7,7 +7,6 @@ from types import SimpleNamespace
 
 import pytest
 
-import repocompass.memory.revalidation as revalidation
 from repocompass.memory.revalidation import (
     MAX_MEMORY_SOURCE_BYTES,
     MemorySourceReadError,
@@ -121,7 +120,9 @@ def test_source_metadata_change_during_read_fails_closed(
 ) -> None:
     source = tmp_path / "source.py"
     source.write_text("answer = 42\n", encoding="utf-8")
-    real_fstat = revalidation.os.fstat
+    from repocompass import source_reader
+
+    real_fstat = source_reader.os.fstat
     calls = 0
 
     def changing_fstat(descriptor: int) -> os.stat_result | SimpleNamespace:
@@ -138,7 +139,7 @@ def test_source_metadata_change_during_read_fails_closed(
             st_mtime_ns=result.st_mtime_ns + 1,
         )
 
-    monkeypatch.setattr(revalidation.os, "fstat", changing_fstat)
+    monkeypatch.setattr(source_reader.os, "fstat", changing_fstat)
 
     _assert_read_reason(
         tmp_path,

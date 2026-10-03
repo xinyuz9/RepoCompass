@@ -63,6 +63,40 @@ def test_search_text_returns_stable_path_order(tmp_path: Path) -> None:
 # Query behavior and validation
 
 
+def test_search_ignores_user_config_that_enables_symlink_traversal(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "safe.txt").write_text("safe needle\n")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("private outside needle\n")
+    (root / "linked.txt").symlink_to(outside)
+    config = tmp_path / "ripgreprc"
+    config.write_text("--follow\n")
+    monkeypatch.setenv("RIPGREP_CONFIG_PATH", str(config))
+    assert search_text(root, "needle") == [
+        {"path": "safe.txt", "line": 1, "text": "safe needle"}
+    ]
+
+
+def test_search_never_executes_configured_preprocessor(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "safe.txt").write_text("needle\n")
+    marker = tmp_path / "preprocessor-ran"
+    preprocessor = tmp_path / "preprocessor"
+    preprocessor.write_text("#!/bin/sh\n" + f"touch '{marker}'\n" + 'cat "$1"\n')
+    preprocessor.chmod(0o700)
+    config = tmp_path / "ripgreprc"
+    config.write_text(f"--pre={preprocessor}\n")
+    monkeypatch.setenv("RIPGREP_CONFIG_PATH", str(config))
+    assert search_text(root, "needle") == [
+        {"path": "safe.txt", "line": 1, "text": "needle"}
+    ]
+    assert not marker.exists()
+
+
 def test_search_text_returns_empty_when_no_matches(tmp_path: Path) -> None:
     source_lines = [
         "first line",

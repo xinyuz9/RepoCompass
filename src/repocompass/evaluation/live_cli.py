@@ -656,7 +656,7 @@ def execute(args) -> dict:
     )
     variants = tuple(v for v in LocalizationVariant if v.value in args.variants)
     config = {
-        "schema_version": 19,
+        "schema_version": 20,
         "provenance": "live_provider",
         "manifest_id": manifest.manifest_id,
         "budget_profile": budget.model_dump(mode="json"),
@@ -680,6 +680,8 @@ def execute(args) -> dict:
         "plan_coverage_policy": "incomplete_diagnostic_denies_approval_v3",
         "gateway_feedback_policy": "last_batch_body_free_pinned_v1",
         "discovery_feedback_policy": "receipt_bound_last_batch_metadata_v1",
+        "source_read_policy": "component_nofollow_bounded_v2",
+        "search_runtime_policy": "ignore_user_config_no_follow_v1",
         "plan_revision_policy": "status_free_proposal_preserved_prefix_v2",
         "step_completion_policy": "deterministic_and_semantic_gate_v2",
         "revision_rejection_policy": "schema_and_history_terminal_exhausted_v2",

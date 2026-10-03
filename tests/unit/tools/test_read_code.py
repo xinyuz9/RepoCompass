@@ -234,7 +234,7 @@ def test_read_code_rejects_symlink_outside_repository(tmp_path: Path) -> None:
         read_code(repo_path, relative_path, start_line=1, end_line=1)
 
 
-def test_read_code_allows_symlink_within_repository(tmp_path: Path) -> None:
+def test_read_code_rejects_symlink_within_repository(tmp_path: Path) -> None:
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     target_file = repo_path / "target.py"
@@ -242,11 +242,5 @@ def test_read_code_allows_symlink_within_repository(tmp_path: Path) -> None:
     relative_path = Path("target-link.py")
     (repo_path / relative_path).symlink_to(target_file)
 
-    result = read_code(repo_path, relative_path, start_line=1, end_line=2)
-
-    assert result == {
-        "path": "target-link.py",
-        "start_line": 1,
-        "end_line": 2,
-        "content": "1 | first line\n2 | second line",
-    }
+    with pytest.raises(ValueError, match="symlink"):
+        read_code(repo_path, relative_path, start_line=1, end_line=2)

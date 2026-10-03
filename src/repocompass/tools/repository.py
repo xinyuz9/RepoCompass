@@ -2,6 +2,12 @@ import subprocess
 from pathlib import Path
 from typing import TypedDict
 
+from repocompass.source_reader import (
+    SourceReadError,
+    SourceReadReason,
+    read_source_bytes,
+)
+
 # ========================================================
 # List tree
 # ========================================================
@@ -132,7 +138,7 @@ def read_code(
         NotADirectoryError: If the repository path is not a directory.
         IsADirectoryError: If the target path is a directory.
         ValueError: If the line range is invalid, exceeds 400 lines, or the
-            target path is outside the repository.
+            target is unsafe, changes during reading, or exceeds 4 MiB.
         UnicodeDecodeError: If the target file is not valid UTF-8 text.
     """
     if not repo_path.exists():
@@ -141,28 +147,8 @@ def read_code(
     if not repo_path.is_dir():
         raise NotADirectoryError(f"Repository path is not a directory: {repo_path}")
 
-    if relative_path.is_absolute():
-        raise ValueError("Relative path need to be relative not absolute path")
-
-    resolved_repo = repo_path.resolve()
-    resolved_target = (resolved_repo / relative_path).resolve()
-
-    try:
-        resolved_target.relative_to(resolved_repo)
-    except ValueError as exc:
-        raise ValueError(
-            f"Resolve target not in repository root, resolve target is {resolved_target}"
-        ) from exc
-
-    if not resolved_target.exists():
-        raise FileNotFoundError(f"File path does not exist: {resolved_target}")
-
-    if resolved_target.is_dir():
-        raise IsADirectoryError(f"File path is a directory: {resolved_target}")
-
-    lines = resolved_target.read_text(encoding="utf-8").splitlines()
-    file_length = len(lines)
-
+    if type(start_line) is not int or type(end_line) is not int:
+        raise ValueError("Line numbers must be integers")
     if start_line < 1:
         raise ValueError(f"Start line should be positive, start line {start_line}")
 
@@ -173,6 +159,23 @@ def read_code(
 
     if end_line - start_line >= 400:
         raise ValueError("Read more than 400 lines")
+
+    if relative_path.is_absolute() or ".." in relative_path.parts:
+        raise ValueError("Source path must stay relative to the repository")
+    if (repo_path / relative_path).is_dir():
+        raise IsADirectoryError(f"Source is a directory: {relative_path.as_posix()}")
+    # Preflight policy alone is not authority to follow a path later. Open each
+    # component relative to a pinned directory descriptor in the worker itself.
+    try:
+        content = read_source_bytes(repo_path, relative_path.as_posix())
+    except SourceReadError as error:
+        if error.reason is SourceReadReason.MISSING:
+            raise FileNotFoundError(
+                f"Source not found: {relative_path.as_posix()}"
+            ) from error
+        raise ValueError(f"Source read rejected: {error.reason.value}") from error
+    lines = content.decode("utf-8").splitlines()
+    file_length = len(lines)
 
     if start_line > file_length:
         raise ValueError(
@@ -252,6 +255,10 @@ def search_text(
     resolved_path = repo_path.resolve()
     command = [
         "rg",
+        # User ripgrep config may enable --follow or executable --pre filters.
+        # A read-only Agent tool must not inherit those additional capabilities.
+        "--no-config",
+        "--no-follow",
         "--line-number",
         "--with-filename",
         "--no-heading",

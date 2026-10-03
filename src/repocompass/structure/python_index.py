@@ -3,15 +3,19 @@
 import ast
 import hashlib
 import io
-import os
 import re
-import stat
 import tokenize
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
 from pydantic import ValidationError
+
+from repocompass.source_reader import (
+    SourceReadError,
+    SourceReadReason,
+    read_source_bytes,
+)
 
 from repocompass.structure.contracts import (
     MAX_INDEXED_SOURCE_BYTES,
@@ -462,64 +466,21 @@ def _read_bounded_regular_file(
     repository_root: Path,
     relative_path: Path,
 ) -> bytes:
-    if not isinstance(repository_root, Path):
-        raise PythonIndexError(PythonIndexErrorReason.INVALID_REPOSITORY)
     try:
-        resolved_root = repository_root.resolve(strict=True)
-    except OSError as error:
-        raise PythonIndexError(PythonIndexErrorReason.INVALID_REPOSITORY) from error
-    if not resolved_root.is_dir():
-        raise PythonIndexError(PythonIndexErrorReason.INVALID_REPOSITORY)
-    candidate = resolved_root / relative_path
-    try:
-        initial_stat = candidate.lstat()
-    except FileNotFoundError as error:
-        raise PythonIndexError(PythonIndexErrorReason.FILE_NOT_FOUND) from error
-    except OSError as error:
-        raise PythonIndexError(PythonIndexErrorReason.SPECIAL_FILE) from error
-    if stat.S_ISLNK(initial_stat.st_mode):
-        raise PythonIndexError(PythonIndexErrorReason.SYMLINK)
-    if not stat.S_ISREG(initial_stat.st_mode):
-        raise PythonIndexError(PythonIndexErrorReason.SPECIAL_FILE)
-    try:
-        resolved_target = candidate.resolve(strict=True)
-        resolved_target.relative_to(resolved_root)
-    except (OSError, ValueError) as error:
-        raise PythonIndexError(PythonIndexErrorReason.INVALID_PATH) from error
-    if initial_stat.st_size > MAX_PYTHON_SOURCE_BYTES:
-        raise PythonIndexError(PythonIndexErrorReason.OVERSIZED_FILE)
-
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(resolved_target, flags)
-    except OSError as error:
-        raise PythonIndexError(PythonIndexErrorReason.FILE_CHANGED) from error
-    try:
-        opened_stat = os.fstat(descriptor)
-        if not stat.S_ISREG(opened_stat.st_mode):
-            raise PythonIndexError(PythonIndexErrorReason.SPECIAL_FILE)
-        if (
-            opened_stat.st_dev != initial_stat.st_dev
-            or opened_stat.st_ino != initial_stat.st_ino
-        ):
-            raise PythonIndexError(PythonIndexErrorReason.FILE_CHANGED)
-        if opened_stat.st_size > MAX_PYTHON_SOURCE_BYTES:
-            raise PythonIndexError(PythonIndexErrorReason.OVERSIZED_FILE)
-        with os.fdopen(descriptor, "rb", closefd=False) as stream:
-            content = stream.read(MAX_PYTHON_SOURCE_BYTES + 1)
-        finished_stat = os.fstat(descriptor)
-        if (
-            finished_stat.st_size != opened_stat.st_size
-            or finished_stat.st_mtime_ns != opened_stat.st_mtime_ns
-            or finished_stat.st_dev != opened_stat.st_dev
-            or finished_stat.st_ino != opened_stat.st_ino
-        ):
-            raise PythonIndexError(PythonIndexErrorReason.FILE_CHANGED)
-    finally:
-        os.close(descriptor)
-    if len(content) > MAX_PYTHON_SOURCE_BYTES:
-        raise PythonIndexError(PythonIndexErrorReason.OVERSIZED_FILE)
-    return content
+        return read_source_bytes(
+            repository_root, relative_path.as_posix(), max_bytes=MAX_PYTHON_SOURCE_BYTES
+        )
+    except SourceReadError as error:
+        reasons = {
+            SourceReadReason.INVALID_REPOSITORY: PythonIndexErrorReason.INVALID_REPOSITORY,
+            SourceReadReason.INVALID_PATH: PythonIndexErrorReason.INVALID_PATH,
+            SourceReadReason.MISSING: PythonIndexErrorReason.FILE_NOT_FOUND,
+            SourceReadReason.SYMLINK: PythonIndexErrorReason.SYMLINK,
+            SourceReadReason.SPECIAL_FILE: PythonIndexErrorReason.SPECIAL_FILE,
+            SourceReadReason.OVERSIZED: PythonIndexErrorReason.OVERSIZED_FILE,
+            SourceReadReason.CHANGED_DURING_READ: PythonIndexErrorReason.FILE_CHANGED,
+        }
+        raise PythonIndexError(reasons[error.reason]) from error
 
 
 def _decode_python_source(source: bytes) -> tuple[str, str]:
