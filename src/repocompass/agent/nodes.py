@@ -48,7 +48,6 @@ from repocompass.agent.context_gathering import (
 from repocompass.agent.cost import AttemptCostBudgetSummary
 from repocompass.agent.evaluation import (
     EvaluationReport,
-    EvidenceExcerpt,
     SemanticAssessment,
     ValidationIssue,
     validate_candidate,
@@ -264,6 +263,17 @@ def _parse_explorer_response(response: object) -> AIMessage:
     return response
 
 
+def _model_messages(
+    role: ModelRole, system_prompt: str, pack: ContextPack
+) -> list[AnyMessage]:
+    """Render one already-prepared context; never gather state a second way."""
+
+    return [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=render_model_context(role, pack)),
+    ]
+
+
 class PlannerInput(TypedDict):
     """Minimal initial-planning view without repository content or messages."""
 
@@ -282,25 +292,6 @@ class PlannerNodeUpdate(TypedDict):
 
 
 PlannerNode = Callable[[PlannerInput], PlannerNodeUpdate]
-
-
-def build_planner_messages(
-    state: PlannerInput,
-    *,
-    gathered_context: GatheredContext | None = None,
-) -> list[AnyMessage]:
-    """Build an isolated initial-planning invocation."""
-
-    gathered = gathered_context or gather_planner_context(
-        objective=state["objective"],
-        max_tool_calls_per_step=state["max_tool_calls_per_step"],
-        max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
-        budget_tokens=_context_budget(state),
-    )
-    return [
-        SystemMessage(content=PLANNING_SYSTEM_PROMPT),
-        HumanMessage(content=render_model_context(ModelRole.PLANNER, gathered.pack)),
-    ]
 
 
 def create_plan_investigation_node(
@@ -331,7 +322,9 @@ def create_plan_investigation_node(
             budget_tokens=_context_budget(state),
             selection_strategy=context_selection_strategy,
         )
-        messages = build_planner_messages(state, gathered_context=gathered)
+        messages = _model_messages(
+            ModelRole.PLANNER, PLANNING_SYSTEM_PROMPT, gathered.pack
+        )
         response = _invoke_model(
             recorder=recorder,
             state=state,
@@ -484,44 +477,6 @@ class AgentNodeUpdate(TypedDict):
 AgentNode = Callable[[AgentNodeInput], AgentNodeUpdate]
 
 
-def build_agent_messages(
-    state: AgentNodeInput,
-    *,
-    gathered_context: GatheredContext | None = None,
-) -> list[AnyMessage]:
-    """Build one Explorer invocation without mutating persistent messages."""
-
-    investigation_plan = state["investigation_plan"]
-    if investigation_plan is None:
-        raise ValueError("Cannot investigate without an InvestigationPlan")
-
-    gathered = gathered_context or gather_explorer_context(
-        repo_path=state["repo_path"],
-        objective=state["objective"],
-        active_step=investigation_plan.active_step,
-        remaining_tool_calls=max(
-            0,
-            state["max_tool_calls_per_step"] - state["step_tool_call_count"],
-        ),
-        remaining_explorer_calls=max(
-            0,
-            state["max_explorer_calls_per_step"] - state["step_explorer_call_count"],
-        ),
-        messages=tuple(state["messages"]),
-        last_tool_batch_audits=tuple(
-            decode_tool_audit_record(item)
-            for item in state.get("last_tool_batch_audits", [])
-        ),
-        evaluation_report=state["evaluation_report"],
-        budget_tokens=_context_budget(state),
-        memory_items=tuple(state.get("memory_context_items", [])),
-    )
-    return [
-        SystemMessage(content=INVESTIGATION_SYSTEM_PROMPT),
-        HumanMessage(content=render_model_context(ModelRole.EXPLORER, gathered.pack)),
-    ]
-
-
 def create_agent_node(
     model: BaseChatModel,
     recorder: RawRunRecorder | None = None,
@@ -568,7 +523,9 @@ def create_agent_node(
             memory_items=tuple(state.get("memory_context_items", [])),
             selection_strategy=context_selection_strategy,
         )
-        messages = build_agent_messages(state, gathered_context=gathered)
+        messages = _model_messages(
+            ModelRole.EXPLORER, INVESTIGATION_SYSTEM_PROMPT, gathered.pack
+        )
         response = _invoke_model(
             recorder=recorder,
             state=state,
@@ -869,40 +826,6 @@ class CandidateBuilderUpdate(TypedDict):
 CandidateBuilderNode = Callable[[CandidateBuilderInput], CandidateBuilderUpdate]
 
 
-def build_candidate_messages(
-    state: CandidateBuilderInput,
-    *,
-    gathered_context: GatheredContext | None = None,
-) -> list[AnyMessage]:
-    """Build an isolated candidate invocation from selected evidence only."""
-
-    investigation_plan = state["investigation_plan"]
-    if investigation_plan is None:
-        raise ValueError("Cannot build a candidate without an InvestigationPlan")
-
-    gathered = gathered_context or gather_candidate_context(
-        repo_path=state["repo_path"],
-        objective=state["objective"],
-        active_step=investigation_plan.active_step,
-        step_stop_reason=state["step_stop_reason"] or "none",
-        messages=tuple(state["messages"]),
-        budget_tokens=_context_budget(state),
-        evaluation_report=state.get("evaluation_report"),
-    )
-    return [
-        SystemMessage(
-            content=(
-                CANDIDATE_BUILDING_SYSTEM_PROMPT
-                if has_selected_structural_records(gathered.pack)
-                else CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT
-            )
-        ),
-        HumanMessage(
-            content=render_model_context(ModelRole.CANDIDATE_BUILDER, gathered.pack)
-        ),
-    ]
-
-
 def create_build_candidate_node(
     model: BaseChatModel,
     recorder: RawRunRecorder | None = None,
@@ -931,8 +854,14 @@ def create_build_candidate_node(
             evaluation_report=state.get("evaluation_report"),
             selection_strategy=context_selection_strategy,
         )
-        messages = build_candidate_messages(state, gathered_context=gathered)
         allow_relations = has_selected_structural_records(gathered.pack)
+        messages = _model_messages(
+            ModelRole.CANDIDATE_BUILDER,
+            CANDIDATE_BUILDING_SYSTEM_PROMPT
+            if allow_relations
+            else CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT,
+            gathered.pack,
+        )
         structured_model = model.with_structured_output(
             CandidateResult if allow_relations else EvidenceOnlyCandidateResult,
             method="function_calling",
@@ -1012,21 +941,6 @@ class EvaluatorInput(TypedDict):
     investigation_structure: InvestigationStructure | None
 
 
-class EvaluationPromptInput(TypedDict):
-    """Validated data rendered into one isolated evaluator invocation."""
-
-    repo_path: Path
-    objective: str
-    active_step: PlanStep
-    candidate_result: CandidateResult
-    deterministic_issues: tuple[ValidationIssue, ...]
-    evidence_pack: tuple[EvidenceExcerpt, ...]
-    context_budget_tokens: int
-    context_build_count: int
-    investigation_structure: InvestigationStructure | None
-    investigation_plan: NotRequired[InvestigationPlan]
-
-
 class EvaluatorNodeUpdate(TypedDict):
     evaluation_report: EvaluationReport
     active_context_pack: ContextPack
@@ -1035,30 +949,6 @@ class EvaluatorNodeUpdate(TypedDict):
 
 
 EvaluatorNode = Callable[[EvaluatorInput], EvaluatorNodeUpdate]
-
-
-def build_evaluator_messages(
-    state: EvaluationPromptInput,
-    *,
-    gathered_context: GatheredContext | None = None,
-) -> list[AnyMessage]:
-    """Build one evaluator invocation without Explorer message history."""
-
-    gathered = gathered_context or gather_evaluator_context(
-        repo_path=state["repo_path"],
-        objective=state["objective"],
-        active_step=state["active_step"],
-        candidate_result=state["candidate_result"],
-        deterministic_issues=state["deterministic_issues"],
-        evidence_pack=state["evidence_pack"],
-        budget_tokens=_context_budget(state),
-        investigation_structure=state.get("investigation_structure"),
-        investigation_plan=state.get("investigation_plan"),
-    )
-    return [
-        SystemMessage(content=EVALUATION_SYSTEM_PROMPT),
-        HumanMessage(content=render_model_context(ModelRole.EVALUATOR, gathered.pack)),
-    ]
 
 
 def create_evaluate_candidate_node(
@@ -1109,31 +999,21 @@ def create_evaluate_candidate_node(
             for issue in structure_result.issues
         )
         deterministic_issues = (*validation.issues, *structure_issues)
-        prompt_input: EvaluationPromptInput = {
-            "repo_path": state["repo_path"],
-            "objective": state["objective"],
-            "active_step": investigation_plan.active_step,
-            "investigation_plan": investigation_plan,
-            "candidate_result": candidate,
-            "deterministic_issues": deterministic_issues,
-            "evidence_pack": validation.evidence_pack,
-            "context_budget_tokens": _context_budget(state),
-            "context_build_count": state.get("context_build_count", 0),
-            "investigation_structure": structure_result.artifact,
-        }
         gathered = gather_evaluator_context(
-            repo_path=prompt_input["repo_path"],
-            objective=prompt_input["objective"],
-            active_step=prompt_input["active_step"],
-            candidate_result=prompt_input["candidate_result"],
-            deterministic_issues=prompt_input["deterministic_issues"],
-            evidence_pack=prompt_input["evidence_pack"],
-            budget_tokens=_context_budget(prompt_input),
-            investigation_structure=prompt_input["investigation_structure"],
+            repo_path=state["repo_path"],
+            objective=state["objective"],
+            active_step=investigation_plan.active_step,
+            candidate_result=candidate,
+            deterministic_issues=deterministic_issues,
+            evidence_pack=validation.evidence_pack,
+            budget_tokens=_context_budget(state),
+            investigation_structure=structure_result.artifact,
             investigation_plan=investigation_plan,
             selection_strategy=context_selection_strategy,
         )
-        messages = build_evaluator_messages(prompt_input, gathered_context=gathered)
+        messages = _model_messages(
+            ModelRole.EVALUATOR, EVALUATION_SYSTEM_PROMPT, gathered.pack
+        )
         response = _invoke_model(
             recorder=recorder,
             state=state,
@@ -1368,45 +1248,6 @@ class RejectedRevisionUpdate(TypedDict):
 ReplannerNode = Callable[[ReplannerInput], ReplannerNodeUpdate | RejectedRevisionUpdate]
 
 
-def build_replanner_messages(
-    state: ReplannerInput,
-    *,
-    gathered_context: GatheredContext | None = None,
-) -> list[AnyMessage]:
-    """Build an isolated replanning invocation from evaluated state."""
-
-    investigation_plan = state["investigation_plan"]
-    candidate = state["candidate_result"]
-    evaluation_report = state["evaluation_report"]
-    if investigation_plan is None:
-        raise ValueError("Cannot revise without an InvestigationPlan")
-    if candidate is None:
-        raise ValueError("Cannot revise without a CandidateResult")
-    if evaluation_report is None:
-        raise ValueError("Cannot revise without an EvaluationReport")
-
-    gathered = gathered_context or gather_replanner_context(
-        objective=state["objective"],
-        investigation_plan=investigation_plan,
-        candidate_result=candidate,
-        evaluation_report=evaluation_report,
-        human_feedback=state["human_feedback"],
-        plan_revision_count=state["plan_revision_count"],
-        last_tool_batch_audits=tuple(
-            decode_tool_audit_record(item)
-            for item in state.get("last_tool_batch_audits", [])
-        ),
-        max_tool_calls_per_step=state["max_tool_calls_per_step"],
-        max_explorer_calls_per_step=state["max_explorer_calls_per_step"],
-        budget_tokens=_context_budget(state),
-        memory_items=tuple(state.get("memory_context_items", [])),
-    )
-    return [
-        SystemMessage(content=REPLANNING_SYSTEM_PROMPT),
-        HumanMessage(content=render_model_context(ModelRole.REPLANNER, gathered.pack)),
-    ]
-
-
 def create_revise_plan_node(
     model: BaseChatModel,
     recorder: RawRunRecorder | None = None,
@@ -1459,7 +1300,9 @@ def create_revise_plan_node(
             memory_items=tuple(state.get("memory_context_items", [])),
             selection_strategy=context_selection_strategy,
         )
-        messages = build_replanner_messages(state, gathered_context=gathered)
+        messages = _model_messages(
+            ModelRole.REPLANNER, REPLANNING_SYSTEM_PROMPT, gathered.pack
+        )
         try:
             response = _invoke_model(
                 recorder=recorder,

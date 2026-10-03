@@ -2,26 +2,27 @@
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.runnables import RunnableLambda
 
 from repocompass.agent.candidate import CandidateResult, EvidenceItem
 from repocompass.agent.evaluation import (
     EvaluationReport,
-    EvidenceExcerpt,
     SemanticAssessment,
-    ValidationIssue,
 )
 from repocompass.agent.nodes import (
     AgentNodeInput,
     CandidateBuilderInput,
-    EvaluationPromptInput,
+    EvaluatorInput,
     PlannerInput,
-    build_agent_messages,
-    build_candidate_messages,
-    build_evaluator_messages,
-    build_planner_messages,
+    create_agent_node,
+    create_build_candidate_node,
+    create_evaluate_candidate_node,
+    create_plan_investigation_node,
 )
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.prompts import (
@@ -43,6 +44,22 @@ def _selected_content(message: HumanMessage) -> str:
     return "\n".join(record["content"] for record in records)
 
 
+def _capture(factory, state, response=None):
+    """Inspect the actual node invocation, not a separate prompt-only path."""
+    received = []
+    model = MagicMock(spec=BaseChatModel)
+    invocation = RunnableLambda(
+        lambda messages: (
+            received.append(messages) or response or AIMessage(content="Stop.")
+        )
+    )
+    model.bind_tools.return_value = invocation
+    model.with_structured_output.return_value = invocation
+    factory(model)(state)
+    assert len(received) == 1
+    return received[0]
+
+
 def test_planner_messages_are_isolated_from_repository_content() -> None:
     state: PlannerInput = {
         "objective": "Find and explain the authentication entry point.",
@@ -50,7 +67,17 @@ def test_planner_messages_are_isolated_from_repository_content() -> None:
         "max_explorer_calls_per_step": 3,
     }
 
-    messages = build_planner_messages(state)
+    plan = InvestigationPlan(
+        steps=[
+            PlanStep(
+                id="inspect",
+                objective="Inspect authentication.",
+                expected_evidence=["Source lines."],
+                status="active",
+            )
+        ]
+    )
+    messages = _capture(create_plan_investigation_node, state, plan)
 
     assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
@@ -99,7 +126,7 @@ def test_agent_messages_expose_only_the_active_plan_step(
         "context_build_count": 0,
     }
 
-    messages = build_agent_messages(state)
+    messages = _capture(create_agent_node, state)
 
     assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
@@ -138,7 +165,7 @@ def test_agent_messages_require_an_investigation_plan() -> None:
     }
 
     with pytest.raises(ValueError, match="InvestigationPlan"):
-        build_agent_messages(state)
+        _capture(create_agent_node, state)
 
 
 def test_agent_messages_select_ephemeral_evaluator_feedback(
@@ -188,7 +215,7 @@ def test_agent_messages_select_ephemeral_evaluator_feedback(
         "context_build_count": 0,
     }
 
-    messages = build_agent_messages(state)
+    messages = _capture(create_agent_node, state)
 
     assert len(messages) == 2
     assert messages[1] is not original_message
@@ -249,7 +276,15 @@ def test_candidate_messages_render_tool_results_without_tool_protocol_history(
         "context_build_count": 0,
     }
 
-    messages = build_candidate_messages(state)
+    messages = _capture(
+        create_build_candidate_node,
+        state,
+        CandidateResult(
+            evidence=[],
+            summary="No verified answer.",
+            unresolved_questions=["Read source."],
+        ),
+    )
 
     assert isinstance(messages[0], SystemMessage)
     assert messages[0].content == CANDIDATE_EVIDENCE_ONLY_SYSTEM_PROMPT
@@ -272,51 +307,41 @@ def test_candidate_messages_render_tool_results_without_tool_protocol_history(
 def test_evaluator_messages_contain_only_isolated_evaluation_data(
     tmp_path: Path,
 ) -> None:
+    (tmp_path / "auth.py").write_text("def authenticate():\n    return True\n")
     candidate = CandidateResult(
         evidence=[
             EvidenceItem(
-                path="auth.py",
-                line_start=1,
-                claim="auth.py defines authentication.",
-            )
+                path="auth.py", line_start=1, claim="auth.py defines authentication."
+            ),
+            EvidenceItem(path="missing.py", line_start=1, claim="Unverified claim."),
         ],
         summary="Authentication is defined in auth.py.",
         unresolved_questions=[],
     )
-    state: EvaluationPromptInput = {
+    step = PlanStep(
+        id="locate-authentication",
+        objective="Locate authentication.",
+        expected_evidence=["A source location for authentication."],
+        status="active",
+    )
+    state: EvaluatorInput = {
         "repo_path": tmp_path,
         "objective": "Find authentication.",
-        "active_step": PlanStep(
-            id="locate-authentication",
-            objective="Locate authentication.",
-            expected_evidence=["A source location for authentication."],
-            status="active",
-        ),
+        "investigation_plan": InvestigationPlan(steps=[step]),
         "candidate_result": candidate,
-        "deterministic_issues": (
-            ValidationIssue(
-                code="example_issue",
-                message="Example deterministic finding.",
-                path="auth.py",
-                evidence_index=0,
-            ),
-        ),
-        "evidence_pack": (
-            EvidenceExcerpt(
-                evidence_index=0,
-                path="auth.py",
-                line_start=1,
-                line_end=1,
-                symbol=None,
-                claim="auth.py defines authentication.",
-                content="1 | def authenticate():",
-            ),
-        ),
         "context_budget_tokens": 16_384,
         "context_build_count": 0,
     }
-
-    messages = build_evaluator_messages(state)
+    assessment = SemanticAssessment(
+        active_step_completed=False,
+        answers_objective=False,
+        evidence_supports_summary=False,
+        has_critical_omissions=True,
+        missing_evidence=["Read the missing source."],
+        recommended_focus=[],
+        summary="The candidate needs repair.",
+    )
+    messages = _capture(create_evaluate_candidate_node, state, assessment)
 
     assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
@@ -324,8 +349,8 @@ def test_evaluator_messages_contain_only_isolated_evaluation_data(
     assert isinstance(messages[1], HumanMessage)
     request = _selected_content(messages[1])
     assert state["objective"] in request
-    assert state["active_step"].objective in request
-    assert state["active_step"].expected_evidence[0] in request
+    assert step.objective in request
+    assert step.expected_evidence[0] in request
     assert candidate.summary in request
-    assert "example_issue" in request
+    assert "path_not_found" in request
     assert "1 | def authenticate():" in request

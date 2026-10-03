@@ -82,19 +82,6 @@ class RawArtifactPayload:
     metadata: RawArtifactMetadata
     content: bytes
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.metadata, RawArtifactMetadata):
-            raise TypeError("metadata must be RawArtifactMetadata")
-        if not isinstance(self.content, bytes):
-            raise TypeError("raw artifact payload content must be bytes")
-        expected = create_raw_artifact_metadata(
-            kind=self.metadata.kind,
-            media_type=self.metadata.media_type,
-            content=self.content,
-        )
-        if expected != self.metadata:
-            raise ValueError("raw artifact payload does not match metadata")
-
 
 @dataclass(frozen=True, slots=True)
 class GatheredContext:

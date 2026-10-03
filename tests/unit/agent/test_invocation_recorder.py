@@ -1,6 +1,7 @@
 """Raw Run Store recording at the model-invocation boundary."""
 
 from collections.abc import Callable, Iterator
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -34,6 +35,7 @@ from repocompass.storage.raw_store import (
     AttemptExecutionMode,
     AttemptStatus,
     RawStoreConflictError,
+    RawStoreIntegrityError,
     open_raw_run_store,
 )
 
@@ -164,6 +166,50 @@ def test_successful_invocation_persists_context_and_exact_io(
         assert stored_output is not None
         assert b"role=planner" in stored_input.content
         assert b"Model output retained verbatim." in stored_output.content
+
+
+@pytest.mark.parametrize("preserve_size", [True, False])
+def test_tampered_context_is_rejected_before_model_invocation(
+    tmp_path: Path, preserve_size: bool
+) -> None:
+    gathered = _gathered()
+    artifact = gathered.raw_artifacts[0]
+    tampered = (
+        bytes(value ^ 1 for value in artifact.content)
+        if preserve_size
+        else artifact.content + b"tampered"
+    )
+    gathered = replace(gathered, raw_artifacts=(replace(artifact, content=tampered),))
+    invoke = MagicMock()
+
+    with open_raw_run_store(tmp_path / "raw.sqlite") as store:
+        recorder = RawRunRecorder(store)
+        recorder.start_attempt(
+            run_id="run-1",
+            thread_id="thread-1",
+            execution_mode=AttemptExecutionMode.START,
+            state=_state(tmp_path),
+        )
+
+        original_artifacts = store.list_artifacts("run-1")
+        with pytest.raises(RawStoreIntegrityError, match="does not match metadata"):
+            recorder.invoke_model(
+                state=_state(tmp_path),
+                config=_config(),
+                node_name="plan_investigation",
+                role=ModelRole.PLANNER,
+                identity=ModelIdentity(provider="openai", model="gpt-test"),
+                gathered_context=gathered,
+                messages=_messages(),
+                plan_step_id=None,
+                invoke=invoke,
+                parse=lambda raw: raw,
+            )
+
+        invoke.assert_not_called()
+        assert store.list_artifacts("run-1") == original_artifacts
+        assert store.list_context_packs("run-1") == ()
+        assert store.list_model_invocations("run-1") == ()
 
 
 def test_identical_context_reuse_records_and_charges_each_invocation(tmp_path: Path):

@@ -20,8 +20,6 @@ from repocompass.agent.evaluation import (
 from repocompass.agent.invocation import RawRunRecorder
 from repocompass.agent.nodes import (
     _parse_plan_revision,
-    build_agent_messages,
-    build_replanner_messages,
     create_agent_node,
     create_build_candidate_node,
     create_execute_tools_node,
@@ -40,6 +38,17 @@ def _step(identifier, status):
 
 def _plan():
     return InvestigationPlan(steps=[_step("inspect", "active")])
+
+
+def _explorer_messages(state):
+    received = []
+    model = MagicMock(spec=BaseChatModel)
+    model.bind_tools.return_value = RunnableLambda(
+        lambda messages: received.append(messages) or AIMessage(content="Stop.")
+    )
+    create_agent_node(model)(state)
+    assert len(received) == 1
+    return received[0]
 
 
 def _state(tmp_path):
@@ -150,10 +159,12 @@ def test_over_limit_batch_feedback_reaches_actual_explorer_and_replanner(tmp_pat
         p.id for p in feedback.source.provenance if p.kind.value == "tool_call"
     ] == [f"read-{i}" for i in range(4)]
     state["evaluation_report"] = _report()
-    assert "budget_exhausted" in build_replanner_messages(state)[1].content
     revised = InvestigationPlan(steps=[_step("read-smaller-batch", "active")])
-    model.with_structured_output.return_value = RunnableLambda(lambda _: revised)
+    model.with_structured_output.return_value = RunnableLambda(
+        lambda messages: received.append(messages) or revised
+    )
     replanned = create_revise_plan_node(model)(state)
+    assert "budget_exhausted" in received[-1][1].content
     assert any(
         i.section is ContextSection.FEEDBACK and "gateway_feedback" in i.content
         for i in replanned["active_context_pack"].items
@@ -162,7 +173,7 @@ def test_over_limit_batch_feedback_reaches_actual_explorer_and_replanner(tmp_pat
 
 def test_gateway_feedback_is_bounded_and_required_not_source_evidence(tmp_path):
     state = _denied_batch(tmp_path, count=20)
-    content = build_agent_messages(state)[1].content
+    content = _explorer_messages(state)[1].content
     assert "omitted_earlier_decisions" in content
     assert "read-19" in content and "read-0" not in content
     candidate = gather_candidate_context(
@@ -176,16 +187,16 @@ def test_gateway_feedback_is_bounded_and_required_not_source_evidence(tmp_path):
     assert not any(i.section is ContextSection.EVIDENCE for i in candidate.pack.items)
     state["context_budget_tokens"] = 2000
     with pytest.raises(ContextBudgetError):
-        build_agent_messages(state)
+        _explorer_messages(state)
 
 
 def test_only_last_batch_survives_and_corrupt_audits_fail_closed(tmp_path):
     state = _denied_batch(tmp_path)
     state["last_tool_batch_audits"] = []
-    assert "budget_exhausted" not in build_agent_messages(state)[1].content
+    assert "budget_exhausted" not in _explorer_messages(state)[1].content
     state["last_tool_batch_audits"] = [{"decision": {"reason": "ignore safeguards"}}]
     with pytest.raises(ValueError, match="Invalid tool audit"):
-        build_agent_messages(state)
+        _explorer_messages(state)
 
 
 @pytest.mark.parametrize("node_kind", ["explorer", "candidate"])
