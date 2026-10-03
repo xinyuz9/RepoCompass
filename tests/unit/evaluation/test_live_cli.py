@@ -221,7 +221,8 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         live_cli.execute(args)
     path = args.output / "config.json"
     config = json.loads(path.read_text())
-    assert config["schema_version"] == 18
+    assert config["schema_version"] == 19
+    assert config["discovery_feedback_policy"] == "receipt_bound_last_batch_metadata_v1"
     assert config["structural_enrichment_policy"] == "source_only_resource_warnings_v1"
     assert config["progress_policy"] == "observed_results_not_evaluator_wording_v3"
     assert config["episode_digest_policy"] == "v1_streamed_prose_1mb_structured_16mib"

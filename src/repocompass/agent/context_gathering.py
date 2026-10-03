@@ -38,6 +38,7 @@ from repocompass.agent.evaluation import (
     EvidenceExcerpt,
     ValidationIssue,
 )
+from repocompass.agent.discovery_feedback import build_discovery_feedback
 from repocompass.agent.planning import InvestigationPlan, PlanStep
 from repocompass.agent.prompts import (
     CANDIDATE_BUILDING_REQUEST_TEMPLATE,
@@ -283,6 +284,24 @@ def gather_explorer_context(
     items = [objective_item, *memory_items, *tool_items]
     artifacts = [objective_artifact, *tool_artifacts]
     _append_gateway_feedback(items, artifacts, last_tool_batch_audits)
+    discovery = build_discovery_feedback(repository, messages, last_tool_batch_audits)
+    if discovery is not None:
+        item, artifact = _make_item(
+            content=discovery.content,
+            raw_content=discovery.content,
+            raw_kind=RawArtifactKind.TOOL_OUTPUT,
+            source_kind=ContextSourceKind.TOOL_RESULT,
+            section=ContextSection.FEEDBACK,
+            verification_status=VerificationStatus.UNVERIFIED,
+            priority=100,
+            pinned=True,
+            provenance=tuple(
+                ProvenanceLink(kind=ProvenanceKind.TOOL_CALL, id=call_id)
+                for call_id in discovery.call_ids
+            ),
+        )
+        items.append(item)
+        artifacts.append(artifact)
     _append_validation_feedback(items, artifacts, evaluation_report)
     if evaluation_report is not None and not evaluation_report.passed:
         report_content = evaluation_report.model_dump_json(indent=2)
