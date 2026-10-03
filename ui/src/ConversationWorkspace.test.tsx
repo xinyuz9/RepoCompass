@@ -2,7 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BrowserBoundary, ConversationWorkspace, InvestigationResult } from "./ConversationWorkspace";
+import { BrowserBoundary, ConversationWorkspace } from "./ConversationWorkspace";
+import { InvestigationResult } from "./InvestigationResult";
 import type {
   DashboardSystemInfo,
   DashboardThreadDetail,

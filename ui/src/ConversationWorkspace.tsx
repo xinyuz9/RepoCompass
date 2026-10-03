@@ -29,6 +29,7 @@ import { ConversationHistory } from "./ConversationHistory";
 import { CurrentReviewHistory } from "./ReviewHistory";
 import { RunCancellationControl } from "./RunCancellationControl";
 import { GoalTitle } from "./GoalTitle";
+import { InvestigationResult } from "./InvestigationResult";
 import { investigationStateLabel } from "./format";
 import {
   forgetLifecycleRequest,
@@ -56,7 +57,7 @@ interface ConversationWorkspaceProps {
   detail: DashboardThreadDetail | null;
   lifecycleMutationsEnabled: boolean;
   onThreadActivated: (threadId: string) => void;
-  onOpenLens: (lens: InspectorLens) => void;
+  onOpenLens: (lens: InspectorLens, entityId?: string) => void;
   onNewGoal: () => void;
 }
 
@@ -244,7 +245,7 @@ function ThreadConversation({
   detail: DashboardThreadDetail;
   enabled: boolean;
   onThreadActivated: (threadId: string) => void;
-  onOpenLens: (lens: InspectorLens) => void;
+  onOpenLens: (lens: InspectorLens, entityId?: string) => void;
   onNewGoal: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -461,72 +462,6 @@ function ThreadConversation({
         ) : null}
       </footer>
     </div>
-  );
-}
-
-export function InvestigationResult({
-  thread,
-  onOpenLens,
-}: {
-  thread: DashboardThreadDetail["thread"];
-  onOpenLens: (lens: InspectorLens) => void;
-}) {
-  const result = thread.final_result;
-  const candidate = thread.candidate_result;
-  const evidence = result?.evidence ?? candidate?.evidence.map((item) => item.claim) ?? [];
-  const files = result?.relevant_files ?? [...new Set(candidate?.evidence.map((item) => item.path) ?? [])];
-  const questions = result?.unresolved_questions ?? candidate?.unresolved_questions ?? [];
-  const status = thread.termination_status;
-  const label = thread.pending_review ? "Awaiting review"
-    : status === "cancelled" ? "Cancelled"
-    : status === "exhausted" ? "Best effort"
-    : result && status === "accepted" ? "Accepted"
-    : "Working draft";
-  if (!result && !candidate) {
-    return (
-      <section className="result-card" aria-label="Investigation result">
-        <h2>No result yet</h2>
-        <p>The latest checkpoint has no result to display. Inspect Run trace for the last completed step.</p>
-        <button className="result-card__open" type="button" onClick={() => onOpenLens("trace")}>Inspect last attempt</button>
-      </section>
-    );
-  }
-  return (
-    <section className={`result-card result-card--${status ?? "draft"}`} aria-label="Investigation result">
-      <div className="result-card__heading">
-        <h2>{result ? "Investigation result" : "Candidate result"}</h2>
-        <span className="result-card__status">{label}</span>
-      </div>
-      <p>{result?.summary ?? candidate?.summary}</p>
-      {status === "exhausted" || status === "cancelled" ? (
-        <p className="result-card__note">Stopped without acceptance. Review the evidence and open questions before relying on this result.</p>
-      ) : !result ? (
-        <p className="result-card__note">This candidate has not been finalized.</p>
-      ) : null}
-      {files.length ? (
-        <>
-          <h3>Relevant files · {files.length}</h3>
-          <div className="result-files">{files.map((file) => <code key={file}>{file}</code>)}</div>
-        </>
-      ) : null}
-      <h3>Evidence · {evidence.length}</h3>
-      {evidence.length ? <ol>{evidence.slice(0, 3).map((claim, index) => <li key={index}>{claim}</li>)}</ol>
-        : <p className="result-card__note">No evidence was reported.</p>}
-      {evidence.length > 3 ? (
-        <details>
-          <summary>Show {evidence.length - 3} more evidence items</summary>
-          <ol start={4}>{evidence.slice(3).map((claim, index) => <li key={index}>{claim}</li>)}</ol>
-        </details>
-      ) : null}
-      <h3>Open questions · {questions.length}</h3>
-      {questions.length ? <ul>{questions.map((question, index) => <li key={index}>{question}</li>)}</ul>
-        : <p className="result-card__note">No unresolved questions were reported.</p>}
-      {thread.structure ? (
-        <button className="result-card__open" type="button" onClick={() => onOpenLens("topology")}>
-          <FileCode2 size={15} />Explore source evidence
-        </button>
-      ) : null}
-    </section>
   );
 }
 

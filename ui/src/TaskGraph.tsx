@@ -19,7 +19,7 @@ import {
   Route,
   ShieldCheck,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DashboardApiError, dashboardQueries } from "./api";
 import EvidenceNodeCard from "./EvidenceNode";
@@ -80,6 +80,13 @@ export function TaskGraph({ threadId, structure, requestedEntityId, onEntitySele
   }));
   const onNodeClick: NodeMouseHandler = (_, node) => selectEntity(node.id);
   const snapshotMatches = !source.data || (source.data.repository_id === structure.repository_id && source.data.commit_sha === structure.commit_sha);
+  const sourceHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (requestedEntityId && sourceEnabled && (source.data || source.error)) {
+      sourceHeading.current?.focus({ preventScroll: true });
+      sourceHeading.current?.scrollIntoView({ block: "start" });
+    }
+  }, [requestedEntityId, sourceEnabled, source.data, source.error]);
 
   return (
     <section className="graph-workspace" aria-label="Task-specific evidence graph">
@@ -145,7 +152,7 @@ export function TaskGraph({ threadId, structure, requestedEntityId, onEntitySele
           <div className="section-heading section-heading--source">
             <div>
               <p className="eyebrow"><Code2 size={13} /> verified source</p>
-              <h3>Evidence window</h3>
+              <h3 ref={sourceHeading} tabIndex={-1}>Evidence window</h3>
             </div>
             {source.data ? (
               <span className="count-pill">{source.data.lines.length} lines</span>

@@ -407,6 +407,14 @@ select:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
 .result-card > .result-card__note { color: var(--muted); font-size: 12px; }
 .result-files { display: flex; flex-wrap: wrap; gap: 7px; }
 .result-files code { max-width: 100%; padding: 6px 8px; color: var(--teal); border: 1px solid var(--line); border-radius: 7px; background: var(--bg-soft); font-size: 12px; overflow-wrap: anywhere; }
+.result-files button { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 36px; padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--bg-soft); color: var(--teal); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.result-files button span { min-width: 0; overflow-wrap: anywhere; }
+.result-files button svg { flex-shrink: 0; }
+.result-stop { margin-top: 16px; padding: 12px 14px; border-left: 2px solid var(--amber); background: var(--bg-soft); border-radius: 0 8px 8px 0; }
+.result-stop strong { color: var(--text); font-size: 13px; }
+.result-stop p { margin: 6px 0 10px; color: var(--text-soft); font-size: 12px; line-height: 1.7; }
+.result-stop button { min-height: 36px; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--panel); color: var(--teal); font: inherit; font-size: 12px; cursor: pointer; }
+.result-files button:focus-visible, .result-stop button:focus-visible { outline: 2px solid var(--acid); outline-offset: 3px; }
 .result-card ol, .result-card ul { display: grid; gap: 10px; margin: 0; padding-left: 22px; color: var(--text-soft); font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
 .result-card li::marker { color: var(--teal); }
 .result-card__open { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; margin-top: 18px; padding: 8px 12px; color: var(--acid); border: 1px solid rgba(185,239,121,.3); border-radius: 8px; background: var(--acid-soft); font: inherit; font-size: 12px; cursor: pointer; }
@@ -436,6 +444,7 @@ select:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
   .goal-welcome { min-height: 0; }
 }
 @media (max-width: 680px) {
+  html { scroll-padding-bottom: 84px; }
   .app-shell[data-sidebar-open="false"] { grid-template-columns: 1fr; }
   .app-shell[data-sidebar-open="false"] .main-stage { grid-column: 1; }
   .topbar { flex-wrap: wrap; padding: 10px 14px; gap: 8px; }

@@ -164,7 +164,7 @@ export function App() {
     }
     navigate({ threadId, lens: "chat", runId: null, composingNew: false });
   }, [navigate]);
-  const openInspector = useCallback((nextLens: InspectorLens) => {
+  const openInspector = useCallback((nextLens: InspectorLens, entityId?: string) => {
     setSidebarOpen(false);
     navigate({
       threadId: activeThreadId,
@@ -172,6 +172,7 @@ export function App() {
       runId: null,
       composingNew: false,
       splitView: true,
+      nodeId: nextLens === "topology" ? entityId : undefined,
     });
   }, [activeThreadId, navigate]);
   const selectLens = useCallback((nextLens: DashboardLens) => {

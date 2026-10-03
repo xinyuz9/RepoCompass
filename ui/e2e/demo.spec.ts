@@ -386,7 +386,8 @@ test("replays real demo evidence, navigates inspectors, and keeps a readable wor
   });
   await page.goto("/");
   const result = page.getByRole("region", { name: "Investigation result" });
-  await expect(result.getByText("Accepted", { exact: true })).toBeVisible();
+  await expect(result.getByText("Workflow accepted", { exact: true })).toBeVisible();
+  await expect(result.getByText(/not independent proof/)).toBeVisible();
   await expect(result.getByText("pkg/policy.py", { exact: true })).toBeVisible();
   await expect(page.getByText("Explore a completed example")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Ask a follow-up" })).toHaveCount(0);

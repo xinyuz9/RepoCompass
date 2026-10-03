@@ -13,3 +13,6 @@ class ResizeObserverMock implements ResizeObserver {
 }
 
 globalThis.ResizeObserver = ResizeObserverMock;
+
+// jsdom has no layout/scrolling; Playwright verifies actual viewport movement.
+HTMLElement.prototype.scrollIntoView = () => undefined;

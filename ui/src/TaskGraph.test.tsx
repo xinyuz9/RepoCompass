@@ -90,6 +90,15 @@ afterEach(() => {
 });
 
 describe("TaskGraph source inspector", () => {
+  it("brings an explicit source link into view after verification", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify(source)))));
+    const scroll = vi.spyOn(HTMLElement.prototype, "scrollIntoView");
+    render(<QueryClientProvider client={new QueryClient()}><TaskGraph threadId="thread-1" structure={structure} requestedEntityId={entityId} /></QueryClientProvider>);
+    const heading = screen.getByRole("heading", { name: "Evidence window" });
+    await waitFor(() => expect(heading).toHaveFocus());
+    expect(scroll).toHaveBeenCalledWith({ block: "start" });
+  });
+
   it("never requests a source for an unknown linked node", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
