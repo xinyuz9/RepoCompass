@@ -1,5 +1,9 @@
+import json
+import os
+import selectors
 import subprocess
 from pathlib import Path
+from time import monotonic
 from typing import TypedDict
 
 from repocompass.source_reader import (
@@ -213,6 +217,12 @@ class SearchMatch(TypedDict):
     text: str
 
 
+SEARCH_TIMEOUT_SECONDS = 5
+MAX_SEARCH_STDOUT_BYTES = 2 * 1024 * 1024
+MAX_SEARCH_RECORD_BYTES = 128 * 1024
+MAX_SEARCH_STDERR_BYTES = 8192
+
+
 def search_text(
     repo_path: Path,
     query: str,
@@ -235,8 +245,11 @@ def search_text(
         FileNotFoundError: If the repository path does not exist.
         NotADirectoryError: If the repository path is not a directory.
         ValueError: If query is empty or max_results is not positive.
-        RuntimeError: If ripgrep is unavailable, times out, or exits with an
-            unexpected error.
+        RuntimeError: If ripgrep is unavailable, times out, exceeds a stream
+            limit, emits invalid JSON/UTF-8 data, or exits with an error.
+
+    Stops the child after max_results. This is a bounded prefix, not proof that
+    the entire repository was scanned. Pipe limits do not bound ripgrep's RSS.
     """
     if not repo_path.exists():
         raise FileNotFoundError(f"Repository path does not exist: {repo_path}")
@@ -259,11 +272,8 @@ def search_text(
         # A read-only Agent tool must not inherit those additional capabilities.
         "--no-config",
         "--no-follow",
-        "--line-number",
-        "--with-filename",
-        "--no-heading",
-        "--color",
-        "never",
+        "--json",
+        "--line-buffered",
         "--fixed-strings",
         "--sort",
         "path",
@@ -275,43 +285,106 @@ def search_text(
     command.extend(["--", query, "."])
 
     try:
-        completed_process = subprocess.run(
+        with subprocess.Popen(
             command,
-            capture_output=True,
-            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
             cwd=resolved_path,
-            timeout=5,
-            check=False,
             shell=False,
-        )
+        ) as process:
+            try:
+                return _read_search_output(process, max_results)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
     except FileNotFoundError as exc:
         raise RuntimeError("ripgrep executable 'rg' was not found on PATH") from exc
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("ripgrep search timed out after 5 seconds") from exc
-
-    if completed_process.returncode == 1:
-        return []
-
-    if completed_process.returncode != 0:
-        error_message = completed_process.stderr.strip() or "no error message"
         raise RuntimeError(
-            f"ripgrep failed with return code {completed_process.returncode}: "
-            f"{error_message}"
-        )
+            f"ripgrep search timed out after {SEARCH_TIMEOUT_SECONDS} seconds"
+        ) from exc
 
+
+def _read_search_output(
+    process: subprocess.Popen[bytes], max_results: int
+) -> list[SearchMatch]:
+    deadline = monotonic() + SEARCH_TIMEOUT_SECONDS
+    pending = bytearray()
+    errors = bytearray()
+    stdout_bytes = 0
     matches: list[SearchMatch] = []
-    output_lines = completed_process.stdout.splitlines()
-    for output_line in output_lines:
-        path_text, line_text, matched_text = output_line.split(":", 2)
-        matches.append(
-            {
-                "path": Path(path_text).as_posix(),
-                "line": int(line_text),
-                "text": matched_text,
-            }
-        )
-
-        if len(matches) >= max_results:
-            break
-
+    with selectors.DefaultSelector() as selector:
+        selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+        selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+        while selector.get_map():
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(process.args, SEARCH_TIMEOUT_SECONDS)
+            for key, _ in selector.select(remaining):
+                chunk = os.read(key.fd, 8192)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    continue
+                if key.data == "stderr":
+                    if len(errors) + len(chunk) > MAX_SEARCH_STDERR_BYTES:
+                        raise RuntimeError("ripgrep stderr exceeded byte limit")
+                    errors.extend(chunk)
+                    continue
+                stdout_bytes += len(chunk)
+                if stdout_bytes > MAX_SEARCH_STDOUT_BYTES:
+                    raise RuntimeError(
+                        "ripgrep stdout exceeded byte limit; narrow the query"
+                    )
+                pending.extend(chunk)
+                while (end := pending.find(b"\n")) >= 0:
+                    if end > MAX_SEARCH_RECORD_BYTES:
+                        raise RuntimeError("ripgrep JSON record exceeded byte limit")
+                    record = bytes(pending[:end])
+                    del pending[: end + 1]
+                    match = _parse_search_record(record)
+                    if match is not None:
+                        matches.append(match)
+                        if len(matches) >= max_results:
+                            return matches
+                if len(pending) > MAX_SEARCH_RECORD_BYTES:
+                    raise RuntimeError("ripgrep JSON record exceeded byte limit")
+    if pending:
+        raise RuntimeError("ripgrep emitted an incomplete JSON record")
+    returncode = process.wait(timeout=max(0, deadline - monotonic()))
+    if returncode not in (0, 1):
+        detail = errors.decode("utf-8", errors="replace").strip() or "no error message"
+        raise RuntimeError(f"ripgrep failed with return code {returncode}: {detail}")
     return matches
+
+
+def _parse_search_record(record: bytes) -> SearchMatch | None:
+    try:
+        event = json.loads(record)
+        if event["type"] in ("begin", "end", "summary"):
+            return None
+        if event["type"] != "match":
+            raise ValueError("unexpected event")
+        data = event["data"]
+        path = data["path"]["text"]
+        text = data["lines"]["text"]
+        line = data["line_number"]
+        if not isinstance(path, str) or not isinstance(text, str):
+            raise ValueError("non-text match")
+        if type(line) is not int or line < 1:
+            raise ValueError("invalid line number")
+        relative = Path(path)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("non-relative path")
+        return {
+            "path": relative.as_posix(),
+            "line": line,
+            "text": text.removesuffix("\n").removesuffix("\r"),
+        }
+    except (ValueError, KeyError, TypeError) as error:
+        # ripgrep uses base64 fields for non-UTF-8 data; never turn those into
+        # plausible but lossy source paths or content.
+        raise RuntimeError(
+            "ripgrep emitted invalid or non-UTF-8 JSON match data"
+        ) from error

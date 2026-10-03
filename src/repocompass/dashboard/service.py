@@ -41,6 +41,7 @@ from repocompass.dashboard.events import EventPage
 from repocompass.memory.contracts import MemoryScope
 from repocompass.memory.store import MemoryStore
 from repocompass.service.contracts import InvestigationOperationKind
+from repocompass.source_reader import SourceReadError, read_source_bytes
 from repocompass.storage.raw_store import (
     RawStoreConflictError,
     RawStoreError,
@@ -736,27 +737,13 @@ def _read_source_snippet(
         raise DashboardSnapshotConflictError(
             "source evidence targets a different repository snapshot"
         )
-    relative = Path(location.path)
-    current = context.repository_root
     try:
-        for part in relative.parts:
-            current /= part
-            if current.is_symlink():
-                raise DashboardSnapshotConflictError(
-                    "source evidence cannot traverse a symbolic link"
-                )
-        target = current.resolve(strict=True)
-        target.relative_to(context.repository_root)
-        if not target.is_file() or target.stat().st_size > MAX_INDEXED_SOURCE_BYTES:
-            raise DashboardSnapshotConflictError(
-                "source evidence file is unavailable or exceeds the display limit"
-            )
-        encoded = target.read_bytes()
-    except DashboardSnapshotConflictError:
-        raise
-    except (OSError, ValueError) as error:
+        encoded = read_source_bytes(
+            context.repository_root, location.path, max_bytes=MAX_INDEXED_SOURCE_BYTES
+        )
+    except SourceReadError as error:
         raise DashboardSnapshotConflictError(
-            "source evidence file is no longer available"
+            "source evidence is unavailable, unsafe, or exceeds the display limit"
         ) from error
     if hashlib.sha256(encoded).hexdigest() != location.source_digest:
         raise DashboardSnapshotConflictError(

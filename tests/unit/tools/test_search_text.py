@@ -1,8 +1,11 @@
+import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
+from repocompass.tools import repository
 from repocompass.tools.repository import search_text
 
 
@@ -58,6 +61,29 @@ def test_search_text_returns_stable_path_order(tmp_path: Path) -> None:
     result = search_text(tmp_path, "needle")
 
     assert [match["path"] for match in result] == ["alpha.txt", "zebra.txt"]
+
+
+@pytest.mark.parametrize(
+    "filename", ["a:b.py", "line\nbreak.py", "tab\tname.py", "源码.py"]
+)
+def test_search_preserves_special_filenames(tmp_path: Path, filename: str) -> None:
+    (tmp_path / filename).write_text("needle: exact\n", encoding="utf-8")
+    assert search_text(tmp_path, "needle") == [
+        {"path": filename, "line": 1, "text": "needle: exact"}
+    ]
+
+
+def test_search_preserves_non_newline_control_characters_in_content(tmp_path):
+    (tmp_path / "source.txt").write_text("needle\vstill same line\r\n")
+    assert search_text(tmp_path, "needle") == [
+        {"path": "source.txt", "line": 1, "text": "needle\vstill same line"}
+    ]
+
+
+def test_search_rejects_oversized_record_before_returning_content(tmp_path):
+    (tmp_path / "source.txt").write_text("needle" + "x" * 262_144 + "\n")
+    with pytest.raises(RuntimeError, match="record.*byte limit"):
+        search_text(tmp_path, "needle", max_results=1)
 
 
 # Query behavior and validation
@@ -190,6 +216,40 @@ def test_search_text_stops_at_max_results(tmp_path: Path) -> None:
 # Repository and subprocess failures
 
 
+def _substitute_search_process(monkeypatch, program: str):
+    """Run a controlled child with real pipes, signals, and descriptor cleanup."""
+    popen = subprocess.Popen
+    processes = []
+
+    def spawn(command, **kwargs):
+        assert "--json" in command
+        assert "--no-config" in command
+        assert "--no-follow" in command
+        process = popen([sys.executable, "-c", program], **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(repository.subprocess, "Popen", spawn)
+    return processes
+
+
+def _assert_processes_closed(processes):
+    assert len(processes) == 1
+    assert processes[0].poll() is not None
+    assert processes[0].stdout.closed
+    assert processes[0].stderr.closed
+
+
+def _match_json(**overrides):
+    data = {
+        "path": {"text": "./source.py"},
+        "lines": {"text": "needle\n"},
+        "line_number": 1,
+    }
+    data.update(overrides)
+    return json.dumps({"type": "match", "data": data}).encode() + b"\n"
+
+
 def test_search_text_rejects_missing_repository(tmp_path: Path) -> None:
     missing_repository = tmp_path / "missing"
 
@@ -209,20 +269,16 @@ def test_search_text_raises_on_rg_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_run(*args, **kwargs):
-        return subprocess.CompletedProcess(
-            args=["rg"], returncode=2, stdout="", stderr="synthetic rg failure"
-        )
-
-    monkeypatch.setattr(
-        "repocompass.tools.repository.subprocess.run",
-        fake_run,
+    processes = _substitute_search_process(
+        monkeypatch,
+        "import sys; sys.stderr.write('synthetic rg failure'); sys.exit(2)",
     )
 
     with pytest.raises(RuntimeError) as exc_info:
         search_text(tmp_path, "cool")
 
     assert "synthetic rg failure" in str(exc_info.value)
+    _assert_processes_closed(processes)
 
 
 def test_search_text_reports_missing_rg(
@@ -233,7 +289,7 @@ def test_search_text_reports_missing_rg(
         raise FileNotFoundError("rg")
 
     monkeypatch.setattr(
-        "repocompass.tools.repository.subprocess.run",
+        "repocompass.tools.repository.subprocess.Popen",
         fake_run,
     )
 
@@ -245,13 +301,93 @@ def test_search_text_reports_timeout(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_run(*args: object, **kwargs: object) -> None:
-        raise subprocess.TimeoutExpired(cmd=["rg"], timeout=5)
+    monkeypatch.setattr(repository, "SEARCH_TIMEOUT_SECONDS", 0.1)
+    processes = _substitute_search_process(monkeypatch, "import time; time.sleep(30)")
 
-    monkeypatch.setattr(
-        "repocompass.tools.repository.subprocess.run",
-        fake_run,
-    )
-
-    with pytest.raises(RuntimeError, match="timed out after 5 seconds"):
+    with pytest.raises(RuntimeError, match="timed out after 0.1 seconds"):
         search_text(tmp_path, "needle")
+    _assert_processes_closed(processes)
+
+
+def test_search_kills_child_when_result_limit_is_reached(tmp_path, monkeypatch):
+    processes = _substitute_search_process(
+        monkeypatch,
+        f"import os,time; os.write(1, {_match_json()!r}); time.sleep(30)",
+    )
+    assert search_text(tmp_path, "needle", max_results=1) == [
+        {"path": "source.py", "line": 1, "text": "needle"}
+    ]
+    _assert_processes_closed(processes)
+
+
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+def test_search_bounds_pipe_bytes_even_without_matches(tmp_path, monkeypatch, stream):
+    limit = 1024
+    monkeypatch.setattr(repository, f"MAX_SEARCH_{stream.upper()}_BYTES", limit)
+    payload = b'{"type":"begin"}\n' * 128 if stream == "stdout" else b"e" * 2048
+    fd = 1 if stream == "stdout" else 2
+    processes = _substitute_search_process(
+        monkeypatch, f"import os,time; os.write({fd}, {payload!r}); time.sleep(30)"
+    )
+    with pytest.raises(RuntimeError, match=f"{stream} exceeded byte limit"):
+        search_text(tmp_path, "needle")
+    _assert_processes_closed(processes)
+
+
+@pytest.mark.parametrize("newline", [b"", b"\n"])
+def test_search_bounds_record_before_parsing(tmp_path, monkeypatch, newline):
+    monkeypatch.setattr(repository, "MAX_SEARCH_RECORD_BYTES", 128)
+    payload = b"x" * 129 + newline
+    processes = _substitute_search_process(
+        monkeypatch, f"import os,time; os.write(1, {payload!r}); time.sleep(30)"
+    )
+    with pytest.raises(RuntimeError, match="record exceeded byte limit"):
+        search_text(tmp_path, "needle")
+    _assert_processes_closed(processes)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"not json\n",
+        b"[]\n",
+        b'{"type":"unknown"}\n',
+        b"\xff\n",
+        _match_json(path={"bytes": "//4="}),
+        _match_json(lines={"bytes": "//4="}),
+        _match_json(path={"text": "../outside.py"}),
+        _match_json(path={"text": "/outside.py"}),
+        _match_json(line_number=True),
+        _match_json(line_number=0),
+    ],
+)
+def test_search_rejects_malformed_or_unrepresentable_matches(
+    tmp_path, monkeypatch, payload
+):
+    processes = _substitute_search_process(
+        monkeypatch, f"import os; os.write(1, {payload!r})"
+    )
+    with pytest.raises(RuntimeError, match="invalid or non-UTF-8"):
+        search_text(tmp_path, "needle")
+    _assert_processes_closed(processes)
+
+
+def test_search_rejects_incomplete_record_at_eof(tmp_path, monkeypatch):
+    payload = _match_json()[:-1]
+    processes = _substitute_search_process(
+        monkeypatch, f"import os; os.write(1, {payload!r})"
+    )
+    with pytest.raises(RuntimeError, match="incomplete JSON record"):
+        search_text(tmp_path, "needle")
+    _assert_processes_closed(processes)
+
+
+def test_search_reassembles_records_across_small_reads(tmp_path, monkeypatch):
+    original = repository.os.read
+    monkeypatch.setattr(
+        repository.os, "read", lambda fd, size: original(fd, min(size, 3))
+    )
+    (tmp_path / "源码.py").write_text("needle 汉字\r\n", encoding="utf-8")
+    assert search_text(tmp_path, "needle") == [
+        {"path": "源码.py", "line": 1, "text": "needle 汉字"}
+    ]
