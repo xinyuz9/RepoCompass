@@ -28,7 +28,7 @@ class CancellationConflict(CancellationError):
 
 class RunCancellationRequested(RuntimeError):
     def __init__(self, run_id: str, request_id: str):
-        super().__init__("cancellation requested at a graph node boundary")
+        super().__init__("run cancellation requested")
         self.run_id = run_id
         self.request_id = request_id
 

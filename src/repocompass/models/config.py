@@ -7,6 +7,8 @@ from typing import ClassVar
 
 from dotenv import load_dotenv
 
+from repocompass.models.control import ModelCallPolicy
+
 
 class ModelProvider(StrEnum):
     """Model providers with an implemented RepoCompass adapter."""
@@ -22,6 +24,7 @@ class DeepSeekModelSettings:
     model: str
     api_key: str = field(repr=False)
     base_url: str
+    call_policy: ModelCallPolicy = field(default_factory=ModelCallPolicy)
     provider: ClassVar[ModelProvider] = ModelProvider.DEEPSEEK
 
 
@@ -31,6 +34,7 @@ class OpenAIModelSettings:
 
     model: str
     api_key: str = field(repr=False)
+    call_policy: ModelCallPolicy = field(default_factory=ModelCallPolicy)
     provider: ClassVar[ModelProvider] = ModelProvider.OPENAI
 
 
@@ -53,6 +57,17 @@ def load_model_settings() -> ModelSettings:
     """Load one provider-specific settings object without creating a client."""
 
     load_dotenv(override=False)
+    try:
+        call_policy = ModelCallPolicy(
+            request_timeout_seconds=float(
+                os.getenv("REPOCOMPASS_MODEL_TIMEOUT_SECONDS", "60")
+            ),
+            attempt_timeout_seconds=float(
+                os.getenv("REPOCOMPASS_ATTEMPT_TIMEOUT_SECONDS", "600")
+            ),
+        )
+    except ValueError:
+        raise ValueError("model timeouts must be positive finite seconds") from None
     provider_name = (
         os.getenv("REPOCOMPASS_MODEL_PROVIDER", ModelProvider.DEEPSEEK).strip().lower()
     )
@@ -75,6 +90,7 @@ def load_model_settings() -> ModelSettings:
             model=values["REPOCOMPASS_MODEL"],
             api_key=values["REPOCOMPASS_API_KEY"],
             base_url=values["REPOCOMPASS_BASE_URL"],
+            call_policy=call_policy,
         )
 
     values = _required_environment(
@@ -84,4 +100,5 @@ def load_model_settings() -> ModelSettings:
     return OpenAIModelSettings(
         model=values["REPOCOMPASS_MODEL"],
         api_key=values["REPOCOMPASS_API_KEY"],
+        call_policy=call_policy,
     )

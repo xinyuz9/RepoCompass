@@ -13,6 +13,8 @@ from typing import TypeVar
 from langchain_core.messages import AnyMessage, BaseMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
+from repocompass.models.control import AttemptDeadlineExceeded, ModelCallTimeout
+from repocompass.storage.cancellation import RunCancellationRequested
 from repocompass.agent.admission import PrecallBudgetDenied
 
 from repocompass.agent.context import (
@@ -322,7 +324,7 @@ class RawRunRecorder:
             # The provider was never called. Keep the attempted input/context for
             # audit, but do not invent a failed invocation or unknown token usage.
             raise
-        except Exception:
+        except Exception as error:
             latency_ms = self._latency_ms(started_ns)
             output_artifact_id = None
             if provider_completed:
@@ -344,6 +346,12 @@ class RawRunRecorder:
                 error_code=(
                     "invalid_model_response"
                     if provider_completed
+                    else "model_call_cancelled"
+                    if isinstance(error, RunCancellationRequested)
+                    else "model_call_timeout"
+                    if isinstance(error, ModelCallTimeout)
+                    else "attempt_deadline_exceeded"
+                    if isinstance(error, AttemptDeadlineExceeded)
                     else "model_call_failed"
                 ),
                 usage=(

@@ -12,6 +12,7 @@ from repocompass.models.config import (
 )
 from repocompass.models.deepseek import create_deepseek_model
 from repocompass.models.openai import create_openai_model
+from repocompass.models.control import ModelCallPolicy
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,7 @@ class WorkflowModels:
     explorer: BaseChatModel
     planner: BaseChatModel
     evaluator: BaseChatModel
+    call_policy: ModelCallPolicy = ModelCallPolicy()
 
     @classmethod
     def from_single_model(cls, model: BaseChatModel) -> "WorkflowModels":
@@ -65,4 +67,11 @@ def create_workflow_models(
     Per-role configuration can be added later without changing graph APIs.
     """
 
-    return WorkflowModels.from_single_model(create_chat_model(settings))
+    resolved_settings = settings or load_model_settings()
+    model = create_chat_model(resolved_settings)
+    return WorkflowModels(
+        explorer=model,
+        planner=model,
+        evaluator=model,
+        call_policy=resolved_settings.call_policy,
+    )

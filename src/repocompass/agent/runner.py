@@ -80,6 +80,7 @@ from repocompass.storage.cancellation import (
     CancellationStore,
     RunCancellationRequested,
 )
+from repocompass.models.control import model_execution_scope
 
 if TYPE_CHECKING:
     from repocompass.memory.consolidation import EpisodeConsolidationResult
@@ -776,8 +777,8 @@ class AgentRunner:
                 and exact model I/O provenance.
             pricing_table: Optional immutable snapshot used for reports and
                 required when an attempt cost budget is configured.
-            memory_store: Optional local memory boundary that receives only
-                deterministic terminal episode consolidation.
+            memory_store: Optional local memory boundary for terminal episodes
+                and revalidated static repository facts.
             episode_clock_factory: Local millisecond clock used only when a
                 memory store is configured.
             run_id_factory: Zero-argument factory for run IDs. Tests can inject
@@ -1355,20 +1356,24 @@ class AgentRunner:
                 enrolled = True
             if self._raw_run_store is not None:
                 self._raw_run_store.append_trace_event(trace.events[0])
-            outcome = self._stream_graph_attempt(
-                graph,
-                graph_input,
-                thread_id=thread_id,
-                execution_mode=execution_mode,
-                existing_snapshot=existing_snapshot,
-                trace=trace,
-                config=config,
-                event_sink=(
-                    None
-                    if self._raw_run_store is None
-                    else self._raw_run_store.append_trace_event
-                ),
-            )
+            with model_execution_scope(
+                lambda: self._check_cancellation(config),
+                timeout_seconds=self._models.call_policy.attempt_timeout_seconds,
+            ):
+                outcome = self._stream_graph_attempt(
+                    graph,
+                    graph_input,
+                    thread_id=thread_id,
+                    execution_mode=execution_mode,
+                    existing_snapshot=existing_snapshot,
+                    trace=trace,
+                    config=config,
+                    event_sink=(
+                        None
+                        if self._raw_run_store is None
+                        else self._raw_run_store.append_trace_event
+                    ),
+                )
             phase = "memory_consolidation"
             episode_consolidation = None
             repository_consolidation = None
@@ -1552,7 +1557,7 @@ class AgentRunner:
                     "final_result": FinalResult(
                         relevant_files=[],
                         evidence=[],
-                        summary="Investigation cancelled at a graph node boundary. No candidate is published as an accepted result.",
+                        summary="Investigation cancelled. No candidate is published as an accepted result.",
                         unresolved_questions=[objective],
                     ),
                 },

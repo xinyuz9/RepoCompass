@@ -24,7 +24,7 @@ test("real lifecycle cancellation survives refresh without replaying the start",
   const limits = page.getByRole("region", { name: "Lifecycle request recovery" }).getByText("Cancellation limits", { exact: true });
   await limits.focus();
   await limits.press("Enter");
-  await expect(page.getByText("Cooperative stop at the next graph node; this does not kill a provider request or sandbox process.")).toBeVisible();
+  await expect(page.getByText("Supported model requests are interrupted locally. Tools and custom models stop at a graph boundary; provider-side work or billing may continue.")).toBeVisible();
   await limits.press("Enter");
   await page.evaluate(axe.source);
   const scan = await page.evaluate(async () => {

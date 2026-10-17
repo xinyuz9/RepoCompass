@@ -55,7 +55,7 @@ function EnabledCancellation({ attempt }: { attempt: RawRunAttempt }) {
           : query.isError ? "Cancellation status unavailable"
           : "Run control"}</strong>
         <p>{state === "cancelled" ? "The cancelled checkpoint and terminal trace are persisted. Recorded calls and cost remain available."
-          : "The current node may finish and incur cost."}</p>
+          : "Sent requests may still incur cost; wait for cancellation confirmation."}</p>
       </div>
       {query.isPending ? <p role="status">Reading run control…</p> : null}
       {canRequest ? <button type="button" disabled={mutation.isPending} onClick={submit}>
@@ -65,7 +65,7 @@ function EnabledCancellation({ attempt }: { attempt: RawRunAttempt }) {
       {mutation.isError && state !== "cancel_requested" && state !== "cancelled" ? <p role="alert">Cancellation was not confirmed. Check status or retry the same request; do not assume the agent has stopped.</p> : null}
       {state !== "cancelled" ? <details className="run-cancellation__limits">
         <summary>Cancellation limits</summary>
-        <p>Cooperative stop at the next graph node; this does not kill a provider request or sandbox process.</p>
+        <p>Supported model requests are interrupted locally. Tools and custom models stop at a graph boundary; provider-side work or billing may continue.</p>
         <p>Automatic checks are bounded. If confirmation does not arrive, check status manually; a crashed worker is not automatically recovered.</p>
       </details> : null}
     </section>

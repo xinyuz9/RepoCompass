@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, sentinel
 
 import pytest
+import httpx
 
 from repocompass.models import config, deepseek, factory, openai
 from repocompass.models.config import (
@@ -17,6 +18,8 @@ MODEL_ENVIRONMENT_VARIABLES = (
     "REPOCOMPASS_MODEL",
     "REPOCOMPASS_BASE_URL",
     "REPOCOMPASS_API_KEY",
+    "REPOCOMPASS_MODEL_TIMEOUT_SECONDS",
+    "REPOCOMPASS_ATTEMPT_TIMEOUT_SECONDS",
 )
 
 
@@ -108,6 +111,9 @@ def test_create_deepseek_model_keeps_provider_parameters_local(
         api_key="deepseek-test-key",
         base_url="https://api.deepseek.com",
         temperature=0.0,
+        timeout=httpx.Timeout(60.0, connect=10.0),
+        model_call_timeout=60.0,
+        max_retries=0,
         use_responses_api=False,
         extra_body={"thinking": {"type": "disabled"}},
         metadata={
@@ -134,6 +140,9 @@ def test_create_openai_model_excludes_deepseek_parameters(
         model="test-openai-model",
         api_key="openai-test-key",
         use_responses_api=False,
+        timeout=httpx.Timeout(60.0, connect=10.0),
+        model_call_timeout=60.0,
+        max_retries=0,
         metadata={
             "repocompass_provider": "openai",
             "repocompass_model": "test-openai-model",
@@ -203,3 +212,28 @@ def test_create_workflow_models_constructs_one_shared_client(
 
     assert models == WorkflowModels.from_single_model(model)
     create_chat_model.assert_called_once_with(settings)
+
+
+@pytest.mark.parametrize("provider", ["openai", "deepseek"])
+def test_real_adapters_enforce_finite_timeouts_and_disable_sdk_retries(provider):
+    from repocompass.models.control import ModelCallPolicy
+
+    policy = ModelCallPolicy(2.5, 30)
+    if provider == "openai":
+        settings = OpenAIModelSettings(
+            model="offline", api_key="not-a-key", call_policy=policy
+        )
+    else:
+        settings = DeepSeekModelSettings(
+            model="offline",
+            api_key="not-a-key",
+            base_url="http://127.0.0.1:1/v1",
+            call_policy=policy,
+        )
+    models = factory.create_workflow_models(settings)
+    assert models.call_policy == policy
+    assert models.explorer.max_retries == 0
+    assert models.explorer.root_client.max_retries == 0
+    assert models.explorer.root_async_client.max_retries == 0
+    assert models.explorer.request_timeout == httpx.Timeout(2.5, connect=2.5)
+    assert models.explorer.model_call_timeout == 2.5

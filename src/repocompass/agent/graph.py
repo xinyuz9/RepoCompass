@@ -48,6 +48,7 @@ from repocompass.agent.tool_adapters import (
     create_browser_tool,
 )
 from repocompass.models import WorkflowModels
+from repocompass.models.control import check_attempt_deadline
 from repocompass.tools.gateway import ToolGateway, create_repository_tool_registry
 from repocompass.tools.browser import BrowserPolicy
 from repocompass.tools.contracts import ToolCapability
@@ -109,13 +110,13 @@ def create_agent_graph(
     builder = StateGraph(RepoCompassState)
 
     def add_node(name, action):
-        if cancellation_check is not None:
-
-            def before_node(state, config: RunnableConfig):
+        def before_node(state, config: RunnableConfig):
+            check_attempt_deadline()
+            if cancellation_check is not None:
                 cancellation_check(config)
-                return state
+            return state
 
-            action = RunnableLambda(before_node) | action
+        action = RunnableLambda(before_node) | action
         builder.add_node(name, action)
 
     add_node(
