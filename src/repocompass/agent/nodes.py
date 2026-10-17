@@ -1499,7 +1499,6 @@ class CostBudgetFinalizerInput(TypedDict):
 
     objective: str
     repo_path: Path
-    architecture_preset: NotRequired[str]
     candidate_result: CandidateResult | None
     cost_budget: AttemptCostBudgetSummary | None
     investigation_structure: InvestigationStructure | None
@@ -1510,6 +1509,7 @@ class CostBudgetFinalizerUpdate(TypedDict):
     termination_status: TerminationStatus
     step_stop_reason: str
     final_result: FinalResult
+    investigation_structure: InvestigationStructure | None
 
 
 def finalize_cost_budget_exhausted(
@@ -1543,7 +1543,7 @@ def finalize_cost_budget_exhausted(
     if structure is not None:
         structure = revalidate_investigation_structure(structure)
     candidate = state["candidate_result"]
-    if candidate is not None and state.get("architecture_preset") == "tool_wrapper":
+    if candidate is not None:
         _, checked_structure, issues = _validate_candidate_evidence(
             state["repo_path"], objective, candidate
         )
@@ -1578,6 +1578,7 @@ def finalize_cost_budget_exhausted(
         "termination_status": "exhausted",
         "step_stop_reason": stop_reason,
         "final_result": result,
+        "investigation_structure": result.structure,
     }
 
 

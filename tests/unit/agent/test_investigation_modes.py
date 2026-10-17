@@ -164,11 +164,12 @@ def test_quick_rejects_empty_invalid_and_escaping_evidence(tmp_path, bad):
     assert result.final_result.summary != bad.summary
 
 
-def test_quick_cost_stop_does_not_publish_unvalidated_candidate(tmp_path):
+@pytest.mark.parametrize("preset", ["tool_wrapper", "evaluator_loop_context_builder"])
+def test_cost_stop_does_not_publish_unvalidated_candidate(tmp_path, preset):
     state = dict(
         repo_path=tmp_path,
         objective="Locate source",
-        architecture_preset="tool_wrapper",
+        architecture_preset=preset,
         candidate_result=candidate("../outside.py"),
         cost_budget=None,
         investigation_structure=None,
@@ -178,6 +179,24 @@ def test_quick_cost_stop_does_not_publish_unvalidated_candidate(tmp_path):
     assert result["termination_status"] == "exhausted"
     assert result["final_result"].evidence == []
     assert result["final_result"].relevant_files == []
+    assert result["investigation_structure"] is None
+
+
+def test_cost_stop_preserves_validated_source_without_acceptance(tmp_path):
+    (tmp_path / "example.py").write_text("value = 1\n")
+    result = finalize_cost_budget_exhausted(
+        dict(
+            repo_path=tmp_path,
+            objective="Locate source",
+            candidate_result=candidate(),
+            cost_budget=None,
+            investigation_structure=None,
+            step_stop_reason="attempt_cost_reservation_denied",
+        )
+    )
+    assert result["termination_status"] == "exhausted"
+    assert result["final_result"].relevant_files == ["example.py"]
+    assert result["investigation_structure"] == result["final_result"].structure
 
 
 def test_quick_keeps_gateway_and_call_limits(tmp_path):
