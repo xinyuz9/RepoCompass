@@ -163,6 +163,9 @@ class InvestigationService:
             exclude={"request_id"},
             exclude_computed_fields=True,
         )
+        # Keep pre-mode detailed request IDs replayable after upgrading.
+        if payload.get("investigation_mode") == "detailed":
+            payload.pop("investigation_mode")
         encoded = json.dumps(
             payload,
             ensure_ascii=False,
@@ -342,6 +345,7 @@ class InvestigationService:
                         thread_id=reservation.thread_id,
                         repo_path=request.repo_path,
                         objective=request.objective,
+                        investigation_mode=request.investigation_mode,
                         max_tool_calls_per_step=request.max_tool_calls_per_step,
                         max_explorer_calls_per_step=(
                             request.max_explorer_calls_per_step

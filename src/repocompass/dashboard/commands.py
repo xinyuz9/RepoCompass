@@ -234,6 +234,7 @@ class DashboardCommandService:
                 request_id=command.request_id,
                 repo_path=context.repository_root,
                 objective=_apply_focus(command.goal, focus_path),
+                investigation_mode=command.investigation_mode,
                 human_review_policy=command.human_review_policy,
                 memory_retrieval_enabled=command.memory_retrieval_enabled,
                 max_attempt_cost_usd=command.max_attempt_cost_usd,

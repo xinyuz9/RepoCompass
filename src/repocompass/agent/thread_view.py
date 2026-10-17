@@ -25,6 +25,7 @@ from repocompass.agent.lifecycle import (
 )
 from repocompass.agent.planning import InvestigationPlan
 from repocompass.agent.result import FinalResult, revalidate_final_result
+from repocompass.agent.architecture import AgentArchitecturePreset
 from repocompass.agent.routing import TerminationStatus
 from repocompass.agent.structural_artifacts import (
     InvestigationStructure,
@@ -59,6 +60,7 @@ class ThreadInvestigationView(CheckpointSafeModel):
     execution_state: ThreadExecutionState
     turn_number: int = Field(ge=1)
     objective: str = Field(min_length=1)
+    architecture_preset: AgentArchitecturePreset | None = None
     plan: InvestigationPlan | None = None
     plan_revision_count: int = Field(ge=0)
     max_plan_revisions: int = Field(ge=1)
@@ -205,6 +207,11 @@ def build_thread_investigation_view(
         execution_state=execution_state,
         turn_number=turn_number,
         objective=objective.strip(),
+        architecture_preset=(
+            AgentArchitecturePreset(values["architecture_preset"])
+            if "architecture_preset" in values
+            else None
+        ),
         plan=_optional_model(values, "investigation_plan", InvestigationPlan),
         plan_revision_count=plan_revision_count,
         max_plan_revisions=max_plan_revisions,

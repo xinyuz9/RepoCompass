@@ -351,8 +351,10 @@ def test_runner_marks_attempt_failed_after_provider_error(tmp_path: Path) -> Non
         )
 
 
-def test_graph_closes_deterministically_after_planner_cost_overshoot(
+@pytest.mark.parametrize("mode", ["quick", "detailed"])
+def test_graph_closes_deterministically_after_first_model_cost_overshoot(
     tmp_path: Path,
+    mode: str,
 ) -> None:
     (tmp_path / "example.py").write_text("value = True\n", encoding="utf-8")
     pricing = create_pricing_table(
@@ -383,6 +385,7 @@ def test_graph_closes_deterministically_after_planner_cost_overshoot(
                 max_tool_calls_per_step=2,
                 max_explorer_calls_per_step=2,
                 max_attempt_cost_usd="0.0001",
+                investigation_mode=mode,
             )
         )
 
@@ -398,9 +401,11 @@ def test_graph_closes_deterministically_after_planner_cost_overshoot(
             outcome.usage_cost_report.budget.reason
             is CostBudgetReason.POST_RESPONSE_OVERSHOOT
         )
-        assert outcome.usage_cost_report.budget.overshoot_usd == "0.00002"
+        assert outcome.usage_cost_report.budget.overshoot_usd == (
+            "0.00014" if mode == "quick" else "0.00002"
+        )
         assert [item.role for item in store.list_model_invocations("cost-run")] == [
-            ModelRole.PLANNER
+            ModelRole.EXPLORER if mode == "quick" else ModelRole.PLANNER
         ]
         attempt = store.get_attempt("cost-run")
         assert attempt is not None
@@ -410,6 +415,7 @@ def test_graph_closes_deterministically_after_planner_cost_overshoot(
         ] == [
             "plan_investigation",
             "agent",
+            *(["build_candidate"] if mode == "quick" else []),
             "finalize_cost_budget_exhausted",
         ]
 

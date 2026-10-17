@@ -195,6 +195,11 @@ def test_start_is_durably_idempotent_and_preserves_all_budgets(tmp_path: Path) -
     assert run_request.memory_retrieval_enabled is True
     assert run_request.max_repository_memory_results == 4
     assert run_request.max_episodic_memory_results == 3
+    assert run_request.investigation_mode == "detailed"
+
+    changed_mode = request.model_copy(update={"investigation_mode": "quick"})
+    with pytest.raises(ServiceOperationConflictError, match="different payload"):
+        service.start_investigation(changed_mode)
 
     changed = request.model_copy(update={"objective": "A changed objective."})
     with pytest.raises(ServiceOperationConflictError, match="different payload"):

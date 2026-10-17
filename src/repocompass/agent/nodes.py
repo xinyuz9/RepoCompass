@@ -47,6 +47,7 @@ from repocompass.agent.context_gathering import (
 )
 from repocompass.agent.cost import AttemptCostBudgetSummary
 from repocompass.agent.evaluation import (
+    CandidateValidation,
     EvaluationReport,
     SemanticAssessment,
     ValidationIssue,
@@ -88,6 +89,7 @@ from repocompass.agent.routing import (
     TerminationStatus,
 )
 from repocompass.agent.structural_artifacts import (
+    StructureBuildResult,
     InvestigationStructure,
     build_investigation_structure,
     revalidate_investigation_structure,
@@ -951,6 +953,65 @@ class EvaluatorNodeUpdate(TypedDict):
 EvaluatorNode = Callable[[EvaluatorInput], EvaluatorNodeUpdate]
 
 
+def _validate_candidate_evidence(
+    repo_path: Path, objective: str, candidate: CandidateResult
+) -> tuple[CandidateValidation, StructureBuildResult, tuple[ValidationIssue, ...]]:
+    """Shared source and structural checks; never invokes a model."""
+    validation = validate_candidate(repo_path, candidate)
+    structure_result = build_investigation_structure(
+        repo_path=repo_path,
+        objective=objective,
+        candidate=candidate,
+        valid_evidence_indices=frozenset(
+            excerpt.evidence_index for excerpt in validation.evidence_pack
+        ),
+    )
+    issues = (
+        *validation.issues,
+        *(
+            ValidationIssue(
+                code=issue.code,
+                message=issue.message,
+                path=issue.path,
+                evidence_index=issue.evidence_index,
+                relation_index=issue.relation_index,
+            )
+            for issue in structure_result.issues
+        ),
+    )
+    return validation, structure_result, issues
+
+
+def validate_quick_candidate(state: EvaluatorInput) -> dict:
+    """Gate quick lookup on real source evidence, without a semantic verdict."""
+    candidate = state["candidate_result"]
+    if candidate is None:
+        raise ValueError("Cannot validate without a CandidateResult")
+    _, structure, issues = _validate_candidate_evidence(
+        state["repo_path"], state["objective"], candidate
+    )
+    if issues:
+        return {
+            "investigation_structure": None,
+            "termination_status": "exhausted",
+            "step_stop_reason": "invalid_candidate_evidence",
+            "final_result": FinalResult(
+                relevant_files=[],
+                evidence=[],
+                summary="Quick lookup could not produce valid source evidence.",
+                unresolved_questions=list(
+                    dict.fromkeys(
+                        [
+                            state["objective"],
+                            *(f"{issue.code}: {issue.message}" for issue in issues),
+                        ]
+                    )
+                ),
+            ),
+        }
+    return {"investigation_structure": structure.artifact}
+
+
 def create_evaluate_candidate_node(
     model: BaseChatModel,
     recorder: RawRunRecorder | None = None,
@@ -979,26 +1040,11 @@ def create_evaluate_candidate_node(
         if investigation_plan is None:
             raise ValueError("Cannot evaluate without an InvestigationPlan")
 
-        validation = validate_candidate(state["repo_path"], candidate)
-        structure_result = build_investigation_structure(
-            repo_path=state["repo_path"],
-            objective=state["objective"],
-            candidate=candidate,
-            valid_evidence_indices=frozenset(
-                excerpt.evidence_index for excerpt in validation.evidence_pack
-            ),
-        )
-        structure_issues = tuple(
-            ValidationIssue(
-                code=issue.code,
-                message=issue.message,
-                path=issue.path,
-                evidence_index=issue.evidence_index,
-                relation_index=issue.relation_index,
+        validation, structure_result, deterministic_issues = (
+            _validate_candidate_evidence(
+                state["repo_path"], state["objective"], candidate
             )
-            for issue in structure_result.issues
         )
-        deterministic_issues = (*validation.issues, *structure_issues)
         gathered = gather_evaluator_context(
             repo_path=state["repo_path"],
             objective=state["objective"],
@@ -1452,6 +1498,8 @@ class CostBudgetFinalizerInput(TypedDict):
     """State available to the model-free cost-budget fallback."""
 
     objective: str
+    repo_path: Path
+    architecture_preset: NotRequired[str]
     candidate_result: CandidateResult | None
     cost_budget: AttemptCostBudgetSummary | None
     investigation_structure: InvestigationStructure | None
@@ -1495,6 +1543,13 @@ def finalize_cost_budget_exhausted(
     if structure is not None:
         structure = revalidate_investigation_structure(structure)
     candidate = state["candidate_result"]
+    if candidate is not None and state.get("architecture_preset") == "tool_wrapper":
+        _, checked_structure, issues = _validate_candidate_evidence(
+            state["repo_path"], objective, candidate
+        )
+        structure = checked_structure.artifact if not issues else None
+        if issues:
+            candidate = None
     if candidate is None:
         result = FinalResult(
             relevant_files=[],

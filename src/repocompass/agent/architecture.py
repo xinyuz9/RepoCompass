@@ -1,5 +1,7 @@
 """Content-addressed static feature profiles for Agent architecture ablations."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 from enum import StrEnum
@@ -12,6 +14,17 @@ from repocompass.agent.domain_model import CheckpointSafeModel
 from repocompass.tools.contracts import Sha256Digest
 
 AGENT_ARCHITECTURE_SCHEMA_VERSION = 1
+
+InvestigationMode = Literal["quick", "detailed"]
+
+
+def profile_for_mode(mode: InvestigationMode) -> AgentArchitectureProfile:
+    return create_agent_architecture_profile(
+        {
+            "quick": AgentArchitecturePreset.TOOL_WRAPPER,
+            "detailed": AgentArchitecturePreset.EVALUATOR_LOOP_CONTEXT_BUILDER,
+        }[mode]
+    )
 
 
 class AgentArchitecturePreset(StrEnum):

@@ -221,7 +221,7 @@ def test_memory_policy_changes_protocol_before_any_network_or_spend(
         live_cli.execute(args)
     path = args.output / "config.json"
     config = json.loads(path.read_text())
-    assert config["schema_version"] == 21
+    assert config["schema_version"] == 22
     assert config["source_read_policy"] == "component_nofollow_bounded_v2"
     assert (
         config["search_runtime_policy"] == "bounded_json_stream_no_config_no_follow_v2"

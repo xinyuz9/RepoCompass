@@ -26,8 +26,10 @@ from tests.model_doubles import (
 )
 
 
+@pytest.mark.parametrize("mode", ["quick", "detailed"])
 def test_cancellation_waits_for_current_node_preserves_usage_and_survives_restart(
     tmp_path: Path,
+    mode: str,
 ):
     (tmp_path / "example.py").write_text("value = 1\n")
     entered, release = Event(), Event()
@@ -43,6 +45,15 @@ def test_cancellation_waits_for_current_node_preserves_usage_and_survives_restar
     def plan(_):
         entered.set()
         assert release.wait(5)
+        if mode == "quick":
+            return AIMessage(
+                content="source",
+                usage_metadata={
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "total_tokens": 120,
+                },
+            )
         return {
             "parsed": default_investigation_plan(),
             "parsing_error": None,
@@ -57,6 +68,8 @@ def test_cancellation_waits_for_current_node_preserves_usage_and_survives_restar
         }
 
     models.planner.with_structured_output.return_value = RunnableLambda(plan)
+    if mode == "quick":
+        models.explorer.bind_tools.return_value = RunnableLambda(plan)
     database = tmp_path / "checkpoints.sqlite"
     with (
         open_sqlite_checkpointer(database) as checkpointer,
@@ -78,6 +91,7 @@ def test_cancellation_waits_for_current_node_preserves_usage_and_survives_restar
                 RunRequest(
                     repo_path=tmp_path,
                     objective="Inspect source",
+                    investigation_mode=mode,
                     max_tool_calls_per_step=3,
                     max_explorer_calls_per_step=2,
                 ),
@@ -107,14 +121,17 @@ def test_cancellation_waits_for_current_node_preserves_usage_and_survives_restar
         assert raw.get_attempt("run-1").status.value == "completed"
         assert outcome.trace.events[-1].payload["cancellation_request_id"] == "cancel-1"
         assert outcome.trace.events[-1].payload["termination_status"] == "cancelled"
-        assert [e.node for e in outcome.trace.events if e.node] == [
-            "plan_investigation"
-        ]
+        assert [e.node for e in outcome.trace.events if e.node] == (
+            ["plan_investigation", "agent"]
+            if mode == "quick"
+            else ["plan_investigation"]
+        )
         assert len(raw.list_model_invocations("run-1")) == 1
         usage = raw.list_model_invocations("run-1")[0].usage
         assert usage.input_tokens == 100 and usage.output_tokens == 20
 
     models.planner.with_structured_output.return_value = RunnableLambda(forbidden)
+    models.explorer.bind_tools.return_value = RunnableLambda(forbidden)
     with (
         open_sqlite_checkpointer(database) as checkpointer,
         open_raw_run_store(tmp_path / "raw.sqlite") as raw,

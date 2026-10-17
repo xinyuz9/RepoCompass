@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from repocompass.agent.context import ContextPack, MemoryRecallReport
+from repocompass.agent.architecture import InvestigationMode
 from repocompass.agent.cost import (
     AttemptUsageCostReport,
     validate_cost_budget_usd,
@@ -92,6 +93,17 @@ class StartInvestigationRequest(_ServiceModel):
     request_id: str = Field(pattern=REQUEST_ID_PATTERN)
     repo_path: Path
     objective: str = Field(min_length=1, max_length=16_384)
+    investigation_mode: InvestigationMode = "detailed"
+
+    @model_validator(mode="after")
+    def require_detailed_review(self):
+        if (
+            self.investigation_mode == "quick"
+            and self.human_review_policy is not HumanReviewPolicy.NEVER
+        ):
+            raise ValueError("Human review requires detailed investigation mode")
+        return self
+
     max_tool_calls_per_step: int = Field(
         default=DEFAULT_MAX_TOOL_CALLS_PER_STEP,
         ge=1,

@@ -1,6 +1,7 @@
 """Real SDK + production graph denial checks using an in-process HTTP mock."""
 
 import httpx
+import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 
 from repocompass.agent.runner import AgentRunner, RunRequest
@@ -14,7 +15,8 @@ from repocompass.storage.raw_store import open_raw_run_store
 from pathlib import Path
 
 
-def test_graph_stops_before_paid_http_without_fake_failed_usage(tmp_path):
+@pytest.mark.parametrize("mode", ["quick", "detailed"])
+def test_graph_stops_before_paid_http_without_fake_failed_usage(tmp_path, mode):
     prices = load_pricing_table_file(
         Path("examples/pricing.openai-standard-2026-09-05.json")
     )
@@ -56,6 +58,7 @@ def test_graph_stops_before_paid_http_without_fake_failed_usage(tmp_path):
             RunRequest(
                 repo_path=repo,
                 objective="Find the public entrypoint.",
+                investigation_mode=mode,
                 max_tool_calls_per_step=4,
                 max_explorer_calls_per_step=4,
                 max_attempt_cost_usd="0.000001",

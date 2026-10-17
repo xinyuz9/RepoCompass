@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import ConfigDict, Field, JsonValue, field_validator, model_validator
 
 from repocompass.agent.candidate import CandidateResult
+from repocompass.agent.architecture import AgentArchitecturePreset, InvestigationMode
 from repocompass.agent.context import ContextPack
 from repocompass.agent.cost import (
     AttemptUsageCostReport,
@@ -284,6 +285,7 @@ class DashboardThreadView(_DashboardModel):
     execution_state: ThreadExecutionState
     turn_number: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
     objective: str = Field(min_length=1, max_length=16_384)
+    architecture_preset: AgentArchitecturePreset | None = None
     plan: InvestigationPlan | None = None
     plan_revision_count: int = Field(ge=0, le=MAX_SAFE_JSON_INTEGER)
     max_plan_revisions: int = Field(ge=1, le=MAX_SAFE_JSON_INTEGER)
@@ -316,6 +318,7 @@ class DashboardThreadView(_DashboardModel):
             execution_state=view.execution_state,
             turn_number=view.turn_number,
             objective=view.objective,
+            architecture_preset=view.architecture_preset,
             plan=view.plan,
             plan_revision_count=view.plan_revision_count,
             max_plan_revisions=view.max_plan_revisions,
@@ -431,12 +434,22 @@ class DashboardStartCommand(_DashboardModel):
     schema_version: Literal[1] = DASHBOARD_SCHEMA_VERSION
     request_id: str = Field(pattern=REQUEST_ID_PATTERN)
     goal: str = Field(min_length=1, max_length=16_384)
+    investigation_mode: InvestigationMode = "detailed"
     expected_repository_id: Sha256Digest
     expected_commit_sha: CommitSha | None
     focus_path: str = Field(default=".", min_length=1, max_length=2_048)
     human_review_policy: HumanReviewPolicy = HumanReviewPolicy.BEFORE_FINALIZE
     memory_retrieval_enabled: bool = True
     max_attempt_cost_usd: str | None = None
+
+    @model_validator(mode="after")
+    def require_detailed_review(self):
+        if (
+            self.investigation_mode == "quick"
+            and self.human_review_policy is not HumanReviewPolicy.NEVER
+        ):
+            raise ValueError("Human review requires detailed investigation mode")
+        return self
 
     @field_validator("human_review_policy", mode="before")
     @classmethod

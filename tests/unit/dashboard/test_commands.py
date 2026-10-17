@@ -292,6 +292,30 @@ class _Query:
         )
 
 
+@pytest.mark.parametrize("mode", ["quick", "detailed"])
+def test_start_forwards_mode_without_changing_workspace_or_budget(tmp_path, mode):
+    from repocompass.agent.lifecycle import HumanReviewPolicy
+
+    _, context = _create_repository(tmp_path)
+    lifecycle = _Lifecycle()
+    service = DashboardCommandService(_Query(context), lifecycle_service=lifecycle)
+    service.start_investigation(
+        DashboardStartCommand(
+            request_id="mode-start",
+            goal="Locate source",
+            investigation_mode=mode,
+            expected_repository_id=context.repository_id,
+            expected_commit_sha=context.commit_sha,
+            human_review_policy=HumanReviewPolicy.NEVER,
+            max_attempt_cost_usd="0.25",
+        )
+    )
+    received = lifecycle.start_requests[0]
+    assert received.investigation_mode == mode
+    assert received.repo_path == context.repository_root
+    assert received.max_attempt_cost_usd == "0.25"
+
+
 class _Lifecycle:
     def __init__(self) -> None:
         self.operations: dict[str, InvestigationOperationSnapshot] = {}

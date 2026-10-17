@@ -27,6 +27,10 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 from repocompass.agent.architecture import (
     DEFAULT_AGENT_ARCHITECTURE,
     AgentArchitectureProfile,
+    AgentArchitecturePreset,
+    InvestigationMode,
+    create_agent_architecture_profile,
+    profile_for_mode,
 )
 from repocompass.agent.context import ContextItem, ContextPack
 from repocompass.agent.context_builder import DEFAULT_CONTEXT_BUDGET_TOKENS
@@ -430,6 +434,7 @@ class RunRequest(BaseModel):
     )
 
     thread_id: str | None = Field(default=None, min_length=1, max_length=256)
+    investigation_mode: InvestigationMode | None = None
     repo_path: Path
     objective: str = Field(min_length=1)
     max_tool_calls_per_step: int = Field(gt=0)
@@ -842,13 +847,28 @@ class AgentRunner:
         if self._cancellation_store is not None:
             self._cancellation_store.check(config["configurable"]["repocompass_run_id"])
 
-    def inspect_thread(self, request: ResumeRequest) -> ThreadInvestigationView:
-        """Read the latest safe public view without executing any graph node."""
-
-        thread_id = _normalize_identifier(request.thread_id, name="thread_id")
-        graph = create_agent_graph(
+    def _create_graph(
+        self,
+        *,
+        thread_id: str | None = None,
+        architecture_profile: AgentArchitectureProfile | None = None,
+    ) -> CompiledStateGraph:
+        """Bind graph features to the thread, without mutating the shared Runner."""
+        if thread_id is not None:
+            checkpoint = self._checkpointer.get(_thread_config(thread_id))
+            preset = (
+                checkpoint["channel_values"].get("architecture_preset")
+                if checkpoint
+                else None
+            )
+            if preset is not None:
+                architecture_profile = create_agent_architecture_profile(
+                    AgentArchitecturePreset(preset)
+                )
+        # Legacy checkpoints retain the operator's configured profile.
+        return create_agent_graph(
             self._models,
-            architecture_profile=self._architecture_profile,
+            architecture_profile=architecture_profile or self._architecture_profile,
             checkpointer=self._checkpointer,
             raw_run_recorder=self._raw_run_recorder,
             memory_store=self._memory_store,
@@ -856,6 +876,12 @@ class AgentRunner:
             cancellation_check=self._cancellation_check,
             browser_policy=self._browser_policy,
         )
+
+    def inspect_thread(self, request: ResumeRequest) -> ThreadInvestigationView:
+        """Read the latest safe public view without executing any graph node."""
+
+        thread_id = _normalize_identifier(request.thread_id, name="thread_id")
+        graph = self._create_graph(thread_id=thread_id)
         snapshot = graph.get_state(_thread_config(thread_id))
         if not snapshot.values:
             raise ValueError(f"Checkpoint thread does not exist: {thread_id}")
@@ -879,16 +905,7 @@ class AgentRunner:
             or self._raw_run_store.get_attempt(run_id) != attempt
         ):
             raise ValueError("runner raw store does not match recovery attempt")
-        graph = create_agent_graph(
-            self._models,
-            architecture_profile=self._architecture_profile,
-            checkpointer=self._checkpointer,
-            raw_run_recorder=self._raw_run_recorder,
-            memory_store=self._memory_store,
-            memory_clock=self._episode_clock_factory,
-            cancellation_check=self._cancellation_check,
-            browser_policy=self._browser_policy,
-        )
+        graph = self._create_graph(thread_id=thread_id)
         snapshot = graph.get_state(_thread_config(thread_id))
         if (
             not snapshot.values
@@ -959,16 +976,7 @@ class AgentRunner:
         from repocompass.agent.conversation import build_public_conversation
 
         thread_id = _normalize_identifier(request.thread_id, name="thread_id")
-        graph = create_agent_graph(
-            self._models,
-            architecture_profile=self._architecture_profile,
-            checkpointer=self._checkpointer,
-            raw_run_recorder=self._raw_run_recorder,
-            memory_store=self._memory_store,
-            memory_clock=self._episode_clock_factory,
-            cancellation_check=self._cancellation_check,
-            browser_policy=self._browser_policy,
-        )
+        graph = self._create_graph(thread_id=thread_id)
         return build_public_conversation(
             thread_id=thread_id,
             snapshot=graph.get_state(_thread_config(thread_id)),
@@ -1007,8 +1015,13 @@ class AgentRunner:
             )
         if request.memory_retrieval_enabled and self._memory_store is None:
             raise ValueError("memory retrieval requires a memory store")
+        profile = (
+            profile_for_mode(request.investigation_mode)
+            if request.investigation_mode is not None
+            else self._architecture_profile
+        )
         if (
-            not self._architecture_profile.evaluator_enabled
+            not profile.evaluator_enabled
             and request.human_review_policy is not HumanReviewPolicy.NEVER
         ):
             raise ValueError(
@@ -1039,16 +1052,8 @@ class AgentRunner:
             max_repository_memory_results=request.max_repository_memory_results,
             max_episodic_memory_results=request.max_episodic_memory_results,
         )
-        graph = create_agent_graph(
-            self._models,
-            architecture_profile=self._architecture_profile,
-            checkpointer=self._checkpointer,
-            raw_run_recorder=self._raw_run_recorder,
-            memory_store=self._memory_store,
-            memory_clock=self._episode_clock_factory,
-            cancellation_check=self._cancellation_check,
-            browser_policy=self._browser_policy,
-        )
+        initial_state["architecture_preset"] = profile.preset.value
+        graph = self._create_graph(architecture_profile=profile)
         config = _thread_config(thread_id)
         if graph.get_state(config).values:
             raise ValueError(f"Checkpoint thread already exists: {thread_id}")
@@ -1069,16 +1074,7 @@ class AgentRunner:
             name="thread_id",
         )
 
-        graph = create_agent_graph(
-            self._models,
-            architecture_profile=self._architecture_profile,
-            checkpointer=self._checkpointer,
-            raw_run_recorder=self._raw_run_recorder,
-            memory_store=self._memory_store,
-            memory_clock=self._episode_clock_factory,
-            cancellation_check=self._cancellation_check,
-            browser_policy=self._browser_policy,
-        )
+        graph = self._create_graph(thread_id=thread_id)
 
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)
@@ -1099,16 +1095,7 @@ class AgentRunner:
         """Consume one exact pending Human-review interrupt."""
 
         thread_id = _normalize_identifier(request.thread_id, name="thread_id")
-        graph = create_agent_graph(
-            self._models,
-            architecture_profile=self._architecture_profile,
-            checkpointer=self._checkpointer,
-            raw_run_recorder=self._raw_run_recorder,
-            memory_store=self._memory_store,
-            memory_clock=self._episode_clock_factory,
-            cancellation_check=self._cancellation_check,
-            browser_policy=self._browser_policy,
-        )
+        graph = self._create_graph(thread_id=thread_id)
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)
         if not snapshot.values:
@@ -1158,16 +1145,7 @@ class AgentRunner:
         """Start a new Human turn on one completed checkpoint thread."""
 
         thread_id = _normalize_identifier(request.thread_id, name="thread_id")
-        graph = create_agent_graph(
-            self._models,
-            architecture_profile=self._architecture_profile,
-            checkpointer=self._checkpointer,
-            raw_run_recorder=self._raw_run_recorder,
-            memory_store=self._memory_store,
-            memory_clock=self._episode_clock_factory,
-            cancellation_check=self._cancellation_check,
-            browser_policy=self._browser_policy,
-        )
+        graph = self._create_graph(thread_id=thread_id)
         config = _thread_config(thread_id)
         snapshot = graph.get_state(config)
         if not snapshot.values:

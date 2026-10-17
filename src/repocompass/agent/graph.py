@@ -31,6 +31,7 @@ from repocompass.agent.nodes import (
     prepare_human_review,
     review_final_candidate,
     seed_tool_wrapper_plan,
+    validate_quick_candidate,
 )
 from repocompass.agent.progress import assess_tool_progress
 from repocompass.agent.routing import (
@@ -186,6 +187,7 @@ def create_agent_graph(
     add_node("prepare_human_review", prepare_human_review)
     add_node("review_final_candidate", review_final_candidate)
     add_node("finalize", finalize_candidate)
+    add_node("validate_quick_candidate", validate_quick_candidate)
 
     explorer_invocation_routes = {
         "agent": "agent",
@@ -200,7 +202,7 @@ def create_agent_graph(
         post_model_routes
         if architecture_profile.evaluator_enabled
         else {
-            "continue": "prepare_human_review",
+            "continue": "validate_quick_candidate",
             "cost_budget_exhausted": "finalize_cost_budget_exhausted",
         }
     )
@@ -265,6 +267,11 @@ def create_agent_graph(
         },
     )
     builder.add_edge("prepare_human_review", "review_final_candidate")
+    builder.add_conditional_edges(
+        "validate_quick_candidate",
+        lambda state: "invalid" if state.get("final_result") is not None else "valid",
+        {"invalid": END, "valid": "prepare_human_review"},
+    )
     builder.add_conditional_edges(
         "review_final_candidate",
         route_human_decision,

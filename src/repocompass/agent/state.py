@@ -47,6 +47,7 @@ class RepoCompassState(MessagesState):
 
     repo_path: Path
     objective: str
+    architecture_preset: str
     turn_number: int
     turn_history: list[TurnRecord]
     review_history: HumanReviewHistory | None

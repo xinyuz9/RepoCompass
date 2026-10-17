@@ -22,7 +22,11 @@ from repocompass.agent.result import FinalResult
 from repocompass.agent.runner import AgentRunner, RunRequest
 from repocompass.agent.trace import TraceEventKind
 from repocompass.models import WorkflowModels
-from tests.model_doubles import candidate_from_final_result, with_scripted_planner
+from tests.model_doubles import (
+    candidate_from_final_result,
+    with_scripted_planner,
+    assert_final_result_core,
+)
 
 
 def _scripted_model(final_result: FinalResult) -> MagicMock:
@@ -125,13 +129,14 @@ def test_tool_wrapper_profile_skips_planner_and_evaluator_and_binds_lexical_tool
         "plan_investigation",
         "agent",
         "build_candidate",
+        "validate_quick_candidate",
         "prepare_human_review",
         "review_final_candidate",
         "mark_investigation_accepted",
         "finalize",
     ]
     assert outcome.termination_status == "accepted"
-    assert outcome.final_result == result
+    assert_final_result_core(outcome.final_result, result)
     assert runner.architecture_profile.preset is AgentArchitecturePreset.TOOL_WRAPPER
     bound_tools = model.bind_tools.call_args.args[0]
     assert tuple(tool.name for tool in bound_tools) == (
