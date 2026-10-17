@@ -1,0 +1,35 @@
+# Opt-in interactive mode. Keep credentials outside the mounted repository.
+services:
+  repocompass:
+    command:
+      - --container-network
+      - --repo-path
+      - /workspace/repository
+      - --pricing-file
+      - /config/pricing.json
+      - --enable-lifecycle-mutations
+    env_file:
+      - path: ${REPOCOMPASS_ENV_FILE:?Set an absolute path to a provider env file}
+        format: raw
+    environment:
+      LANGSMITH_TRACING: "false"
+      LANGGRAPH_CLI_NO_ANALYTICS: "1"
+    volumes:
+      - type: bind
+        source: ${REPOCOMPASS_REPOSITORY:?Set an absolute path to a clean repository checkout}
+        target: /workspace/repository
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${REPOCOMPASS_PRICING_FILE:?Set an absolute path to reviewed model pricing}
+        target: /config/pricing.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: volume
+        source: investigation-data
+        target: /data
+
+volumes:
+  investigation-data:

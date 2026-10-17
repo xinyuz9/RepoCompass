@@ -57,9 +57,11 @@ def test_operator_browser_catalog_reaches_api_without_urls_or_new_http_authority
     assert runtime.main(arguments) == 0
 
 
-def test_runtime_serves_loopback_read_api_without_provider_credentials(
+@pytest.mark.parametrize("container_network", [False, True])
+def test_runtime_serves_local_read_api_without_provider_credentials(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    container_network: bool,
 ) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
@@ -82,6 +84,10 @@ def test_runtime_serves_loopback_read_api_without_provider_credentials(
         assert "/api/v1/threads/{thread_id}/responses" not in document["paths"]
         assert "/api/v1/memory/{memory_id}" not in document["paths"]
         assert "/api/v1/runs/{run_id}/cancellation" not in document["paths"]
+        assert (
+            client.get("/api/v1/system", headers={"host": "remote.example"}).status_code
+            == 400
+        )
 
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
@@ -89,6 +95,7 @@ def test_runtime_serves_loopback_read_api_without_provider_credentials(
 
     result = runtime.main(
         [
+            *(["--container-network"] if container_network else []),
             "--repo-path",
             str(repository),
             "--checkpoint-db",
@@ -103,7 +110,7 @@ def test_runtime_serves_loopback_read_api_without_provider_credentials(
     )
 
     assert result == 0
-    assert observed["host"] == "127.0.0.1"
+    assert observed["host"] == ("0.0.0.0" if container_network else "127.0.0.1")
     assert observed["port"] == 8766
     assert observed["proxy_headers"] is False
     assert observed["forwarded_allow_ips"] == ""
@@ -249,6 +256,14 @@ def test_runtime_parser_rejects_non_loopback_host_and_invalid_port(
 
     assert invalid_host.value.code == 2
     assert invalid_port.value.code == 2
+
+
+def test_container_network_rejects_ambiguous_host_selection(tmp_path):
+    with pytest.raises(SystemExit) as error:
+        runtime.main(
+            ["--repo-path", str(tmp_path), "--container-network", "--host", "127.0.0.1"]
+        )
+    assert error.value.code == 2
 
 
 def test_runtime_demo_is_ephemeral_read_only_and_credential_free(

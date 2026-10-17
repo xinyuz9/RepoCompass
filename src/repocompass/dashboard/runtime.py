@@ -1,4 +1,4 @@
-"""Credential-free, loopback-only runtime for the RepoCompass dashboard."""
+"""Local-first dashboard runtime with an explicit container-network opt-in."""
 
 from __future__ import annotations
 
@@ -114,6 +114,14 @@ def create_parser() -> argparse.ArgumentParser:
         choices=_LOOPBACK_HOSTS,
         default=DEFAULT_DASHBOARD_HOST,
     )
+    parser.add_argument(
+        "--container-network",
+        action="store_true",
+        help=(
+            "listen on 0.0.0.0 inside a container; publish its port to host "
+            "127.0.0.1 only (the API has no remote authentication)"
+        ),
+    )
     parser.add_argument("--port", type=int, default=DEFAULT_DASHBOARD_PORT)
     parser.add_argument(
         "--demo-turns",
@@ -182,6 +190,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = create_parser()
     argument_vector = list(sys.argv[1:] if argv is None else argv)
     arguments = parser.parse_args(argument_vector)
+    if arguments.container_network and _option_was_supplied(argument_vector, "--host"):
+        parser.error("--container-network cannot be combined with --host")
     if arguments.browser_page and not arguments.enable_lifecycle_mutations:
         parser.error("--browser-page requires --enable-lifecycle-mutations")
     try:
@@ -338,7 +348,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             uvicorn.run(
                 app,
-                host=arguments.host,
+                host="0.0.0.0" if arguments.container_network else arguments.host,
                 port=arguments.port,
                 log_level=arguments.log_level,
                 access_log=True,

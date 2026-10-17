@@ -1,0 +1,21 @@
+# Allow only build inputs. Credentials, history and datasets stay on the host.
+**
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!README.md
+!src/
+!src/**
+!ui/
+!ui/**
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/.git
+**/.venv
+**/__pycache__
+**/node_modules
+ui/test-results*
+ui/playwright-report
+src/repocompass/dashboard/static
