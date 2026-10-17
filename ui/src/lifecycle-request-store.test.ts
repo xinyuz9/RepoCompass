@@ -12,6 +12,26 @@ const STORAGE_KEY = "repocompass.pending-lifecycle.v1";
 afterEach(() => window.sessionStorage.clear());
 
 describe("lifecycle request recovery store", () => {
+  it("retains mode across refresh and rejects unsupported mode or review combinations", () => {
+    const draft = startDraft("quick", "Locate source");
+    draft.command.investigation_mode = "quick";
+    draft.command.human_review_policy = "never";
+    rememberLifecycleRequest(draft);
+    expect(readLifecycleRequests()[0]?.command).toEqual(draft.command);
+    const stored = JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!);
+    for (const mode of ["auto", null]) {
+      stored[0].command.investigation_mode = mode;
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+      expect(readLifecycleRequests()).toEqual([]);
+    }
+    stored[0].command.investigation_mode = "quick";
+    stored[0].command.human_review_policy = "before_finalize";
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    expect(readLifecycleRequests()).toEqual([]);
+    delete stored[0].command.investigation_mode;
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    expect(readLifecycleRequests()).toHaveLength(1);
+  });
   it("deduplicates by idempotency key and removes only an explicitly named request", () => {
     rememberLifecycleRequest(startDraft("request-1", "Trace the first path."));
     rememberLifecycleRequest(startDraft("request-1", "Trace the revised path."));

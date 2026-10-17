@@ -5,7 +5,7 @@ const baseURL = externalUrl ?? "http://127.0.0.1:8878";
 
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: ["**/cancellation.spec.ts", "**/recovery.spec.ts", "**/core-case.spec.ts"],
+  testIgnore: ["**/cancellation.spec.ts", "**/recovery.spec.ts", "**/core-case.spec.ts", "**/modes.spec.ts"],
   fullyParallel: false,
   workers: 1,
   retries: 0,

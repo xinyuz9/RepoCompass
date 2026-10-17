@@ -240,6 +240,7 @@ export interface HumanReviewRequest {
 }
 
 export interface ThreadInvestigationView {
+  architecture_preset?: "tool_wrapper" | "evaluator_loop" | "evaluator_loop_symbol_tools" | "evaluator_loop_context_builder" | null;
   schema_version: 1;
   thread_id: string;
   execution_state: ExecutionState;
@@ -320,6 +321,7 @@ export interface DashboardHumanResponseCommand {
 }
 
 export interface DashboardStartCommand {
+  investigation_mode?: "quick" | "detailed";
   schema_version: 1;
   request_id: string;
   expected_repository_id: string;

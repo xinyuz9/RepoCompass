@@ -115,6 +115,8 @@ function NewGoalWorkspace({
   const [focusPath, setFocusPath] = useState(".");
   const [memoryEnabled, setMemoryEnabled] = useState(system.memory_available);
   const [reviewEnabled, setReviewEnabled] = useState(true);
+  const [mode, setMode] = useState<"quick" | "detailed">("detailed");
+  const reviewActive = mode === "detailed" && reviewEnabled;
   const [costBudget, setCostBudget] = useState("");
   const [lockedCommand, setLockedCommand] =
     useState<DashboardStartCommand | null>(null);
@@ -141,8 +143,9 @@ function NewGoalWorkspace({
       expected_repository_id: system.repository_id,
       expected_commit_sha: system.commit_sha,
       goal: goal.trim(),
+      investigation_mode: mode,
       focus_path: focusPath.trim() || ".",
-      human_review_policy: reviewEnabled ? "before_finalize" : "never",
+      human_review_policy: reviewActive ? "before_finalize" : "never",
       memory_retrieval_enabled: system.memory_available && memoryEnabled,
       max_attempt_cost_usd: costBudget.trim() || null,
     };
@@ -162,8 +165,7 @@ function NewGoalWorkspace({
         <p className="eyebrow">repository agent workspace</p>
         <h1 id="new-goal-title">Declare the current goal</h1>
         <p>
-          Ask a question about this repository. Follow the answer back to source,
-          then decide what to investigate next.
+          Ask a repository question. Follow the answer back to source.
         </p>
         <WorkspaceBoundary system={system} focusPath={focusPath} />
       </section>
@@ -177,7 +179,7 @@ function NewGoalWorkspace({
           <span>What should RepoCompass investigate?</span>
           <textarea
             value={goal}
-            rows={4}
+            rows={3}
             maxLength={16_384}
             disabled={lockedCommand !== null || mutation.isPending || mutation.isSuccess}
             placeholder="Trace how focused-improve verifies and applies a proposal"
@@ -195,21 +197,38 @@ function NewGoalWorkspace({
               onClick={() => setGoal(objective ?? "")}>{label}</button>
           ))}
         </div>
+        <fieldset className="investigation-modes" disabled={!enabled || lockedCommand !== null || mutation.isPending || mutation.isSuccess}>
+          <legend>Investigation mode</legend>
+          <label>
+            <input type="radio" name="investigation-mode" value="quick" checked={mode === "quick"} onChange={() => setMode("quick")} />
+            <span><strong>Quick lookup</strong><small>One focused search loop with source checks.</small></span>
+          </label>
+          <label>
+            <input type="radio" name="investigation-mode" value="detailed" checked={mode === "detailed"} onChange={() => setMode("detailed")} />
+            <span><strong>Detailed investigation</strong><small>Plan, structural tools and model review.</small></span>
+          </label>
+        </fieldset>
+        <p className="mode-note">
+          {mode === "quick"
+            ? "Source checks only. For model review or human approval, choose Detailed."
+            : "Multi-step planning with source checks, model review and optional human approval."}
+        </p>
         <details className="task-settings">
           <summary>
             <Settings2 size={15} /><strong>Task settings</strong>
             <span className="task-settings__preview">
-              {reviewEnabled ? "Review on" : "Review off"} · Memory {memoryEnabled && system.memory_available ? "on" : "off"} · {costBudget.trim() ? `USD ${costBudget.trim()} cap` : "No task cost cap"}
+              {reviewActive ? "Review on" : "Review off"} · Memory {memoryEnabled && system.memory_available ? "on" : "off"} · {costBudget.trim() ? `USD ${costBudget.trim()} cap` : "No task cost cap"}
             </span>
           </summary>
-          <p>Optional for this new goal. Submitted requests keep their original settings.</p>
+          <p>Both modes keep tool permissions, budgets and evidence validation. Submitted requests and follow-ups keep their mode.</p>
           <ComposerOptions
           system={system}
           focusPath={focusPath}
           onFocusPathChange={setFocusPath}
           memoryEnabled={memoryEnabled}
           onMemoryEnabledChange={setMemoryEnabled}
-          reviewEnabled={reviewEnabled}
+          reviewEnabled={reviewActive}
+          reviewAvailable={mode === "detailed"}
           onReviewEnabledChange={setReviewEnabled}
           costBudget={costBudget}
           onCostBudgetChange={setCostBudget}
@@ -328,6 +347,12 @@ function ThreadConversation({
           <p className="eyebrow">current goal</p>
           <GoalTitle objective={thread.objective} />
           <span>turn {thread.turn_number} · thread/{shortId(thread.thread_id)}</span>
+          <p className="mode-note" aria-label="Saved investigation mode">
+            {thread.architecture_preset === "tool_wrapper" ? "Quick lookup · source checks only"
+              : thread.architecture_preset === "evaluator_loop_context_builder" ? "Detailed investigation · plan and model review"
+              : thread.architecture_preset ? "Custom investigation profile" : "Legacy thread · mode not recorded"}
+            {thread.architecture_preset ? " · Mode stays fixed for follow-ups." : " · Uses the operator-configured profile."}
+          </p>
         </div>
         <button type="button" className="new-goal-link" onClick={onNewGoal}>
           <Sparkles size={14} />New goal
@@ -472,6 +497,7 @@ function ComposerOptions({
   memoryEnabled,
   onMemoryEnabledChange,
   reviewEnabled,
+  reviewAvailable,
   onReviewEnabledChange,
   costBudget,
   onCostBudgetChange,
@@ -483,6 +509,7 @@ function ComposerOptions({
   memoryEnabled: boolean;
   onMemoryEnabledChange: (value: boolean) => void;
   reviewEnabled: boolean;
+  reviewAvailable: boolean;
   onReviewEnabledChange: (value: boolean) => void;
   costBudget: string;
   onCostBudgetChange: (value: string) => void;
@@ -497,7 +524,7 @@ function ComposerOptions({
       </label>
       <div className="toggle-options">
         <label><input type="checkbox" checked={memoryEnabled && system.memory_available} disabled={disabled || !system.memory_available} onChange={(event) => onMemoryEnabledChange(event.target.checked)} /><span>Recall memory</span></label>
-        <label><input type="checkbox" checked={reviewEnabled} disabled={disabled} onChange={(event) => onReviewEnabledChange(event.target.checked)} /><span>Review before finalize</span></label>
+        <label><input type="checkbox" checked={reviewEnabled} disabled={disabled || !reviewAvailable} onChange={(event) => onReviewEnabledChange(event.target.checked)} /><span>Review before finalize{!reviewAvailable ? " (Detailed only)" : ""}</span></label>
       </div>
       <label className="cost-option">
         <span>Attempt cap</span>

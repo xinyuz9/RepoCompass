@@ -139,6 +139,8 @@ function isStartCommand(command: Record<string, unknown>): boolean {
   return (
     isBoundedString(command.goal, 1, MAX_PROMPT_LENGTH)
     && isExpectedSnapshot(command)
+    && (command.investigation_mode === undefined || command.investigation_mode === "quick" || command.investigation_mode === "detailed")
+    && (command.investigation_mode !== "quick" || command.human_review_policy === "never")
     && isBoundedString(command.focus_path, 1, MAX_PATH_LENGTH)
     && (command.human_review_policy === "never"
       || command.human_review_policy === "before_finalize")

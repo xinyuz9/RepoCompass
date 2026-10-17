@@ -4,6 +4,7 @@ import type { InspectorLens } from "./ConversationWorkspace";
 import type { ThreadInvestigationView } from "./types";
 
 const STOP_ADVICE: Record<string, { title: string; next: string; lens: InspectorLens }> = {
+  invalid_candidate_evidence: { title: "Source checks failed", next: "Inspect the rejected candidate in the trace, then refine the goal or start a detailed investigation.", lens: "trace" },
   step_no_progress: { title: "No new evidence", next: "Review the recent searches, then narrow the goal or focus path. Repeating the same request may not help.", lens: "trace" },
   step_tool_call_budget_exhausted: { title: "Tool-call limit reached", next: "Inspect which searches used the allowance, then choose a smaller follow-up scope.", lens: "trace" },
   step_explorer_budget_exhausted: { title: "Exploration-call limit reached", next: "Review the missing evidence before starting another investigation.", lens: "plan" },
@@ -28,7 +29,7 @@ export function InvestigationResult({ thread, onOpenLens }: {
   const label = thread.pending_review ? "Awaiting review"
     : status === "cancelled" ? "Cancelled"
     : status === "exhausted" ? "Best effort"
-    : result && status === "accepted" ? "Workflow accepted" : "Working draft";
+    : result && status === "accepted" ? thread.architecture_preset === "tool_wrapper" ? "Source checks passed" : "Workflow accepted" : "Working draft";
   const advice = status === "cancelled"
     ? { title: "Investigation cancelled", next: "Recorded findings are retained. Inspect the last attempt before deciding whether to start a new goal.", lens: "trace" as const }
     : status === "exhausted"
@@ -49,7 +50,9 @@ export function InvestigationResult({ thread, onOpenLens }: {
       {status === "exhausted" || status === "cancelled" ? (
         <p className="result-card__note">Stopped without acceptance. Review the evidence and open questions before relying on this result.</p>
       ) : result && status === "accepted" ? (
-        <p className="result-card__note">Passed the configured workflow checks, not independent proof that every conclusion is correct.</p>
+        <p className="result-card__note">{thread.architecture_preset === "tool_wrapper"
+          ? "Source references passed deterministic checks. The answer has not had independent semantic review."
+          : "Passed the configured workflow checks, not independent proof that every conclusion is correct."}</p>
       ) : candidate ? <p className="result-card__note">This candidate has not been finalized.</p> : null}
       {advice ? <aside className="result-stop" aria-label="Why this investigation stopped">
         <strong>{advice.title}</strong><p>{advice.next}</p>

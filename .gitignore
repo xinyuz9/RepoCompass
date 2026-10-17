@@ -17,6 +17,7 @@ ui/node_modules/
 ui/test-results/
 ui/test-results-cancellation/
 ui/test-results-recovery/
+ui/test-results-modes/
 ui/test-results-browser-v2/
 ui/playwright-report/
 

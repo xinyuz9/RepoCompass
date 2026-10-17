@@ -500,3 +500,40 @@ select:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
 .run-cancellation__limits { margin-top: 10px; color: var(--muted); font-size: 12px; }
 .run-cancellation__limits summary { cursor: pointer; }
 .run-cancellation__limits summary:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.investigation-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 8px;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.investigation-modes legend { margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+.investigation-modes label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.investigation-modes label:has(input:checked) { border-color: var(--acid); background: var(--acid-soft); }
+.investigation-modes label:has(input:focus-visible) { outline: 2px solid var(--acid); outline-offset: 3px; }
+.investigation-modes:disabled label { cursor: default; opacity: 0.65; }
+.investigation-modes input { accent-color: var(--acid); margin-top: 3px; }
+.investigation-modes strong { font-size: 13px; }
+.investigation-modes small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.mode-note { color: var(--muted); font-size: 12px; line-height: 1.6; }
+@media (max-width: 680px) {
+  .investigation-modes label { padding: 10px; }
+  .investigation-modes small { display: none; }
+  .conversation-stage--new { gap: 12px; }
+  .goal-field textarea { min-height: 72px; height: 76px; }
+}
+@media (min-width: 931px) and (max-height: 850px) {
+  .conversation-stage--new { padding-top: 16px; gap: 16px; }
+  .goal-welcome { padding-top: 8px; }
+  .goal-welcome__mark { display: none; }
+}

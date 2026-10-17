@@ -32,6 +32,50 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace lifecycle commands", () => {
+  it("makes quick review limits explicit and restores detailed settings", () => {
+    renderWorkspace({ detail: null });
+    expect(screen.getByRole("radio", { name: /Detailed investigation/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /Quick lookup/ }));
+    expect(screen.getByText(/For model review or human approval, choose Detailed/)).toBeVisible();
+    fireEvent.click(screen.getByText("Task settings"));
+    expect(screen.getByLabelText(/Review before finalize/)).toBeDisabled();
+    expect(screen.getByLabelText(/Review before finalize/)).not.toBeChecked();
+    expect(screen.getByLabelText("Recall memory")).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /Detailed investigation/ }));
+    expect(screen.getByLabelText("Review before finalize")).toBeChecked();
+    expect(screen.getByLabelText("Review before finalize")).toBeEnabled();
+  });
+
+  it("locks quick mode and retries the exact submitted request", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("Lost response"));
+    vi.stubGlobal("fetch", fetchMock);
+    renderWorkspace({ detail: null });
+    fireEvent.click(screen.getByRole("radio", { name: /Quick lookup/ }));
+    fireEvent.change(screen.getByLabelText("What should RepoCompass investigate?"), { target: { value: "Locate source" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start investigation" }));
+    await waitFor(() => expect(screen.getByRole("radio", { name: /Detailed investigation/ })).toBeDisabled());
+    await screen.findByRole("button", { name: "Retry same request" });
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({ investigation_mode: "quick", human_review_policy: "never", memory_retrieval_enabled: true });
+    fireEvent.click(screen.getByRole("button", { name: /Retry/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(fetchMock.mock.calls[0]?.[1]?.body);
+  });
+
+  it("labels a saved quick result without implying semantic approval", () => {
+    const detail = threadDetail({ executionState: "completed", attemptCommitSha: commitSha });
+    detail.thread.architecture_preset = "tool_wrapper";
+    detail.thread.termination_status = "accepted";
+    detail.thread.final_result = {
+      summary: "Located source", relevant_files: ["example.py"], relevant_symbols: [],
+      evidence: ["Source reference"], unresolved_questions: [],
+    };
+    renderWorkspace({ detail });
+    expect(screen.getByLabelText("Saved investigation mode")).toHaveTextContent("Quick lookup");
+    expect(screen.getByText("Source checks passed")).toBeVisible();
+    expect(screen.getByText(/has not had independent semantic review/)).toBeVisible();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+  });
   it("keeps settings optional and preserves edits when the panel is collapsed", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
