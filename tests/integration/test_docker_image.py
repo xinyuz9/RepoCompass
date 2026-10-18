@@ -1,5 +1,6 @@
 """Opt-in tests of an already-built local image; no pulls, credentials or LLMs."""
 
+import http.client
 import json
 import os
 import re
@@ -29,6 +30,26 @@ def get(url):
         return response.read().decode()
 
 
+def wait_until_ready(url, *, timeout=90):
+    """Wait through Docker's published-port startup race, with a fixed deadline."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            get(url + "/api/v1/system")
+            return
+        except urllib.error.HTTPError:
+            raise
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            ConnectionError,
+            http.client.RemoteDisconnected,
+        ) as error:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Container readiness timed out") from error
+            time.sleep(0.2)
+
+
 @contextmanager
 def running(command, mounts=()):
     name = f"repocompass-smoke-{uuid4().hex}"
@@ -54,17 +75,10 @@ def running(command, mounts=()):
         info = json.loads(docker("inspect", name))[0]
         port = info["NetworkSettings"]["Ports"]["8766/tcp"][0]["HostPort"]
         url = f"http://127.0.0.1:{port}"
-        deadline = time.monotonic() + 90
-        while True:
-            try:
-                get(url + "/api/v1/system")
-                break
-            except (urllib.error.URLError, TimeoutError):
-                if time.monotonic() >= deadline:
-                    pytest.fail(
-                        "Container readiness timed out: " + docker("logs", name)
-                    )
-                time.sleep(0.2)
+        try:
+            wait_until_ready(url)
+        except TimeoutError:
+            pytest.fail("Container readiness timed out: " + docker("logs", name))
         yield name, url
     finally:
         # Only this test's uniquely named container is removed.
