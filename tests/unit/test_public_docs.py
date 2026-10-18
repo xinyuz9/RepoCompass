@@ -28,6 +28,10 @@ def test_distribution_keeps_project_and_bundled_licenses():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     assert project["license"] == "MIT"
     assert (ROOT / "LICENSE").read_text().startswith("MIT License")
+    assert (
+        "Copyright (c) 2023 Carlos E Jimenez"
+        in (ROOT / "licenses/SWE-bench-MIT.txt").read_text()
+    )
     notices = (
         ROOT / "src/repocompass/dashboard/static/THIRD_PARTY_LICENSES.md"
     ).read_text()
