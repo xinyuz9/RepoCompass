@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -132,6 +133,11 @@ def create_dashboard_demo(
 
     if type(turns) is not int or not 1 <= turns <= 3:
         raise DashboardDemoError("demo turns must be between 1 and 3")
+    for executable in ("git", "rg"):
+        if shutil.which(executable) is None:
+            raise DashboardDemoError(
+                f"demo requires '{executable}' on PATH; install Git and ripgrep"
+            )
     root = _prepare_empty_destination(destination)
     repository = root / "proposal-gate-demo"
     state = root / "state"

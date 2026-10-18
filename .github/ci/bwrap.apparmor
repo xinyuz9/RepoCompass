@@ -1,0 +1,8 @@
+# Only loaded on disposable CI runners. The dedicated executable avoids
+# replacing a distribution-owned profile or changing global userns restrictions.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile repocompass-ci-bwrap /usr/local/lib/repocompass-ci/bwrap flags=(unconfined) {
+  userns,
+}

@@ -7,6 +7,11 @@ changes first. Execution authority belongs in code; provider-specific behavior s
 
 Linux/WSL, Python 3.12+, uv, Git, ripgrep, Node.js 24:
 
+On Ubuntu, install `git`, `ripgrep`, and `bubblewrap` before running the Python suite.
+Sandbox tests need user namespaces permitted by the host. CI uses a dedicated bubblewrap
+executable with a scoped AppArmor profile on a disposable runner; it does not disable
+global AppArmor protections. See [Ubuntu's namespace policy](https://documentation.ubuntu.com/security/security-features/privilege-restriction/apparmor/).
+
 ```bash
 uv sync --locked
 uv run ruff check .

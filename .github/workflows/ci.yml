@@ -15,7 +15,7 @@ concurrency:
 jobs:
   python:
     name: Python 3.12 · tests, coverage, package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -26,13 +26,19 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-      - name: Install Linux sandbox runtime
+      - name: Install Linux runtime tools
         run: |
-          if ! command -v bwrap >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install --yes bubblewrap
-          fi
+          sudo apt-get update
+          sudo apt-get install --yes git ripgrep bubblewrap apparmor
+          rg --version
           bwrap --version
+      - name: Permit namespaces for the dedicated CI sandbox executable
+        run: |
+          sudo install -D -m 0755 /usr/bin/bwrap /usr/local/lib/repocompass-ci/bwrap
+          sudo apparmor_parser -r .github/ci/bwrap.apparmor
+          echo /usr/local/lib/repocompass-ci >> "$GITHUB_PATH"
+      - name: Verify sandbox namespaces before running tests
+        run: bwrap --unshare-all --ro-bind / / --dev /dev --proc /proc -- /usr/bin/true
       - name: Install locked dependencies
         run: uv sync --locked --all-groups
       - name: Ruff
@@ -66,8 +72,8 @@ jobs:
 
   ui:
     name: Node 24 · tests, axe, lint, build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: ui
@@ -103,7 +109,9 @@ jobs:
       - name: Install Chromium for browser acceptance
         run: npx playwright install --with-deps --only-shell chromium
       - name: Install Chinese fonts for bilingual visual acceptance
-        run: sudo apt-get install -y fonts-noto-cjk
+        run: |
+          sudo apt-get install -y fonts-noto-cjk ripgrep
+          rg --version
       - name: Exercise real demo across four viewports
         run: npm run test:e2e
       - name: Exercise real HTTP cancellation with a local scripted model
@@ -125,7 +133,7 @@ jobs:
 
   docker:
     name: Docker image and runtime boundaries
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
