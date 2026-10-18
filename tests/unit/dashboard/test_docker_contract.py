@@ -33,6 +33,7 @@ def test_build_context_is_allowlisted_and_excludes_secrets_and_local_state():
         "!pyproject.toml",
         "!uv.lock",
         "!README.md",
+        "!LICENSE",
         "!src/",
         "!src/**",
         "!ui/",

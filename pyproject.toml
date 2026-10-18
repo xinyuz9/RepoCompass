@@ -1,10 +1,12 @@
 [project]
 name = "repocompass"
 version = "0.1.0"
-description = "Evidence-grounded repository investigation agent with bounded tools, memory, evaluation, MCP, observability, and opt-in sandboxed focused improvements"
+description = "Source-backed repository investigations with bounded tools, memory, checkpoints, and cost visibility"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-    { name = "xinyuz9", email = "152044466+xinyuz9@users.noreply.github.com" }
+    { name = "Xinyu Zhou" }
 ]
 requires-python = ">=3.12"
 dependencies = [
@@ -17,6 +19,11 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "uvicorn>=0.51.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/xinyuz9/RepoCompass"
+Issues = "https://github.com/xinyuz9/RepoCompass/issues"
+Documentation = "https://github.com/xinyuz9/RepoCompass#readme"
 
 [project.optional-dependencies]
 browser = [

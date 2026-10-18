@@ -13,7 +13,7 @@ FROM ${PYTHON_IMAGE} AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 WORKDIR /app
-COPY pyproject.toml uv.lock README.md ./
+COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN uv sync --locked --no-dev --no-install-project --python /usr/local/bin/python
 COPY src/ ./src/
 COPY --from=frontend /build/src/repocompass/dashboard/static/ ./src/repocompass/dashboard/static/

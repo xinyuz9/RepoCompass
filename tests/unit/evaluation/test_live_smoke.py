@@ -256,10 +256,8 @@ def test_live_cli_reserves_output_before_loading_credentials_or_calling_model(
     settings_loader.assert_not_called()
 
 
-def test_bundled_real_provider_report_is_valid_sanitized_evidence() -> None:
-    path = (
-        PROJECT_ROOT / "benchmarks/results/deepseek-v4-pro-live-smoke-2026-08-27.json"
-    )
+def test_bundled_provider_report_fixture_is_valid_and_sanitized() -> None:
+    path = PROJECT_ROOT / "tests/fixtures/provider-smoke-report.json"
     raw = path.read_text(encoding="utf-8")
 
     report = LiveProviderSmokeReport.model_validate_json(raw)
