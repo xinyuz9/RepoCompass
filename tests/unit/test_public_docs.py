@@ -24,6 +24,18 @@ def test_public_documentation_links_resolve():
                 )
 
 
+def test_readme_navigation_targets_existing_headings():
+    readme = (ROOT / "README.md").read_text()
+    headings = re.findall(r"^#{1,6} (.+)$", readme, re.MULTILINE)
+    anchors = {
+        re.sub(r"[^\w -]", "", heading.lower()).replace(" ", "-")
+        for heading in headings
+    }
+    navigation = re.findall(r"\]\(#([^)]*)\)", readme)
+    assert navigation
+    assert set(navigation) <= anchors
+
+
 def test_distribution_keeps_project_and_bundled_licenses():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     assert project["license"] == "MIT"

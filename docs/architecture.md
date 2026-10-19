@@ -1,7 +1,9 @@
 # Architecture
 
-All interfaces share a repository-bound service. The model proposes; deterministic code
-owns execution authority and validates the evidence it can publish.
+The dashboard and MCP interfaces use a repository-bound investigation service. The CLI
+calls `AgentRunner` directly; all three entry points reuse its graph, tool policies, and
+persistence components. The model proposes; deterministic code owns execution authority
+and validates the evidence it can publish.
 
 ## Runtime and evidence
 
